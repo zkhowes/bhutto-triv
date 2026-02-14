@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
 import NavBar from "@/components/layout/NavBar";
 import Link from "next/link";
@@ -9,11 +9,13 @@ import QuestionSubmitForm from "@/components/question/QuestionSubmitForm";
 import BettingInterface from "@/components/game/BettingInterface";
 import AnswerInterface from "@/components/game/AnswerInterface";
 import RoundResults from "@/components/game/RoundResults";
+import GradingInterface from "@/components/game/GradingInterface";
 
 interface RoundData {
   id: string;
   number: number;
   status: string;
+  categoryRevealAt: string | null;
   atBatPlayerId: string | null;
   onDeckPlayerId: string | null;
   inTheHolePlayerId: string | null;
@@ -54,15 +56,18 @@ interface RoundData {
   game: {
     id: string;
     number: number;
+    status: string;
     season: {
       id: string;
       number: number;
       league: {
         id: string;
         name: string;
+        type: string;
         roundsPerGame: number;
         dailyDeadline: string;
         deadlineTimezone: string;
+        answerTimerSeconds: number;
       };
     };
     playerStates: Array<{
@@ -90,13 +95,16 @@ export default function RoundPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const roundId = params.id as string;
+  const actAsPlayerId = searchParams.get("actAs");
   const [round, setRound] = useState<RoundData | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchRound = useCallback(async () => {
     try {
-      const res = await fetch(`/api/rounds/${roundId}`);
+      const actAsParam = actAsPlayerId ? `?actAs=${actAsPlayerId}` : "";
+      const res = await fetch(`/api/rounds/${roundId}${actAsParam}`);
       if (!res.ok) throw new Error();
       setRound(await res.json());
     } catch {
@@ -104,7 +112,7 @@ export default function RoundPage() {
     } finally {
       setLoading(false);
     }
-  }, [roundId, router]);
+  }, [roundId, router, actAsPlayerId]);
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/");
@@ -129,9 +137,23 @@ export default function RoundPage() {
   }
 
   const league = round.game.season.league;
-  const myPlayerId = round.game.playerStates.find(
-    (ps) => ps.leaguePlayer.user.id === session?.user?.id
-  )?.leaguePlayerId;
+  // In test mode with actAs, use the selected player; otherwise match session user
+  const myPlayerId = actAsPlayerId
+    ? (round.game.playerStates.find(
+        (ps) => ps.leaguePlayerId === actAsPlayerId
+      )?.leaguePlayerId || null)
+    : (round.game.playerStates.find(
+        (ps) => ps.leaguePlayer.user.id === session?.user?.id
+      )?.leaguePlayerId || null);
+
+  const actingPlayerName = actAsPlayerId
+    ? (round.game.playerStates.find(
+        (ps) => ps.leaguePlayerId === actAsPlayerId
+      )?.leaguePlayer.fakeNickname ||
+      round.game.playerStates.find(
+        (ps) => ps.leaguePlayerId === actAsPlayerId
+      )?.leaguePlayer.user.nickname || null)
+    : null;
 
   const isAtBat = round.atBatPlayerId === myPlayerId;
   const myAnswer = round.answers.find(
@@ -142,7 +164,13 @@ export default function RoundPage() {
   );
   const hasBet = !!myAnswer?.betPlacedAt;
   const hasAnswered = !!myAnswer?.answeredAt;
-  const isGraded = round.status === "graded" || round.status === "closed";
+  const isGraded = round.status === "graded";
+  const isAwaitingGrading = round.status === "closed";
+
+  // Compute answer deadline from category reveal + timer
+  const answerDeadline = round.categoryRevealAt && league.answerTimerSeconds
+    ? new Date(new Date(round.categoryRevealAt).getTime() + league.answerTimerSeconds * 1000).toISOString()
+    : null;
 
   const getPlayerName = (playerId: string | null) => {
     if (!playerId) return "TBD";
@@ -158,6 +186,12 @@ export default function RoundPage() {
 
   // Player status for dashboard
   const getPlayerStatus = (answer: RoundData["answers"][0]) => {
+    // At-bat player submitted the question, they don't bet/answer
+    if (answer.leaguePlayerId === round.atBatPlayerId) {
+      if (isGraded) return { icon: "\u26BE", label: "At Bat", color: "text-[#e94560]" };
+      if (round.status === "awaiting_question") return { icon: "\u26BE", label: "At Bat", color: "text-[#e94560]" };
+      return { icon: "\u26BE", label: "Question Submitted", color: "text-[#e94560]" };
+    }
     if (isGraded) {
       if (answer.isAbsent) return { icon: "\u274C", label: "Missed", color: "text-gray-400" };
       if (answer.isCorrect) return { icon: "\u2713", label: `+${answer.pointsWon}`, color: "text-emerald-400" };
@@ -173,6 +207,37 @@ export default function RoundPage() {
     <div className="min-h-screen">
       <NavBar />
       <div className="max-w-4xl mx-auto px-4 py-6">
+        {/* Test mode banner with player switcher */}
+        {league.type === "test" && (
+          <div className="card p-3 mb-4 border-purple-500/30 flex items-center justify-between gap-3">
+            <span className="text-xs text-purple-400 font-semibold flex-shrink-0">TEST MODE</span>
+            <select
+              value={actAsPlayerId || ""}
+              onChange={(e) => {
+                const newActAs = e.target.value;
+                const url = newActAs
+                  ? `/rounds/${roundId}?actAs=${newActAs}`
+                  : `/rounds/${roundId}`;
+                router.push(url);
+              }}
+              className="input-field text-sm flex-1 min-w-0"
+            >
+              <option value="">Commissioner (you)</option>
+              {round.game.playerStates.map((ps) => (
+                <option key={ps.leaguePlayerId} value={ps.leaguePlayerId}>
+                  {ps.leaguePlayer.fakeNickname || ps.leaguePlayer.user.nickname}
+                </option>
+              ))}
+            </select>
+            <Link
+              href={`/leagues/${league.id}`}
+              className="text-xs text-purple-400 hover:text-purple-300 flex-shrink-0"
+            >
+              &larr; League
+            </Link>
+          </div>
+        )}
+
         {/* Breadcrumb */}
         <div className="text-sm text-[#a0a0b8] mb-4">
           <Link href={`/leagues/${league.id}`} className="hover:text-white">
@@ -207,10 +272,12 @@ export default function RoundPage() {
                     ? "bg-amber-500/20 text-amber-400"
                     : round.status === "graded"
                       ? "bg-blue-500/20 text-blue-400"
-                      : "bg-gray-500/20 text-gray-400"
+                      : round.status === "closed"
+                        ? "bg-orange-500/20 text-orange-400"
+                        : "bg-gray-500/20 text-gray-400"
               }`}
             >
-              {round.status.replace(/_/g, " ").toUpperCase()}
+              {round.status === "closed" ? "AWAITING REVIEW" : round.status.replace(/_/g, " ").toUpperCase()}
             </span>
           </div>
 
@@ -238,7 +305,7 @@ export default function RoundPage() {
         </div>
 
         {/* Category display (when revealed) */}
-        {round.question && (round.status === "category_revealed" || isGraded) && (
+        {round.question && (round.status === "category_revealed" || isGraded || isAwaitingGrading) && (
           <div className="card p-4 mb-4 text-center">
             <p className="text-xs text-[#a0a0b8] uppercase tracking-wider">
               Category
@@ -260,35 +327,91 @@ export default function RoundPage() {
             />
           )}
 
+          {/* Eliminated player message */}
+          {!isGraded &&
+            !isAwaitingGrading &&
+            !isAtBat &&
+            myPlayerState &&
+            myPlayerState.points === 0 &&
+            !hasBet && (
+              <div className="card p-6 text-center">
+                <p className="text-lg font-bold text-red-400 mb-2">
+                  Eliminated
+                </p>
+                <p className="text-[#a0a0b8]">
+                  You&apos;ve run out of points for this game. You can still view questions and results.
+                </p>
+              </div>
+            )}
+
           {/* Betting Phase */}
           {!isGraded &&
+            !isAtBat &&
             round.question &&
             (round.status === "category_revealed" || round.status === "question_submitted") &&
             !hasBet &&
             myPlayerId &&
-            myPlayerState && (
+            myPlayerState &&
+            myPlayerState.points > 0 && (
               <BettingInterface
                 roundId={round.id}
                 leaguePlayerId={myPlayerId}
                 maxPoints={myPlayerState.points}
                 category={round.question.category}
+                answerDeadline={answerDeadline}
                 onBetPlaced={fetchRound}
               />
             )}
 
           {/* Answer Phase */}
-          {!isGraded && hasBet && !hasAnswered && round.question && myPlayerId && (
+          {!isGraded && !isAtBat && hasBet && !hasAnswered && round.question && myPlayerId && (
             <AnswerInterface
               roundId={round.id}
               leaguePlayerId={myPlayerId}
               question={round.question}
               betAmount={myAnswer?.betAmount || 0}
+              answerDeadline={answerDeadline}
               onAnswered={fetchRound}
             />
           )}
 
+          {/* At Bat - grading review */}
+          {isAwaitingGrading && isAtBat && round.question && (
+            <GradingInterface
+              roundId={round.id}
+              answers={round.answers}
+              question={round.question}
+              atBatPlayerId={round.atBatPlayerId}
+              onGradingComplete={fetchRound}
+            />
+          )}
+
+          {/* Non-at-bat waiting for grading review */}
+          {isAwaitingGrading && !isAtBat && (
+            <div className="card p-6 text-center">
+              <p className="text-lg font-bold text-orange-400 mb-2">
+                Awaiting Review
+              </p>
+              <p className="text-[#a0a0b8]">
+                Waiting for the question creator to review and confirm grades...
+              </p>
+            </div>
+          )}
+
+          {/* At Bat - you submitted the question */}
+          {!isGraded && !isAwaitingGrading && isAtBat && round.status !== "awaiting_question" && (
+            <div className="card p-6 text-center">
+              <p className="text-lg font-bold text-[#e94560] mb-2">
+                You&apos;re At Bat!
+              </p>
+              <p className="text-[#a0a0b8]">
+                You submitted the question for this round. Waiting for other players to bet and answer...
+              </p>
+            </div>
+          )}
+
           {/* Waiting for results */}
-          {!isGraded && hasAnswered && (
+          {!isGraded && !isAwaitingGrading && !isAtBat && hasAnswered && (
             <div className="card p-6 text-center">
               <p className="text-lg font-bold text-white mb-2">
                 Answer Submitted!
@@ -304,10 +427,34 @@ export default function RoundPage() {
 
           {/* Results */}
           {isGraded && (
-            <RoundResults
-              round={round}
-              myPlayerId={myPlayerId || null}
-            />
+            <>
+              <RoundResults
+                round={round}
+                myPlayerId={myPlayerId || null}
+              />
+
+              {/* Game complete or next round link */}
+              {round.game.status === "completed" ? (
+                <Link
+                  href={`/games/${round.game.id}${actAsPlayerId ? `?actAs=${actAsPlayerId}` : ""}`}
+                  className="btn-gold w-full text-center block mt-4"
+                >
+                  View Game Results
+                </Link>
+              ) : round.number < league.roundsPerGame && (
+                <div className="card p-4 mt-4 text-center">
+                  <p className="text-sm text-[#a0a0b8]">
+                    Next round is starting...
+                  </p>
+                  <button
+                    onClick={fetchRound}
+                    className="btn-primary text-sm mt-2"
+                  >
+                    Refresh
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
 
@@ -321,13 +468,19 @@ export default function RoundPage() {
               const answer = round.answers.find(
                 (a) => a.leaguePlayerId === ps.leaguePlayerId
               );
-              const playerStatus = answer
-                ? getPlayerStatus(answer)
-                : {
-                    icon: "\u26A0",
-                    label: "Not bet",
-                    color: "text-gray-500",
-                  };
+              const playerStatus = ps.leaguePlayerId === round.atBatPlayerId
+                ? (round.status === "awaiting_question"
+                    ? { icon: "\u26BE", label: "At Bat", color: "text-[#e94560]" }
+                    : { icon: "\u26BE", label: "Question Submitted", color: "text-[#e94560]" })
+                : ps.points === 0
+                  ? { icon: "\uD83D\uDCA5", label: "Busted", color: "text-red-500" }
+                  : answer
+                    ? getPlayerStatus(answer)
+                    : {
+                        icon: "\u26A0",
+                        label: "Not bet",
+                        color: "text-gray-500",
+                      };
               const playerName =
                 ps.leaguePlayer.fakeNickname ||
                 ps.leaguePlayer.user.nickname;

@@ -15,10 +15,11 @@ export async function POST(
 
   const roundId = params.id;
 
-  // Verify user is commissioner of the league
+  // Verify user is commissioner or at-bat player (question creator) of the league
   const round = await prisma.round.findUnique({
     where: { id: roundId },
     include: {
+      question: true,
       game: {
         include: {
           season: {
@@ -28,7 +29,6 @@ export async function POST(
                   players: {
                     where: {
                       userId: session.user.id,
-                      role: "commissioner",
                       isActive: true,
                     },
                   },
@@ -45,13 +45,18 @@ export async function POST(
     return NextResponse.json({ error: "Round not found" }, { status: 404 });
   }
 
-  const isCommissioner =
-    round.game.season.league.players.length > 0;
-
-  // In test mode or commissioner can close rounds
+  const myPlayer = round.game.season.league.players[0];
+  const isCommissioner = myPlayer?.role === "commissioner";
+  const isCreator = round.question?.creatorUserId === session.user.id;
   const isTestMode = round.game.season.league.type === "test";
-  if (!isCommissioner && !isTestMode) {
+
+  if (!isCommissioner && !isCreator && !isTestMode) {
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  }
+
+  // Only allow closing from "closed" (awaiting review) status
+  if (round.status !== "closed") {
+    return NextResponse.json({ error: "Round is not awaiting review" }, { status: 400 });
   }
 
   try {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
 import NavBar from "@/components/layout/NavBar";
 import Link from "next/link";
@@ -55,7 +55,10 @@ export default function GamePage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const gameId = params.id as string;
+  const actAsPlayerId = searchParams.get("actAs");
+  const actAsParam = actAsPlayerId ? `?actAs=${actAsPlayerId}` : "";
   const [game, setGame] = useState<GameData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -164,7 +167,7 @@ export default function GamePage() {
                   </span>
                 </div>
                 <Link
-                  href={`/rounds/${activeRound.id}`}
+                  href={`/rounds/${activeRound.id}${actAsParam}`}
                   className="inline-block mt-3 btn-primary text-sm"
                 >
                   Go to Round
@@ -223,7 +226,7 @@ export default function GamePage() {
               {game.rounds.map((r) => (
                 <Link
                   key={r.id}
-                  href={`/rounds/${r.id}`}
+                  href={`/rounds/${r.id}${actAsParam}`}
                   className={`w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold transition-colors ${
                     r.status === "graded"
                       ? "bg-emerald-500/20 text-emerald-400"

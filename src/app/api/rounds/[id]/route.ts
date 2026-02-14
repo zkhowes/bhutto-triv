@@ -37,9 +37,11 @@ export async function GET(
                 select: {
                   id: true,
                   name: true,
+                  type: true,
                   roundsPerGame: true,
                   dailyDeadline: true,
                   deadlineTimezone: true,
+                  answerTimerSeconds: true,
                 },
               },
             },
@@ -90,8 +92,14 @@ export async function GET(
   const isGraded = round.status === "graded" || round.status === "closed";
   const userId = session?.user?.id;
 
+  // Support test mode actAs parameter for correct player identification
+  const url = new URL(_req.url);
+  const actAsPlayerId = url.searchParams.get("actAs");
+
   const processedAnswers = round.answers.map((answer) => {
-    const isMyAnswer = answer.userId === userId;
+    const isMyAnswer = actAsPlayerId
+      ? answer.leaguePlayerId === actAsPlayerId
+      : answer.userId === userId;
 
     // After grading, show everything
     if (isGraded) {
@@ -134,7 +142,9 @@ export async function GET(
   // Hide question text until player has bet (for non-graded rounds)
   let questionData = round.question;
   if (questionData && !isGraded && userId) {
-    const myAnswer = round.answers.find((a) => a.userId === userId);
+    const myAnswer = actAsPlayerId
+      ? round.answers.find((a) => a.leaguePlayerId === actAsPlayerId)
+      : round.answers.find((a) => a.userId === userId);
     if (!myAnswer?.betPlacedAt) {
       // Player hasn't bet yet, only show category
       questionData = {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import CountdownTimer from "./CountdownTimer";
 
 interface AnswerInterfaceProps {
   roundId: string;
@@ -15,6 +16,7 @@ interface AnswerInterfaceProps {
     optionD: string | null;
   };
   betAmount: number;
+  answerDeadline?: string | null;
   onAnswered: () => void;
 }
 
@@ -23,6 +25,7 @@ export default function AnswerInterface({
   leaguePlayerId,
   question,
   betAmount,
+  answerDeadline,
   onAnswered,
 }: AnswerInterfaceProps) {
   const [selectedOption, setSelectedOption] = useState("");
@@ -77,12 +80,17 @@ export default function AnswerInterface({
 
   return (
     <div className="card p-6">
-      {/* Bet reminder */}
+      {/* Bet reminder & timer */}
       <div className="flex items-center justify-between mb-4 pb-4 border-b border-[#1e3a5f]">
         <div>
           <p className="text-xs text-[#a0a0b8] uppercase tracking-wider">
             {question.category}
           </p>
+          {answerDeadline && (
+            <div className="mt-1">
+              <CountdownTimer deadlineTime={answerDeadline} />
+            </div>
+          )}
         </div>
         <div className="text-right">
           <p className="text-xs text-[#a0a0b8]">Your Bet</p>

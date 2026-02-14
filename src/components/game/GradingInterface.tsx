@@ -1,0 +1,211 @@
+"use client";
+
+import { useState } from "react";
+
+interface Answer {
+  id: string;
+  leaguePlayerId: string;
+  selectedOption: string | null;
+  freeTextAnswer: string | null;
+  isCorrect: boolean | null;
+  gradedBy: string | null;
+  leaguePlayer: {
+    id: string;
+    fakeNickname: string | null;
+    user: { id: string; nickname: string };
+  };
+}
+
+interface Question {
+  questionText: string;
+  answerFormat: string;
+  category: string;
+  correctOption: string | null;
+  correctAnswer: string | null;
+  optionA: string | null;
+  optionB: string | null;
+  optionC: string | null;
+  optionD: string | null;
+}
+
+interface GradingInterfaceProps {
+  roundId: string;
+  answers: Answer[];
+  question: Question;
+  atBatPlayerId: string | null;
+  onGradingComplete: () => void;
+}
+
+export default function GradingInterface({
+  roundId,
+  answers,
+  question,
+  atBatPlayerId,
+  onGradingComplete,
+}: GradingInterfaceProps) {
+  // Only show non-at-bat player answers (at-bat doesn't answer)
+  const playerAnswers = answers.filter(
+    (a) => a.leaguePlayerId !== atBatPlayerId && a.isCorrect !== null
+  );
+
+  const [overrides, setOverrides] = useState<Record<string, boolean>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  const getEffectiveGrade = (answer: Answer): boolean => {
+    if (answer.id in overrides) return overrides[answer.id];
+    return answer.isCorrect ?? false;
+  };
+
+  const toggleGrade = (answerId: string, currentGrade: boolean) => {
+    setOverrides((prev) => {
+      const original = answers.find((a) => a.id === answerId)?.isCorrect ?? false;
+      const newGrade = !currentGrade;
+      // If toggling back to original, remove override
+      if (newGrade === original) {
+        const next = { ...prev };
+        delete next[answerId];
+        return next;
+      }
+      return { ...prev, [answerId]: newGrade };
+    });
+  };
+
+  const getOptionText = (key: string): string => {
+    const map: Record<string, string | null> = {
+      A: question.optionA,
+      B: question.optionB,
+      C: question.optionC,
+      D: question.optionD,
+    };
+    return map[key] || key;
+  };
+
+  const handleConfirm = async () => {
+    setSubmitting(true);
+    setError("");
+
+    try {
+      // Submit any overrides
+      for (const [answerId, isCorrect] of Object.entries(overrides)) {
+        const res = await fetch(`/api/rounds/${roundId}/grade`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ answerId, isCorrect }),
+        });
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || "Failed to save grade override");
+        }
+      }
+
+      // Close the round (finalize scoring)
+      const closeRes = await fetch(`/api/rounds/${roundId}/close`, {
+        method: "POST",
+      });
+      if (!closeRes.ok) {
+        const data = await closeRes.json();
+        throw new Error(data.error || "Failed to close round");
+      }
+
+      onGradingComplete();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to confirm grades");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="card p-6">
+      <h2 className="text-lg font-bold text-[#e94560] mb-1">Review Answers</h2>
+      <p className="text-sm text-[#a0a0b8] mb-4">
+        All players have answered. Review the grades below and override if needed.
+      </p>
+
+      {/* Question & correct answer */}
+      <div className="bg-[#0f0f23] rounded-lg p-4 mb-5 border border-[#1e3a5f]">
+        <p className="text-xs text-[#a0a0b8] uppercase tracking-wider mb-1">
+          {question.category}
+        </p>
+        <p className="text-white font-medium mb-2">{question.questionText}</p>
+        <p className="text-sm text-emerald-400">
+          Correct answer:{" "}
+          {question.answerFormat === "multiple_choice"
+            ? `${question.correctOption}. ${getOptionText(question.correctOption || "")}`
+            : question.correctAnswer}
+        </p>
+      </div>
+
+      {/* Player answers */}
+      <div className="space-y-3 mb-5">
+        {playerAnswers.map((answer) => {
+          const grade = getEffectiveGrade(answer);
+          const isOverridden = answer.id in overrides;
+          const playerName =
+            answer.leaguePlayer.fakeNickname || answer.leaguePlayer.user.nickname;
+          const answerText =
+            question.answerFormat === "multiple_choice"
+              ? `${answer.selectedOption}. ${getOptionText(answer.selectedOption || "")}`
+              : answer.freeTextAnswer || "(no answer)";
+
+          return (
+            <div
+              key={answer.id}
+              className={`rounded-lg p-4 border transition-all ${
+                grade
+                  ? "border-emerald-500/30 bg-emerald-500/5"
+                  : "border-red-500/30 bg-red-500/5"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-white">{playerName}</p>
+                  <p className="text-sm text-[#a0a0b8] mt-1 truncate">{answerText}</p>
+                  {answer.gradedBy === "ai" && (
+                    <p className="text-xs text-[#666680] mt-1">
+                      AI says: {answer.isCorrect ? "Correct" : "Incorrect"}
+                    </p>
+                  )}
+                  {isOverridden && (
+                    <p className="text-xs text-amber-400 mt-1">Override applied</p>
+                  )}
+                </div>
+                <button
+                  onClick={() => toggleGrade(answer.id, grade)}
+                  className={`ml-4 flex-shrink-0 w-20 py-2 rounded-lg text-sm font-bold transition-all ${
+                    grade
+                      ? "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30"
+                      : "bg-red-500/20 text-red-400 hover:bg-red-500/30"
+                  }`}
+                >
+                  {grade ? "✓ Right" : "✗ Wrong"}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {Object.keys(overrides).length > 0 && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 mb-4 text-sm text-amber-400">
+          {Object.keys(overrides).length} grade{Object.keys(overrides).length > 1 ? "s" : ""} overridden
+        </div>
+      )}
+
+      {error && (
+        <div className="text-red-400 text-sm bg-red-500/10 rounded-lg p-3 mb-4">
+          {error}
+        </div>
+      )}
+
+      <button
+        onClick={handleConfirm}
+        disabled={submitting}
+        className="btn-primary w-full text-lg"
+      >
+        {submitting ? "Confirming..." : "Confirm & Complete Round"}
+      </button>
+    </div>
+  );
+}

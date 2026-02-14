@@ -33,8 +33,7 @@ export async function GET() {
             take: 1,
             include: {
               rounds: {
-                orderBy: { number: "desc" },
-                take: 1,
+                orderBy: { number: "asc" },
               },
             },
           },
@@ -105,6 +104,17 @@ export async function POST(req: NextRequest) {
   if (type === "test" && process.env.NODE_ENV !== "development") {
     return NextResponse.json(
       { error: "Test mode only available in development" },
+      { status: 400 }
+    );
+  }
+
+  // Ensure the user exists in the database (may have been reset)
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+  });
+  if (!user) {
+    return NextResponse.json(
+      { error: "User not found. Please sign out and sign back in." },
       { status: 400 }
     );
   }

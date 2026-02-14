@@ -35,8 +35,7 @@ export async function GET(
             take: 1,
             include: {
               rounds: {
-                orderBy: { number: "desc" },
-                take: 1,
+                orderBy: { number: "asc" },
               },
               playerStates: {
                 include: {
@@ -74,4 +73,50 @@ export async function GET(
     myRole: myPlayer?.role || null,
     myPlayerId: myPlayer?.id || null,
   });
+}
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const leagueId = params.id;
+  const league = await prisma.league.findUnique({
+    where: { id: leagueId },
+    include: {
+      players: { where: { userId: session.user.id, role: "commissioner" } },
+    },
+  });
+
+  if (!league) {
+    return NextResponse.json({ error: "League not found" }, { status: 404 });
+  }
+
+  if (league.players.length === 0) {
+    return NextResponse.json({ error: "Only the commissioner can delete a league" }, { status: 403 });
+  }
+
+  if (league.type !== "test") {
+    return NextResponse.json({ error: "Only test leagues can be deleted" }, { status: 400 });
+  }
+
+  // Delete fake users created for test players
+  const fakePlayers = await prisma.leaguePlayer.findMany({
+    where: { leagueId, isFake: true },
+  });
+  const fakeUserIds = fakePlayers.map((p) => p.userId);
+
+  // Cascade delete handles league → seasons → games → rounds → answers etc.
+  await prisma.league.delete({ where: { id: leagueId } });
+
+  // Clean up fake user records
+  if (fakeUserIds.length > 0) {
+    await prisma.user.deleteMany({ where: { id: { in: fakeUserIds } } });
+  }
+
+  return NextResponse.json({ deleted: true });
 }

@@ -31,6 +31,7 @@ interface LeagueInfo {
   submissionWindowStart: string;
   submissionWindowEnd: string;
   categoryRevealTime: string;
+  answerTimerSeconds: number;
   absenteePenaltyType: string;
   myRole: string | null;
   players: Player[];
@@ -384,6 +385,12 @@ export default function CommissionerPage() {
               <div className="flex justify-between py-2 border-b border-[#1e3a5f]">
                 <span className="text-[#a0a0b8]">Category Reveal</span>
                 <span className="text-white">{league.categoryRevealTime}</span>
+              </div>
+              <div className="flex justify-between py-2 border-b border-[#1e3a5f]">
+                <span className="text-[#a0a0b8]">Answer Timer</span>
+                <span className="text-white">
+                  {Math.floor(league.answerTimerSeconds / 60)}:{(league.answerTimerSeconds % 60).toString().padStart(2, "0")} min
+                </span>
               </div>
               <div className="flex justify-between py-2">
                 <span className="text-[#a0a0b8]">Absentee Penalty</span>

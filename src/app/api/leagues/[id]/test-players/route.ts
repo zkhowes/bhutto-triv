@@ -62,11 +62,21 @@ export async function POST(
     const nameIndex = existingFakeCount + i;
     const fakeName = FAKE_NAMES[nameIndex % FAKE_NAMES.length];
 
-    // Fake players share the commissioner's user account
+    // Create a separate fake User for each test player to avoid unique constraint on (leagueId, userId)
+    const fakeUser = await prisma.user.create({
+      data: {
+        name: fakeName,
+        nickname: fakeName,
+        email: `fake-${Date.now()}-${i}@test.local`,
+        profileComplete: true,
+        timezone: "America/Los_Angeles",
+      },
+    });
+
     const player = await prisma.leaguePlayer.create({
       data: {
         leagueId,
-        userId: session.user.id,
+        userId: fakeUser.id,
         role: "player",
         isFake: true,
         fakeNickname: fakeName,

@@ -89,8 +89,7 @@ export default function RoundResults({ round, myPlayerId }: RoundResultsProps) {
             <p className="text-sm text-[#a0a0b8]">
               {myAnswer.pointsWon > 0 ? "+" : ""}
               {myAnswer.pointsWon} points &middot; #{myAnswer.placement} place
-              &middot; {myAnswer.f1Points} F1 pts
-              {myAnswer.fastestLap && " ⚡ +1 Fastest Lap"}
+              {myAnswer.fastestLap && " ⚡ Fastest Lap"}
             </p>
           </div>
         )}
@@ -128,7 +127,7 @@ export default function RoundResults({ round, myPlayerId }: RoundResultsProps) {
                 <th className="table-header pb-2 text-center">Result</th>
                 <th className="table-header pb-2 text-right">Bet</th>
                 <th className="table-header pb-2 text-right">+/-</th>
-                <th className="table-header pb-2 text-right">F1</th>
+                <th className="table-header pb-2 text-right">Total</th>
               </tr>
             </thead>
             <tbody>

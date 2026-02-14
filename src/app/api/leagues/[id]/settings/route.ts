@@ -52,6 +52,7 @@ export async function PUT(
     "submissionWindowStart",
     "submissionWindowEnd",
     "categoryRevealTime",
+    "answerTimerSeconds",
     "absenteePenaltyType",
     "consecutiveMissesForPenalty",
   ];

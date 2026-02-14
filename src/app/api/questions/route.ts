@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { submitQuestion } from "@/lib/game-engine";
+import { resolveTestPlayer } from "@/lib/test-mode";
 
 // POST - Submit a question for a round
 export async function POST(req: NextRequest) {
@@ -34,19 +35,26 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Verify player belongs to user
-  const player = await prisma.leaguePlayer.findFirst({
+  // Verify player belongs to user (or commissioner acting as test player)
+  let player = await prisma.leaguePlayer.findFirst({
     where: {
       id: leaguePlayerId,
       userId: session.user.id,
     },
   });
 
+  let actingUserId = session.user.id;
+
   if (!player) {
-    return NextResponse.json(
-      { error: "Player not found" },
-      { status: 404 }
-    );
+    const testPlayer = await resolveTestPlayer(leaguePlayerId, session.user.id);
+    if (!testPlayer) {
+      return NextResponse.json(
+        { error: "Player not found" },
+        { status: 404 }
+      );
+    }
+    player = { ...testPlayer } as typeof player;
+    actingUserId = testPlayer.userId;
   }
 
   // Verify player is at bat for this round
@@ -81,7 +89,7 @@ export async function POST(req: NextRequest) {
       correctAnswer,
       acceptableAnswers,
       leaguePlayerId,
-      creatorUserId: session.user.id,
+      creatorUserId: actingUserId,
     });
     return NextResponse.json({ questionId }, { status: 201 });
   } catch (error) {

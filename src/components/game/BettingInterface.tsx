@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import CountdownTimer from "./CountdownTimer";
 
 interface BettingInterfaceProps {
   roundId: string;
   leaguePlayerId: string;
   maxPoints: number;
   category: string;
+  answerDeadline?: string | null;
   onBetPlaced: () => void;
 }
 
@@ -15,6 +17,7 @@ export default function BettingInterface({
   leaguePlayerId,
   maxPoints,
   category,
+  answerDeadline,
   onBetPlaced,
 }: BettingInterfaceProps) {
   const [betAmount, setBetAmount] = useState(1);
@@ -53,6 +56,11 @@ export default function BettingInterface({
           Category
         </p>
         <p className="text-2xl font-bold text-[#fbbf24] mt-1">{category}</p>
+        {answerDeadline && (
+          <div className="mt-2">
+            <CountdownTimer deadlineTime={answerDeadline} />
+          </div>
+        )}
         <p className="text-sm text-[#a0a0b8] mt-2">
           Place your bet to see the question
         </p>

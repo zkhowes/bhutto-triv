@@ -57,6 +57,9 @@ export default function LeagueDetailPage() {
   const [copied, setCopied] = useState(false);
   const [addingTestPlayers, setAddingTestPlayers] = useState(false);
   const [startingSeason, setStartingSeason] = useState(false);
+  const [advancing, setAdvancing] = useState(false);
+  const [advanceMessage, setAdvanceMessage] = useState("");
+  const [activeTestPlayerId, setActiveTestPlayerId] = useState<string | null>(null);
 
   const fetchLeague = useCallback(async () => {
     try {
@@ -86,14 +89,19 @@ export default function LeagueDetailPage() {
   const addTestPlayers = async (count: number) => {
     setAddingTestPlayers(true);
     try {
-      await fetch(`/api/leagues/${leagueId}/test-players`, {
+      const res = await fetch(`/api/leagues/${leagueId}/test-players`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ count }),
       });
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || "Failed to add test players");
+        return;
+      }
       await fetchLeague();
-    } catch {
-      // ignore
+    } catch (err) {
+      alert("Failed to add test players: " + (err instanceof Error ? err.message : "unknown error"));
     } finally {
       setAddingTestPlayers(false);
     }
@@ -118,6 +126,29 @@ export default function LeagueDetailPage() {
     }
   };
 
+  const testAdvance = async (action: string = "advance") => {
+    setAdvancing(true);
+    setAdvanceMessage("");
+    try {
+      const res = await fetch(`/api/leagues/${leagueId}/test-advance`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAdvanceMessage(data.error || "Failed to advance");
+      } else {
+        setAdvanceMessage(data.message || "Advanced!");
+      }
+      await fetchLeague();
+    } catch (err) {
+      setAdvanceMessage("Failed to advance: " + (err instanceof Error ? err.message : "unknown error"));
+    } finally {
+      setAdvancing(false);
+    }
+  };
+
   if (status === "loading" || loading) {
     return (
       <div className="min-h-screen">
@@ -131,9 +162,15 @@ export default function LeagueDetailPage() {
 
   if (!league) return null;
 
+  // Build query string for test mode player switching
+  const actAsParam = activeTestPlayerId ? `?actAs=${activeTestPlayerId}` : "";
+
   const currentSeason = league.seasons[0];
   const currentGame = currentSeason?.games[0];
-  const currentRound = currentGame?.rounds[0];
+  // Pick the first non-graded round (the active one), or fall back to the last round
+  const currentRound = currentGame?.rounds?.find(
+    (r: { status: string }) => r.status !== "graded"
+  ) || currentGame?.rounds?.[currentGame.rounds.length - 1];
   const isCommissioner = league.myRole === "commissioner";
   const activeSeason = currentSeason?.status === "active";
   const hasEnoughPlayers = league.players.length >= 2;
@@ -186,28 +223,129 @@ export default function LeagueDetailPage() {
           </div>
         </div>
 
-        {/* Test Mode: Add Fake Players */}
+        {/* Test Mode Controls */}
         {league.type === "test" && isCommissioner && (
-          <div className="card p-4 mb-4 border-purple-500/30">
-            <h3 className="text-sm font-semibold text-purple-400 mb-2">
+          <div className="card p-4 mb-4 border-purple-500/30 space-y-4">
+            <h3 className="text-sm font-semibold text-purple-400">
               Test Mode Controls
             </h3>
-            <div className="flex gap-2">
-              <button
-                onClick={() => addTestPlayers(3)}
-                disabled={addingTestPlayers}
-                className="btn-secondary text-xs"
-              >
-                +3 Players
-              </button>
-              <button
-                onClick={() => addTestPlayers(5)}
-                disabled={addingTestPlayers}
-                className="btn-secondary text-xs"
-              >
-                +5 Players
-              </button>
+
+            {/* Add Players */}
+            <div>
+              <p className="text-xs text-[#a0a0b8] mb-1.5">Add Test Players</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => addTestPlayers(3)}
+                  disabled={addingTestPlayers}
+                  className="btn-secondary text-xs"
+                >
+                  {addingTestPlayers ? "Adding..." : "+3 Players"}
+                </button>
+                <button
+                  onClick={() => addTestPlayers(5)}
+                  disabled={addingTestPlayers}
+                  className="btn-secondary text-xs"
+                >
+                  {addingTestPlayers ? "Adding..." : "+5 Players"}
+                </button>
+              </div>
             </div>
+
+            {/* Player Switcher */}
+            {league.players.length > 1 && (
+              <div>
+                <p className="text-xs text-[#a0a0b8] mb-1.5">Act As Player</p>
+                <select
+                  value={activeTestPlayerId || ""}
+                  onChange={(e) => setActiveTestPlayerId(e.target.value || null)}
+                  className="input-field text-sm"
+                >
+                  <option value="">Commissioner (you)</option>
+                  {league.players.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.fakeNickname || p.user.nickname || p.user.name}
+                      {p.role === "commissioner" ? " (Commissioner)" : ""}
+                      {p.isFake ? " (test)" : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Advance Round */}
+            {activeSeason && currentRound && currentRound.status !== "graded" && (
+              <div>
+                <p className="text-xs text-[#a0a0b8] mb-1.5">
+                  Round {currentRound.number} &mdash;{" "}
+                  <span className="text-purple-400">{currentRound.status.replace(/_/g, " ")}</span>
+                  {" "}&rarr;{" "}
+                  <span className="text-emerald-400">
+                    {currentRound.status === "awaiting_question"
+                      ? "question submitted"
+                      : currentRound.status === "question_submitted"
+                        ? "category revealed"
+                        : currentRound.status === "category_revealed"
+                          ? "graded"
+                          : "next"}
+                  </span>
+                </p>
+                <div className="space-y-2">
+                  <button
+                    onClick={() => testAdvance("advance")}
+                    disabled={advancing}
+                    className="btn-primary text-xs w-full"
+                  >
+                    {advancing
+                      ? "Advancing..."
+                      : currentRound.status === "awaiting_question"
+                        ? "Auto-Submit Question"
+                        : currentRound.status === "question_submitted"
+                          ? "Reveal Category"
+                          : currentRound.status === "category_revealed"
+                            ? "Auto-Bet, Answer & Grade"
+                            : "Advance Stage"}
+                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => testAdvance("complete_round")}
+                      disabled={advancing}
+                      className="btn-secondary text-xs flex-1"
+                    >
+                      Complete Round
+                    </button>
+                    <button
+                      onClick={() => testAdvance("complete_game")}
+                      disabled={advancing}
+                      className="btn-secondary text-xs flex-1"
+                    >
+                      Complete Game
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* All rounds graded - show option to advance */}
+            {activeSeason && currentRound && currentRound.status === "graded" && (
+              <div>
+                <p className="text-xs text-emerald-400 mb-1.5">
+                  Round {currentRound.number} graded! Refresh to see next round.
+                </p>
+                <button
+                  onClick={fetchLeague}
+                  className="btn-secondary text-xs w-full"
+                >
+                  Refresh
+                </button>
+              </div>
+            )}
+
+            {/* Advance Message */}
+            {advanceMessage && (
+              <p className="text-xs text-[#a0a0b8] bg-[#0f0f23] rounded-lg p-2">
+                {advanceMessage}
+              </p>
+            )}
           </div>
         )}
 
@@ -236,7 +374,7 @@ export default function LeagueDetailPage() {
                 Game {currentGame.number}
               </h2>
               <Link
-                href={`/games/${currentGame.id}`}
+                href={`/games/${currentGame.id}${actAsParam}`}
                 className="btn-primary text-sm"
               >
                 View Game
@@ -273,7 +411,7 @@ export default function LeagueDetailPage() {
                       {currentRound.status.replace(/_/g, " ")}
                     </span>
                     <Link
-                      href={`/rounds/${currentRound.id}`}
+                      href={`/rounds/${currentRound.id}${actAsParam}`}
                       className="block mt-2 text-sm text-[#e94560] hover:underline"
                     >
                       Go to Round &rarr;

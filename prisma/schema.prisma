@@ -94,6 +94,7 @@ model League {
   submissionWindowStart String @default("17:00")
   submissionWindowEnd   String @default("07:00")
   categoryRevealTime    String @default("07:00")
+  answerTimerSeconds    Int @default(120) // Timer from category reveal to answer deadline
   absenteePenaltyType   String @default("half") // "half", "quarter", "none"
   consecutiveMissesForPenalty Int @default(2)
 

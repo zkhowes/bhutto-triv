@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { submitAnswer } from "@/lib/game-engine";
+import { resolveTestPlayer } from "@/lib/test-mode";
 
 export async function POST(
   req: NextRequest,
@@ -16,8 +17,8 @@ export async function POST(
   const { leaguePlayerId, selectedOption, freeTextAnswer } = await req.json();
   const roundId = params.id;
 
-  // Verify player belongs to user
-  const player = await prisma.leaguePlayer.findFirst({
+  // Verify player belongs to user (or commissioner acting as test player)
+  let player = await prisma.leaguePlayer.findFirst({
     where: {
       id: leaguePlayerId,
       userId: session.user.id,
@@ -25,7 +26,11 @@ export async function POST(
   });
 
   if (!player) {
-    return NextResponse.json({ error: "Player not found" }, { status: 404 });
+    const testPlayer = await resolveTestPlayer(leaguePlayerId, session.user.id);
+    if (!testPlayer) {
+      return NextResponse.json({ error: "Player not found" }, { status: 404 });
+    }
+    player = { ...testPlayer } as typeof player;
   }
 
   try {

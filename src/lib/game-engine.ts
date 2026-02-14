@@ -301,6 +301,37 @@ export async function submitAnswer(
     },
   });
 
+  // Auto-close round if all eligible (non-at-bat) players have answered
+  const round = await prisma.round.findUnique({
+    where: { id: roundId },
+    include: {
+      game: { include: { playerStates: true } },
+    },
+  });
+
+  if (round) {
+    const eligiblePlayerIds = round.game.playerStates
+      .filter((ps) => !ps.isEliminated && ps.leaguePlayerId !== round.atBatPlayerId)
+      .map((ps) => ps.leaguePlayerId);
+
+    const answeredCount = await prisma.roundAnswer.count({
+      where: {
+        roundId,
+        leaguePlayerId: { in: eligiblePlayerIds },
+        answeredAt: { not: null },
+      },
+    });
+
+    if (answeredCount >= eligiblePlayerIds.length) {
+      // Set to "closed" (awaiting grading review by at-bat player)
+      // instead of directly closing/grading the round
+      await prisma.round.update({
+        where: { id: roundId },
+        data: { status: ROUND_STATUS.CLOSED },
+      });
+    }
+  }
+
   return { isCorrect, gradedBy };
 }
 
@@ -340,7 +371,7 @@ export async function closeRound(roundId: string): Promise<void> {
   const allPlayerIds = game.playerStates.map((ps) => ps.leaguePlayerId);
   const answeredPlayerIds = round.answers.map((a) => a.leaguePlayerId);
   const absentPlayerIds = allPlayerIds.filter(
-    (id) => !answeredPlayerIds.includes(id)
+    (id) => !answeredPlayerIds.includes(id) && id !== round.atBatPlayerId
   );
 
   // Create absent records
