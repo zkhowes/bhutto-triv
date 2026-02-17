@@ -326,6 +326,7 @@ export default function HallOfFamePage() {
                 </tbody>
               </table>
             </div>
+            </>
           )
         )}
       </div>
