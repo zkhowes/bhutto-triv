@@ -144,7 +144,28 @@ export default function HallOfFamePage() {
               No season awards yet. Complete a full season to generate awards!
             </div>
           ) : (
-            <div className="space-y-8">
+            <>
+              {/* Champion Card */}
+              {stats.length > 0 && (
+                <div className="card p-6 mb-6 text-center bg-gradient-to-br from-[#fbbf24]/10 to-[#1a1a2e]">
+                  <p className="text-3xl font-bold text-[#fbbf24] mb-2">👑 Champion</p>
+                  <div className="flex items-center justify-center gap-3">
+                    <Avatar
+                      src={stats[0].avatarUrl}
+                      name={stats[0].nickname}
+                      size="lg"
+                    />
+                    <div className="text-left">
+                      <p className="text-xl font-bold text-white">{stats[0].nickname}</p>
+                      <p className="text-sm text-[#a0a0b8]">
+                        {stats[0].totalF1Points} F1 Points · {stats[0].totalGames} Games
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-8">
               {awards.map((season) => (
                 <div key={season.seasonId}>
                   <h2 className="text-lg font-bold text-white mb-4">
@@ -188,7 +209,8 @@ export default function HallOfFamePage() {
                   </div>
                 </div>
               ))}
-            </div>
+              </div>
+            </>
           )
         )}
 
@@ -199,26 +221,7 @@ export default function HallOfFamePage() {
               No stats yet. Play some games to build the Hall of Fame!
             </div>
           ) : (
-            <>
-              {stats.length > 0 && (
-                <div className="card p-6 mb-4 text-center bg-gradient-to-br from-[#fbbf24]/10 to-[#1a1a2e]">
-                  <p className="text-3xl font-bold text-[#fbbf24] mb-2">👑 Champion</p>
-                  <div className="flex items-center justify-center gap-3">
-                    <Avatar
-                      src={stats[0].avatarUrl}
-                      name={stats[0].nickname}
-                      size="lg"
-                    />
-                    <div className="text-left">
-                      <p className="text-xl font-bold text-white">{stats[0].nickname}</p>
-                      <p className="text-sm text-[#a0a0b8]">
-                        {stats[0].totalF1Points} F1 Points · {stats[0].totalGames} Games
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-              <div className="card overflow-x-auto">
+            <div className="card overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-[#1e3a5f]">
@@ -326,7 +329,6 @@ export default function HallOfFamePage() {
                 </tbody>
               </table>
             </div>
-            </>
           )
         )}
       </div>

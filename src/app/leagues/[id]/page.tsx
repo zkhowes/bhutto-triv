@@ -189,12 +189,6 @@ export default function LeagueDetailPage() {
   const activeSeason = currentSeason?.status === "active";
   const hasEnoughPlayers = league.players.length >= 2;
 
-  // Redirect to Hall of Fame if season just completed
-  if (currentSeason?.status === "completed" && !activeSeason) {
-    router.push(`/leagues/${leagueId}/hall-of-fame`);
-    return null;
-  }
-
   return (
     <div className="min-h-screen">
       <NavBar />
@@ -242,6 +236,37 @@ export default function LeagueDetailPage() {
             </button>
           </div>
         </div>
+
+        {/* Completed Season - Champion Display */}
+        {currentSeason?.status === "completed" && league.seasonStandings.length > 0 && (
+          <div className="card p-6 mb-6 text-center bg-gradient-to-br from-[#fbbf24]/10 to-[#1a1a2e]">
+            <p className="text-xs text-[#a0a0b8] uppercase tracking-wider mb-2">
+              Season {currentSeason.number} Complete
+            </p>
+            <p className="text-3xl font-bold text-[#fbbf24] mb-3">👑 Champion</p>
+            <div className="flex items-center justify-center gap-3 mb-4">
+              <Avatar
+                src={league.seasonStandings[0].avatarUrl}
+                name={league.seasonStandings[0].nickname}
+                size="lg"
+              />
+              <div className="text-left">
+                <p className="text-xl font-bold text-white">
+                  {league.seasonStandings[0].nickname}
+                </p>
+                <p className="text-sm text-[#a0a0b8]">
+                  {league.seasonStandings[0].totalF1Points} F1 Points · {league.seasonStandings[0].gamesPlayed} Games
+                </p>
+              </div>
+            </div>
+            <Link
+              href={`/leagues/${leagueId}/hall-of-fame`}
+              className="btn-secondary text-sm inline-block"
+            >
+              View Hall of Fame →
+            </Link>
+          </div>
+        )}
 
         {/* Test Mode Controls */}
         {league.type === "test" && isCommissioner && (
@@ -410,21 +435,49 @@ export default function LeagueDetailPage() {
           </div>
         )}
 
-        {/* Start Season */}
-        {isCommissioner && !activeSeason && hasEnoughPlayers && (
-          <button
-            onClick={startSeason}
-            disabled={startingSeason}
-            className="btn-gold w-full mb-4"
-          >
-            {startingSeason ? "Starting..." : "Start Season"}
-          </button>
-        )}
-
-        {!hasEnoughPlayers && !activeSeason && (
-          <div className="card p-4 mb-4 text-center text-[#a0a0b8]">
-            Need at least 2 players to start. Share the invite code!
-          </div>
+        {/* Start Season / Season Complete Message */}
+        {!activeSeason && (
+          <>
+            {currentSeason?.status === "completed" ? (
+              <div className="card p-4 mb-4 text-center">
+                <p className="text-[#fbbf24] text-lg mb-2">🏆 Season Complete!</p>
+                <p className="text-[#a0a0b8] text-sm mb-4">
+                  View the Hall of Fame to see all awards and final standings.
+                </p>
+                {isCommissioner && hasEnoughPlayers && (
+                  <button
+                    onClick={startSeason}
+                    disabled={startingSeason}
+                    className="btn-primary"
+                  >
+                    {startingSeason ? "Starting New Season..." : "Start New Season"}
+                  </button>
+                )}
+                {!hasEnoughPlayers && (
+                  <p className="text-sm text-[#666680] mt-2">
+                    Need at least 2 players to start a new season.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <>
+                {isCommissioner && hasEnoughPlayers && (
+                  <button
+                    onClick={startSeason}
+                    disabled={startingSeason}
+                    className="btn-gold w-full mb-4"
+                  >
+                    {startingSeason ? "Starting..." : "Start Season"}
+                  </button>
+                )}
+                {!hasEnoughPlayers && (
+                  <div className="card p-4 mb-4 text-center text-[#a0a0b8]">
+                    Need at least 2 players to start. Share the invite code!
+                  </div>
+                )}
+              </>
+            )}
+          </>
         )}
 
         {/* Active Game */}
