@@ -5,6 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
 import NavBar from "@/components/layout/NavBar";
 import Link from "next/link";
+import Avatar from "@/components/ui/Avatar";
 
 interface Player {
   id: string;
@@ -25,7 +26,6 @@ interface LeagueInfo {
   name: string;
   type: string;
   gamesPerSeason: number;
-  roundsPerGame: number;
   dailyDeadline: string;
   deadlineTimezone: string;
   submissionWindowStart: string;
@@ -154,7 +154,7 @@ export default function CommissionerPage() {
   const currentSeason = league.seasons[0];
   const currentGame = currentSeason?.games[0];
   const activeRound = currentGame?.rounds?.find(
-    (r) => r.status !== "pending" && r.status !== "graded"
+    (r) => r.status !== "pending" && r.status !== "graded" && r.status !== "cancelled"
   );
   const hasActiveSeason = currentSeason?.status === "active";
 
@@ -207,9 +207,11 @@ export default function CommissionerPage() {
                       key={p.id}
                       className="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-[#0f0f23]/50"
                     >
-                      <div className="avatar-sm">
-                        {name?.[0]?.toUpperCase() || "?"}
-                      </div>
+                      <Avatar
+                        src={p.user.avatarUrl || p.user.image}
+                        name={name}
+                        size="sm"
+                      />
                       <span className="flex-1 text-white text-sm">
                         {name}
                         {p.role === "commissioner" && (
@@ -368,7 +370,7 @@ export default function CommissionerPage() {
               </div>
               <div className="flex justify-between py-2 border-b border-[#1e3a5f]">
                 <span className="text-[#a0a0b8]">Rounds per Game</span>
-                <span className="text-white">{league.roundsPerGame}</span>
+                <span className="text-white">= number of players</span>
               </div>
               <div className="flex justify-between py-2 border-b border-[#1e3a5f]">
                 <span className="text-[#a0a0b8]">Daily Deadline</span>

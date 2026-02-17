@@ -87,7 +87,6 @@ model League {
 
   // Settings
   gamesPerSeason      Int @default(10)
-  roundsPerGame       Int @default(5)
   maxPlayers          Int @default(10)
   dailyDeadline       String @default("10:00") // HH:mm format
   deadlineTimezone    String @default("America/Los_Angeles")
@@ -96,7 +95,6 @@ model League {
   categoryRevealTime    String @default("07:00")
   answerTimerSeconds    Int @default(120) // Timer from category reveal to answer deadline
   absenteePenaltyType   String @default("half") // "half", "quarter", "none"
-  consecutiveMissesForPenalty Int @default(2)
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -157,6 +155,7 @@ model Game {
   seasonId   String
   number     Int      // Game number within season
   status     String   @default("pending") // "pending", "active", "completed"
+  totalRounds Int     @default(0)         // Set at creation = player count, decremented on cancel
 
   startedAt  DateTime?
   completedAt DateTime?
@@ -178,7 +177,7 @@ model GamePlayerState {
   leaguePlayerId String
   points         Int    @default(20) // Betting points
   totalF1Points  Int    @default(0)  // Accumulated F1 scoring points
-  consecutiveMisses Int @default(0)
+  skipCount      Int     @default(0)       // Cumulative skips this game
   isEliminated   Boolean @default(false)
 
   game           Game         @relation(fields: [gameId], references: [id], onDelete: Cascade)
@@ -207,7 +206,8 @@ model Round {
   gameId       String
   number       Int      // Round number within game
   status       String   @default("pending")
-  // "pending" | "awaiting_question" | "question_submitted" | "category_revealed" | "closed" | "graded"
+  // "pending" | "awaiting_question" | "question_submitted" | "category_revealed" | "closed" | "graded" | "cancelled"
+  isCancelled  Boolean  @default(false)
 
   atBatPlayerId    String? // LeaguePlayer id of player creating question
   onDeckPlayerId   String? // Next player
@@ -216,6 +216,8 @@ model Round {
   questionSubmissionOpensAt DateTime?
   categoryRevealAt          DateTime?
   deadlineAt                DateTime?
+
+  funFact      String?  // AI-generated "Did You Know" fact
 
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt

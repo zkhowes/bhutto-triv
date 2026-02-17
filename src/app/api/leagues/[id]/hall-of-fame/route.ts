@@ -38,6 +38,19 @@ export async function GET(
     },
   });
 
+  // Build a map of round categoryRevealAt for answer time calculation
+  const roundRevealTimes: Record<string, Date | null> = {};
+  const roundIds = Array.from(new Set(answers.map((a) => a.roundId)));
+  if (roundIds.length > 0) {
+    const rounds = await prisma.round.findMany({
+      where: { id: { in: roundIds } },
+      select: { id: true, categoryRevealAt: true },
+    });
+    for (const r of rounds) {
+      roundRevealTimes[r.id] = r.categoryRevealAt;
+    }
+  }
+
   // Get all game player states
   const gameStates = await prisma.gamePlayerState.findMany({
     where: {
@@ -193,6 +206,25 @@ export async function GET(
         ? Math.max(...playerAnswers.map((a) => a.f1Points))
         : 0;
 
+    // Average answer time (seconds from category reveal to answer)
+    let avgAnswerTime: number | null = null;
+    const answerTimes: number[] = [];
+    for (const a of playerAnswers) {
+      if (a.answeredAt && !a.isAbsent) {
+        const revealAt = roundRevealTimes[a.roundId];
+        if (revealAt) {
+          const diffMs = a.answeredAt.getTime() - revealAt.getTime();
+          if (diffMs > 0) {
+            answerTimes.push(diffMs / 1000);
+          }
+        }
+      }
+    }
+    if (answerTimes.length > 0) {
+      avgAnswerTime =
+        answerTimes.reduce((a, b) => a + b, 0) / answerTimes.length;
+    }
+
     return {
       playerId: player.id,
       nickname:
@@ -222,6 +254,7 @@ export async function GET(
       highestRoundScore,
       totalWon,
       riskProfile: avgBet,
+      avgAnswerTime,
     };
   });
 

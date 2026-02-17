@@ -60,7 +60,6 @@ async function main() {
       inviteCode: "TESTLEAGUE",
       maxPlayers: 10,
       gamesPerSeason: 5,
-      roundsPerGame: 3,
     },
   });
 

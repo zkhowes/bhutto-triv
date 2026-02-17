@@ -7,6 +7,7 @@ declare module "next-auth" {
       name?: string | null;
       email?: string | null;
       image?: string | null;
+      avatarUrl?: string | null;
       profileComplete: boolean;
       nickname: string | null;
       isSuperAdmin: boolean;
@@ -20,5 +21,6 @@ declare module "next-auth/jwt" {
     profileComplete: boolean;
     nickname: string | null;
     isSuperAdmin: boolean;
+    avatarUrl: string | null;
   }
 }

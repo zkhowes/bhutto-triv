@@ -5,6 +5,12 @@ import { useRouter, useParams } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
 import NavBar from "@/components/layout/NavBar";
 import Link from "next/link";
+import Avatar from "@/components/ui/Avatar";
+import dynamic from "next/dynamic";
+
+const SeasonChart = dynamic(() => import("@/components/league/SeasonChart"), {
+  ssr: false,
+});
 
 interface LeagueData {
   id: string;
@@ -13,7 +19,6 @@ interface LeagueData {
   inviteCode: string;
   maxPlayers: number;
   gamesPerSeason: number;
-  roundsPerGame: number;
   isPlayer: boolean;
   myRole: string | null;
   myPlayerId: string | null;
@@ -32,7 +37,8 @@ interface LeagueData {
       id: string;
       number: number;
       status: string;
-      rounds: Array<{ id: string; number: number; status: string }>;
+      totalRounds: number;
+      rounds: Array<{ id: string; number: number; status: string; isCancelled: boolean }>;
       playerStates: Array<{
         leaguePlayerId: string;
         points: number;
@@ -45,6 +51,14 @@ interface LeagueData {
       }>;
     }>;
   }>;
+  seasonStandings: Array<{
+    leaguePlayerId: string;
+    nickname: string;
+    avatarUrl: string | null;
+    totalF1Points: number;
+    gamesPlayed: number;
+  }>;
+  seasonChartData: Array<Record<string, number>>;
 }
 
 export default function LeagueDetailPage() {
@@ -167,13 +181,19 @@ export default function LeagueDetailPage() {
 
   const currentSeason = league.seasons[0];
   const currentGame = currentSeason?.games[0];
-  // Pick the first non-graded round (the active one), or fall back to the last round
+  // Pick the first non-graded, non-cancelled round (the active one), or fall back to the last non-cancelled round
   const currentRound = currentGame?.rounds?.find(
-    (r: { status: string }) => r.status !== "graded"
-  ) || currentGame?.rounds?.[currentGame.rounds.length - 1];
+    (r) => !r.isCancelled && r.status !== "graded"
+  ) || currentGame?.rounds?.filter((r) => !r.isCancelled).pop() || currentGame?.rounds?.[currentGame.rounds.length - 1];
   const isCommissioner = league.myRole === "commissioner";
   const activeSeason = currentSeason?.status === "active";
   const hasEnoughPlayers = league.players.length >= 2;
+
+  // Redirect to Hall of Fame if season just completed
+  if (currentSeason?.status === "completed" && !activeSeason) {
+    router.push(`/leagues/${leagueId}/hall-of-fame`);
+    return null;
+  }
 
   return (
     <div className="min-h-screen">
@@ -325,8 +345,22 @@ export default function LeagueDetailPage() {
               </div>
             )}
 
-            {/* All rounds graded - show option to advance */}
-            {activeSeason && currentRound && currentRound.status === "graded" && (
+            {/* All rounds graded - show option to advance or start next game */}
+            {activeSeason && currentGame?.status === "completed" && (
+              <div>
+                <p className="text-xs text-[#fbbf24] mb-1.5">
+                  Game {currentGame.number} complete!
+                </p>
+                <button
+                  onClick={() => testAdvance("start_next_game")}
+                  disabled={advancing}
+                  className="btn-primary text-xs w-full"
+                >
+                  {advancing ? "Starting..." : "Start Next Game"}
+                </button>
+              </div>
+            )}
+            {activeSeason && currentRound && currentRound.status === "graded" && currentGame?.status === "active" && (
               <div>
                 <p className="text-xs text-emerald-400 mb-1.5">
                   Round {currentRound.number} graded! Refresh to see next round.
@@ -337,6 +371,33 @@ export default function LeagueDetailPage() {
                 >
                   Refresh
                 </button>
+              </div>
+            )}
+
+            {/* End Season / End League */}
+            {activeSeason && (
+              <div className="border-t border-purple-500/20 pt-3">
+                <p className="text-xs text-[#a0a0b8] mb-1.5">Quick Complete</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => testAdvance("end_season")}
+                    disabled={advancing}
+                    className="btn-secondary text-xs flex-1"
+                  >
+                    {advancing ? "Working..." : "End Season"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (confirm("End the league? This will complete the season and deactivate the league.")) {
+                        testAdvance("end_league");
+                      }
+                    }}
+                    disabled={advancing}
+                    className="text-xs flex-1 px-3 py-1.5 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+                  >
+                    {advancing ? "Working..." : "End League"}
+                  </button>
+                </div>
               </div>
             )}
 
@@ -393,7 +454,7 @@ export default function LeagueDetailPage() {
                       {currentRound.number}
                     </p>
                     <p className="text-xs text-[#a0a0b8]">
-                      of {league.roundsPerGame}
+                      of {currentGame?.totalRounds || currentGame?.rounds?.filter((r: { isCancelled: boolean }) => !r.isCancelled).length || 0}
                     </p>
                   </div>
                   <div className="text-right">
@@ -429,6 +490,69 @@ export default function LeagueDetailPage() {
                 </h3>
                 <div className="space-y-1">
                   {currentGame.playerStates
+                    .sort((a, b) => b.points - a.points)
+                    .map((ps, i) => (
+                      <div
+                        key={ps.leaguePlayerId}
+                        className="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-[#0f0f23]/50"
+                      >
+                        <span
+                          className={`w-6 text-center font-bold ${
+                            i === 0
+                              ? "text-[#fbbf24]"
+                              : i === 1
+                                ? "text-gray-300"
+                                : i === 2
+                                  ? "text-amber-700"
+                                  : "text-[#666680]"
+                          }`}
+                        >
+                          {i + 1}
+                        </span>
+                        <Avatar
+                          src={ps.leaguePlayer.user.avatarUrl || ps.leaguePlayer.user.image}
+                          name={ps.leaguePlayer.fakeNickname || ps.leaguePlayer.user.nickname}
+                          size="sm"
+                        />
+                        <span className="flex-1 text-white text-sm font-medium">
+                          {ps.leaguePlayer.fakeNickname ||
+                            ps.leaguePlayer.user.nickname}
+                        </span>
+                        <span className="text-sm font-mono text-[#fbbf24]">
+                          {ps.points} pts
+                        </span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Completed Game */}
+        {currentGame && currentGame.status === "completed" && (
+          <div className="card p-5 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-white">
+                Game {currentGame.number}{" "}
+                <span className="text-sm font-normal text-[#fbbf24]">Complete</span>
+              </h2>
+              <Link
+                href={`/games/${currentGame.id}${actAsParam}`}
+                className="btn-primary text-sm"
+              >
+                View Results
+              </Link>
+            </div>
+
+            {/* Final Standings */}
+            {currentGame.playerStates.length > 0 && (
+              <div>
+                <h3 className="text-sm font-semibold text-[#a0a0b8] uppercase tracking-wider mb-2">
+                  Final Standings
+                </h3>
+                <div className="space-y-1">
+                  {currentGame.playerStates
                     .sort((a, b) => b.totalF1Points - a.totalF1Points)
                     .map((ps, i) => (
                       <div
@@ -448,18 +572,17 @@ export default function LeagueDetailPage() {
                         >
                           {i + 1}
                         </span>
-                        <div className="avatar-sm">
-                          {(
-                            ps.leaguePlayer.fakeNickname ||
-                            ps.leaguePlayer.user.nickname
-                          )?.[0]?.toUpperCase() || "?"}
-                        </div>
+                        <Avatar
+                          src={ps.leaguePlayer.user.avatarUrl || ps.leaguePlayer.user.image}
+                          name={ps.leaguePlayer.fakeNickname || ps.leaguePlayer.user.nickname}
+                          size="sm"
+                        />
                         <span className="flex-1 text-white text-sm font-medium">
                           {ps.leaguePlayer.fakeNickname ||
                             ps.leaguePlayer.user.nickname}
                         </span>
                         <span className="text-sm font-mono text-[#fbbf24]">
-                          {ps.totalF1Points} pts
+                          {ps.totalF1Points} season pts
                         </span>
                         <span className="text-xs text-[#a0a0b8]">
                           {ps.points} bet pts
@@ -469,6 +592,61 @@ export default function LeagueDetailPage() {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Season Standings */}
+        {league.seasonStandings && league.seasonStandings.length > 0 && (
+          <div className="card p-5 mb-6">
+            <h2 className="text-sm font-semibold text-[#a0a0b8] uppercase tracking-wider mb-3">
+              Season {currentSeason?.number} Standings
+            </h2>
+            <div className="space-y-1">
+              {league.seasonStandings.map((ps, i) => (
+                <div
+                  key={ps.leaguePlayerId}
+                  className="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-[#0f0f23]/50"
+                >
+                  <span
+                    className={`w-6 text-center font-bold ${
+                      i === 0
+                        ? "text-[#fbbf24]"
+                        : i === 1
+                          ? "text-gray-300"
+                          : i === 2
+                            ? "text-amber-700"
+                            : "text-[#666680]"
+                    }`}
+                  >
+                    {i + 1}
+                  </span>
+                  <Avatar
+                    src={ps.avatarUrl}
+                    name={ps.nickname}
+                    size="sm"
+                  />
+                  <span className="flex-1 text-white text-sm font-medium">
+                    {ps.nickname}
+                  </span>
+                  <span className="text-sm font-mono text-[#fbbf24]">
+                    {ps.totalF1Points} pts
+                  </span>
+                  <span className="text-xs text-[#a0a0b8]">
+                    {ps.gamesPlayed} games
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Season Chart */}
+        {league.seasonChartData && league.seasonChartData.length >= 2 && league.seasonStandings.length > 0 && (
+          <div className="mb-6">
+            <SeasonChart
+              data={league.seasonChartData}
+              playerNames={league.seasonStandings.map((ps) => ps.nickname)}
+            />
           </div>
         )}
 
@@ -483,13 +661,11 @@ export default function LeagueDetailPage() {
                 key={p.id}
                 className="flex items-center gap-3 py-2"
               >
-                <div className="avatar-sm">
-                  {(
-                    p.fakeNickname ||
-                    p.user.nickname ||
-                    p.user.name
-                  )?.[0]?.toUpperCase() || "?"}
-                </div>
+                <Avatar
+                  src={p.user.avatarUrl || p.user.image}
+                  name={p.fakeNickname || p.user.nickname || p.user.name}
+                  size="sm"
+                />
                 <span className="flex-1 text-white text-sm">
                   {p.fakeNickname || p.user.nickname || p.user.name}
                   {p.isFake && (

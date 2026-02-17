@@ -11,8 +11,7 @@ export default function CreateLeaguePage() {
   const [name, setName] = useState("");
   const [type, setType] = useState("season");
   const [maxPlayers, setMaxPlayers] = useState(6);
-  const [gamesPerSeason, setGamesPerSeason] = useState(10);
-  const [roundsPerGame, setRoundsPerGame] = useState(5);
+  const [gamesPerSeason, setGamesPerSeason] = useState(3);
   const [dailyDeadline, setDailyDeadline] = useState("10:00");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -49,7 +48,6 @@ export default function CreateLeaguePage() {
           type,
           maxPlayers,
           gamesPerSeason,
-          roundsPerGame,
           dailyDeadline,
         }),
       });
@@ -222,18 +220,10 @@ export default function CreateLeaguePage() {
                   />
                 </div>
               )}
-              <div>
-                <label className="block text-sm font-medium text-[#a0a0b8] mb-1">
-                  Rounds per Game
-                </label>
-                <input
-                  type="number"
-                  min={1}
-                  max={20}
-                  value={roundsPerGame}
-                  onChange={(e) => setRoundsPerGame(Number(e.target.value))}
-                  className="input-field"
-                />
+              <div className="card p-3 bg-[#0f0f23]/50">
+                <p className="text-xs text-[#a0a0b8]">
+                  Rounds per game = number of players (each player bats once)
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-[#a0a0b8] mb-1">

@@ -10,11 +10,13 @@ import BettingInterface from "@/components/game/BettingInterface";
 import AnswerInterface from "@/components/game/AnswerInterface";
 import RoundResults from "@/components/game/RoundResults";
 import GradingInterface from "@/components/game/GradingInterface";
+import Avatar from "@/components/ui/Avatar";
 
 interface RoundData {
   id: string;
   number: number;
   status: string;
+  funFact: string | null;
   categoryRevealAt: string | null;
   atBatPlayerId: string | null;
   onDeckPlayerId: string | null;
@@ -57,6 +59,7 @@ interface RoundData {
     id: string;
     number: number;
     status: string;
+    totalRounds: number;
     season: {
       id: string;
       number: number;
@@ -64,7 +67,6 @@ interface RoundData {
         id: string;
         name: string;
         type: string;
-        roundsPerGame: number;
         dailyDeadline: string;
         deadlineTimezone: string;
         answerTimerSeconds: number;
@@ -260,7 +262,7 @@ export default function RoundPage() {
             <span className="round-card-number">{round.number}</span>
             <span className="text-2xl text-[#a0a0b8]">of</span>
             <span className="text-4xl font-bold text-[#a0a0b8]">
-              {league.roundsPerGame}
+              {round.game.totalRounds || round.game.playerStates.length}
             </span>
           </div>
           <div className="mt-2">
@@ -441,18 +443,13 @@ export default function RoundPage() {
                 >
                   View Game Results
                 </Link>
-              ) : round.number < league.roundsPerGame && (
-                <div className="card p-4 mt-4 text-center">
-                  <p className="text-sm text-[#a0a0b8]">
-                    Next round is starting...
-                  </p>
-                  <button
-                    onClick={fetchRound}
-                    className="btn-primary text-sm mt-2"
-                  >
-                    Refresh
-                  </button>
-                </div>
+              ) : (
+                <Link
+                  href={`/games/${round.game.id}${actAsPlayerId ? `?actAs=${actAsPlayerId}` : ""}`}
+                  className="btn-primary w-full text-center block mt-4"
+                >
+                  Continue to Next Round
+                </Link>
               )}
             </>
           )}
@@ -490,9 +487,11 @@ export default function RoundPage() {
                   key={ps.leaguePlayerId}
                   className="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-[#0f0f23]/50"
                 >
-                  <div className="avatar-sm">
-                    {playerName?.[0]?.toUpperCase() || "?"}
-                  </div>
+                  <Avatar
+                    src={ps.leaguePlayer.user.avatarUrl || ps.leaguePlayer.user.image}
+                    name={playerName}
+                    size="sm"
+                  />
                   <span className="flex-1 text-white text-sm font-medium">
                     {playerName}
                     {ps.leaguePlayerId === myPlayerId && (

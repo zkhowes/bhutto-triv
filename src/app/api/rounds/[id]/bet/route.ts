@@ -38,7 +38,7 @@ export async function POST(
     if (!testPlayer) {
       return NextResponse.json({ error: "Player not found" }, { status: 404 });
     }
-    player = { ...testPlayer } as typeof player;
+    player = { ...testPlayer } as unknown as typeof player;
   }
 
   try {

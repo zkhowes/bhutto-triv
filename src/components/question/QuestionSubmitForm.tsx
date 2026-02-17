@@ -1,12 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { CATEGORIES } from "@/lib/constants";
 
 interface QuestionSubmitFormProps {
   roundId: string;
   leaguePlayerId: string;
   onSubmitted: () => void;
+}
+
+interface Draft {
+  id: string;
+  category: string | null;
+  questionText: string | null;
+  answerFormat: string | null;
+  optionA: string | null;
+  optionB: string | null;
+  optionC: string | null;
+  optionD: string | null;
+  correctOption: string | null;
+  correctAnswer: string | null;
 }
 
 export default function QuestionSubmitForm({
@@ -26,6 +39,7 @@ export default function QuestionSubmitForm({
   const [acceptableAnswers, setAcceptableAnswers] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [draftLoaded, setDraftLoaded] = useState(false);
 
   // AI Workshop
   const [showWorkshop, setShowWorkshop] = useState(false);
@@ -34,6 +48,35 @@ export default function QuestionSubmitForm({
   >([]);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
+
+  // Load auto-submit draft
+  useEffect(() => {
+    if (draftLoaded) return;
+    fetch("/api/questions/drafts")
+      .then((r) => r.json())
+      .then((drafts: Draft[]) => {
+        if (!Array.isArray(drafts)) return;
+        const autoSubmitDraft = drafts.find(
+          (d: Draft) => (d as Draft & { useOnNextRound: boolean }).useOnNextRound
+        );
+        if (autoSubmitDraft && autoSubmitDraft.category && autoSubmitDraft.answerFormat) {
+          setCategory(autoSubmitDraft.category);
+          setQuestionText(autoSubmitDraft.questionText || "");
+          setAnswerFormat(autoSubmitDraft.answerFormat);
+          if (autoSubmitDraft.answerFormat === "multiple_choice") {
+            setOptionA(autoSubmitDraft.optionA || "");
+            setOptionB(autoSubmitDraft.optionB || "");
+            setOptionC(autoSubmitDraft.optionC || "");
+            setOptionD(autoSubmitDraft.optionD || "");
+            setCorrectOption(autoSubmitDraft.correctOption || "");
+          } else {
+            setCorrectAnswer(autoSubmitDraft.correctAnswer || "");
+          }
+        }
+        setDraftLoaded(true);
+      })
+      .catch(() => setDraftLoaded(true));
+  }, [draftLoaded]);
 
   const handleSubmit = async () => {
     if (!category) {

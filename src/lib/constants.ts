@@ -18,9 +18,10 @@ export const F1_POINTS_SCALE = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
 
 export const STARTING_POINTS = 20;
 
+export const SKIP_PENALTY_PERCENTAGE = 0.5;
+
 export const DEFAULT_SETTINGS = {
-  gamesPerSeason: 10,
-  roundsPerGame: 5,
+  gamesPerSeason: 3,
   maxPlayers: 10,
   dailyDeadline: "10:00",
   deadlineTimezone: "America/Los_Angeles",
@@ -28,7 +29,6 @@ export const DEFAULT_SETTINGS = {
   submissionWindowEnd: "07:00",
   categoryRevealTime: "07:00",
   absenteePenaltyType: "half" as const,
-  consecutiveMissesForPenalty: 2,
 };
 
 export const ROUND_STATUS = {
@@ -38,6 +38,7 @@ export const ROUND_STATUS = {
   CATEGORY_REVEALED: "category_revealed",
   CLOSED: "closed",
   GRADED: "graded",
+  CANCELLED: "cancelled",
 } as const;
 
 export const GAME_STATUS = {

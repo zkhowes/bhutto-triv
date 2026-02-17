@@ -46,7 +46,6 @@ export async function PUT(
   const body = await req.json();
   const allowedFields = [
     "gamesPerSeason",
-    "roundsPerGame",
     "dailyDeadline",
     "deadlineTimezone",
     "submissionWindowStart",
@@ -54,7 +53,6 @@ export async function PUT(
     "categoryRevealTime",
     "answerTimerSeconds",
     "absenteePenaltyType",
-    "consecutiveMissesForPenalty",
   ];
 
   const updateData: Record<string, unknown> = {};

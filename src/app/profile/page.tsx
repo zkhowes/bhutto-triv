@@ -2,8 +2,9 @@
 
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import NavBar from "@/components/layout/NavBar";
+import Avatar from "@/components/ui/Avatar";
 
 const TIMEZONES = [
   "America/New_York",
@@ -27,9 +28,13 @@ export default function ProfilePage() {
   const [nickname, setNickname] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [timezone, setTimezone] = useState("America/Los_Angeles");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [loaded, setLoaded] = useState(false);
+  const [aiDescription, setAiDescription] = useState("");
+  const [generatingAvatar, setGeneratingAvatar] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -46,12 +51,55 @@ export default function ProfilePage() {
             setNickname(data.nickname || session.user?.name || "");
             setPhoneNumber(data.phoneNumber || "");
             setTimezone(data.timezone || "America/Los_Angeles");
+            setAvatarUrl(data.avatarUrl || null);
           }
           setLoaded(true);
         })
         .catch(() => setLoaded(true));
     }
   }, [session]);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = 200;
+    canvas.height = 200;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const img = new Image();
+    img.onload = () => {
+      // Center crop
+      const size = Math.min(img.width, img.height);
+      const sx = (img.width - size) / 2;
+      const sy = (img.height - size) / 2;
+      ctx.drawImage(img, sx, sy, size, size, 0, 0, 200, 200);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
+      setAvatarUrl(dataUrl);
+    };
+    img.src = URL.createObjectURL(file);
+  };
+
+  const generateAiAvatar = async () => {
+    if (!aiDescription.trim()) return;
+    setGeneratingAvatar(true);
+    try {
+      const res = await fetch("/api/avatar/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ description: aiDescription.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setAvatarUrl(data.avatarUrl);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to generate avatar");
+    } finally {
+      setGeneratingAvatar(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,7 +119,12 @@ export default function ProfilePage() {
       const res = await fetch("/api/users/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nickname: nickname.trim(), phoneNumber: phoneNumber.trim(), timezone }),
+        body: JSON.stringify({
+          nickname: nickname.trim(),
+          phoneNumber: phoneNumber.trim(),
+          timezone,
+          avatarUrl,
+        }),
       });
 
       if (!res.ok) {
@@ -106,6 +159,59 @@ export default function ProfilePage() {
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-5">
+          {/* Avatar Section */}
+          <div>
+            <label className="block text-sm font-medium text-[#a0a0b8] mb-3">
+              Avatar
+            </label>
+            <div className="flex items-center gap-4 mb-3">
+              <Avatar src={avatarUrl} name={nickname} size="lg" />
+              <div className="flex-1 space-y-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="btn-secondary text-xs w-full"
+                >
+                  Upload Photo
+                </button>
+                {avatarUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setAvatarUrl(null)}
+                    className="text-xs text-red-400 hover:text-red-300 w-full"
+                  >
+                    Remove Avatar
+                  </button>
+                )}
+              </div>
+            </div>
+            {/* AI Generate */}
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={aiDescription}
+                onChange={(e) => setAiDescription(e.target.value)}
+                className="input-field flex-1 text-sm"
+                placeholder="Describe your avatar (e.g. 'Purple Chicken')"
+              />
+              <button
+                type="button"
+                onClick={generateAiAvatar}
+                disabled={generatingAvatar || !aiDescription.trim()}
+                className="btn-secondary text-xs whitespace-nowrap"
+              >
+                {generatingAvatar ? "..." : "AI Generate"}
+              </button>
+            </div>
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-[#a0a0b8] mb-1.5">
               Nickname *

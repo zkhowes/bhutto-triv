@@ -4,8 +4,9 @@ import {
   ROUND_STATUS,
   GAME_STATUS,
   SEASON_STATUS,
+  SKIP_PENALTY_PERCENTAGE,
 } from "./constants";
-import { scoreRound, calculateAbsenteePenalty } from "./scoring";
+import { scoreRound, calculateAbsenteePenalty, getF1PointsForPlacement } from "./scoring";
 
 /**
  * Initialize a new season for a league
@@ -64,6 +65,7 @@ export async function initializeGame(
       seasonId,
       number: nextGameNumber,
       status: GAME_STATUS.ACTIVE,
+      totalRounds: playerIds.length,
       startedAt: new Date(),
     },
   });
@@ -87,12 +89,12 @@ export async function initializeGame(
       leaguePlayerId: playerId,
       points: STARTING_POINTS,
       totalF1Points: 0,
-      consecutiveMisses: 0,
+      skipCount: 0,
     })),
   });
 
-  // Create rounds
-  const roundsPerGame = season.league.roundsPerGame;
+  // Create rounds — one per player (each player bats exactly once)
+  const roundsPerGame = playerIds.length;
   for (let i = 0; i < roundsPerGame; i++) {
     const atBatIndex = i % shuffled.length;
     const onDeckIndex = (i + 1) % shuffled.length;
@@ -381,8 +383,9 @@ export async function closeRound(roundId: string): Promise<void> {
     );
     if (!playerState || playerState.isEliminated) continue;
 
-    const remainingRounds =
-      league.roundsPerGame - round.number;
+    const remainingRounds = game.rounds.filter(
+      (r) => !r.isCancelled && r.status !== ROUND_STATUS.GRADED && r.id !== roundId
+    ).length;
     const penalty = calculateAbsenteePenalty(
       playerState.points,
       Math.max(remainingRounds, 1)
@@ -460,7 +463,7 @@ export async function closeRound(roundId: string): Promise<void> {
       },
     });
 
-    // Update player state
+    // Update player state (F1/season points are calculated at game end, not per round)
     const playerState = game.playerStates.find(
       (ps) => ps.leaguePlayerId === score.leaguePlayerId
     );
@@ -470,27 +473,65 @@ export async function closeRound(roundId: string): Promise<void> {
         where: { id: playerState.id },
         data: {
           points: newPoints,
-          totalF1Points: playerState.totalF1Points + score.f1Points,
           isEliminated: newPoints === 0,
         },
       });
     }
   }
 
+  // Generate fun fact
+  let funFact: string | null = null;
+  try {
+    const roundWithQuestion = await prisma.round.findUnique({
+      where: { id: roundId },
+      include: { question: true },
+    });
+    if (roundWithQuestion?.question) {
+      const { generateFunFact } = await import("./ai");
+      const q = roundWithQuestion.question;
+      funFact = await generateFunFact(
+        q.questionText,
+        q.correctAnswer || q.correctOption || "",
+        q.category
+      );
+    }
+  } catch (err) {
+    console.error("Failed to generate fun fact:", err);
+  }
+
   // Update round status
   await prisma.round.update({
     where: { id: roundId },
-    data: { status: ROUND_STATUS.GRADED },
+    data: { status: ROUND_STATUS.GRADED, funFact },
   });
 
-  // Check if game should end (all players at 0 or last round)
-  const isLastRound = round.number >= league.roundsPerGame;
+  // Check if game should end (all players at 0 or no remaining rounds)
+  const remainingActiveRounds = game.rounds.filter(
+    (r) => !r.isCancelled && r.status !== ROUND_STATUS.GRADED && r.id !== roundId
+  ).length;
+  const isLastRound = remainingActiveRounds === 0;
   const updatedStates = await prisma.gamePlayerState.findMany({
     where: { gameId: game.id },
   });
   const allEliminated = updatedStates.every((s) => s.isEliminated);
 
   if (isLastRound || allEliminated) {
+    // Calculate F1/season points based on final game standings
+    const finalStates = await prisma.gamePlayerState.findMany({
+      where: { gameId: game.id },
+    });
+    // Sort by remaining points (descending) — higher points = better placement
+    const sortedByPoints = [...finalStates].sort((a, b) => b.points - a.points);
+    const totalPlayers = sortedByPoints.length;
+    for (let i = 0; i < sortedByPoints.length; i++) {
+      const placement = i + 1;
+      const f1Points = getF1PointsForPlacement(placement, totalPlayers);
+      await prisma.gamePlayerState.update({
+        where: { id: sortedByPoints[i].id },
+        data: { totalF1Points: f1Points },
+      });
+    }
+
     await prisma.game.update({
       where: { id: game.id },
       data: { status: GAME_STATUS.COMPLETED, completedAt: new Date() },
@@ -508,10 +549,20 @@ export async function closeRound(roundId: string): Promise<void> {
           completedAt: new Date(),
         },
       });
+
+      // Generate season awards
+      try {
+        const { generateSeasonAwards } = await import("./awards");
+        await generateSeasonAwards(game.seasonId);
+      } catch (err) {
+        console.error("Failed to generate season awards:", err);
+      }
     }
   } else {
-    // Activate next round
-    const nextRound = game.rounds.find((r) => r.number === round.number + 1);
+    // Activate next non-cancelled pending round
+    const nextRound = game.rounds.find(
+      (r) => r.number > round.number && !r.isCancelled && r.status === ROUND_STATUS.PENDING
+    );
     if (nextRound) {
       await prisma.round.update({
         where: { id: nextRound.id },
@@ -536,23 +587,30 @@ export async function revealCategory(roundId: string): Promise<void> {
 
 /**
  * Skip a player's turn (Commissioner action)
+ * Two-strike system:
+ *   First skip (skipCount was 0): move player to end of batting order
+ *   Second skip (skipCount >= 1): 50% point penalty, cancel the round
  */
 export async function skipPlayerTurn(
   roundId: string,
   leaguePlayerId: string
-): Promise<void> {
+): Promise<{ cancelled: boolean }> {
   const round = await prisma.round.findUnique({
     where: { id: roundId },
     include: {
       game: {
-        include: { battingOrder: { orderBy: { position: "asc" } } },
+        include: {
+          rounds: { orderBy: { number: "asc" } },
+          playerStates: true,
+          battingOrder: { orderBy: { position: "asc" } },
+          season: { include: { league: true } },
+        },
       },
     },
   });
 
   if (!round) throw new Error("Round not found");
 
-  // Update consecutive misses
   const playerState = await prisma.gamePlayerState.findUnique({
     where: {
       gameId_leaguePlayerId: {
@@ -562,26 +620,136 @@ export async function skipPlayerTurn(
     },
   });
 
-  if (playerState) {
-    const newMisses = playerState.consecutiveMisses + 1;
+  if (!playerState) throw new Error("Player state not found");
+
+  const game = round.game;
+
+  if (playerState.skipCount === 0) {
+    // ── FIRST SKIP: move skipped player to end of order ──
     await prisma.gamePlayerState.update({
       where: { id: playerState.id },
-      data: { consecutiveMisses: newMisses },
+      data: { skipCount: 1 },
     });
+
+    // Get all future pending rounds (after this one) that are not cancelled
+    const futureRounds = game.rounds.filter(
+      (r) => r.number > round.number && !r.isCancelled && r.status === ROUND_STATUS.PENDING
+    );
+
+    if (futureRounds.length === 0) {
+      // No future rounds to shift into — this is the last round
+      // Just swap with next player in batting order
+      const nextPendingRound = game.rounds.find(
+        (r) => r.number > round.number && !r.isCancelled
+      );
+      if (nextPendingRound) {
+        // Swap at-bat players
+        await prisma.round.update({
+          where: { id: round.id },
+          data: { atBatPlayerId: nextPendingRound.atBatPlayerId },
+        });
+        await prisma.round.update({
+          where: { id: nextPendingRound.id },
+          data: { atBatPlayerId: leaguePlayerId },
+        });
+      }
+    } else {
+      // Shift: current round gets next round's at-bat, each shifts forward, last gets skipped player
+      const allAffectedRounds = [round, ...futureRounds];
+      const newAtBatOrder: string[] = [];
+
+      // Build new at-bat order: skip the current player, shift everyone else forward
+      for (let i = 1; i < allAffectedRounds.length; i++) {
+        newAtBatOrder.push(allAffectedRounds[i].atBatPlayerId!);
+      }
+      newAtBatOrder.push(leaguePlayerId); // Skipped player goes to end
+
+      // Apply the new at-bat assignments
+      for (let i = 0; i < allAffectedRounds.length; i++) {
+        const r = allAffectedRounds[i];
+        const newAtBat = newAtBatOrder[i];
+        // Compute on-deck and in-the-hole from the subsequent rounds
+        const onDeck = i + 1 < newAtBatOrder.length ? newAtBatOrder[i + 1] : null;
+        const inTheHole = i + 2 < newAtBatOrder.length ? newAtBatOrder[i + 2] : null;
+
+        await prisma.round.update({
+          where: { id: r.id },
+          data: {
+            atBatPlayerId: newAtBat,
+            onDeckPlayerId: onDeck,
+            inTheHolePlayerId: inTheHole,
+          },
+        });
+      }
+    }
+
+    return { cancelled: false };
+  } else {
+    // ── SECOND SKIP (or more): penalty + cancel round ──
+    const penalty = Math.floor(playerState.points * SKIP_PENALTY_PERCENTAGE);
+    const newPoints = Math.max(0, playerState.points - penalty);
+
+    await prisma.gamePlayerState.update({
+      where: { id: playerState.id },
+      data: {
+        skipCount: playerState.skipCount + 1,
+        points: newPoints,
+        isEliminated: newPoints === 0,
+      },
+    });
+
+    // Mark round as cancelled
+    await prisma.round.update({
+      where: { id: roundId },
+      data: {
+        status: ROUND_STATUS.CANCELLED,
+        isCancelled: true,
+      },
+    });
+
+    // Decrement game totalRounds
+    await prisma.game.update({
+      where: { id: game.id },
+      data: { totalRounds: { decrement: 1 } },
+    });
+
+    // Check if any remaining active rounds exist
+    const remainingRounds = game.rounds.filter(
+      (r) => r.id !== roundId && !r.isCancelled && r.status !== ROUND_STATUS.GRADED
+    );
+
+    if (remainingRounds.length === 0) {
+      // No more rounds — complete the game with F1 scoring
+      const finalStates = await prisma.gamePlayerState.findMany({
+        where: { gameId: game.id },
+      });
+      const sortedByPoints = [...finalStates].sort((a, b) => b.points - a.points);
+      const totalPlayers = sortedByPoints.length;
+      for (let i = 0; i < sortedByPoints.length; i++) {
+        const placement = i + 1;
+        const f1Points = getF1PointsForPlacement(placement, totalPlayers);
+        await prisma.gamePlayerState.update({
+          where: { id: sortedByPoints[i].id },
+          data: { totalF1Points: f1Points },
+        });
+      }
+      await prisma.game.update({
+        where: { id: game.id },
+        data: { status: GAME_STATUS.COMPLETED, completedAt: new Date() },
+      });
+    } else {
+      // Activate next pending round
+      const nextPending = game.rounds.find(
+        (r) => r.id !== roundId && !r.isCancelled && r.status === ROUND_STATUS.PENDING
+      );
+      if (nextPending) {
+        await prisma.round.update({
+          where: { id: nextPending.id },
+          data: { status: ROUND_STATUS.AWAITING_QUESTION },
+        });
+      }
+    }
+
+    return { cancelled: true };
   }
-
-  // Move to next player in batting order
-  const currentIndex = round.game.battingOrder.findIndex(
-    (b) => b.leaguePlayerId === round.atBatPlayerId
-  );
-  const nextIndex =
-    (currentIndex + 1) % round.game.battingOrder.length;
-  const nextPlayer = round.game.battingOrder[nextIndex];
-
-  await prisma.round.update({
-    where: { id: roundId },
-    data: {
-      atBatPlayerId: nextPlayer.leaguePlayerId,
-    },
-  });
 }

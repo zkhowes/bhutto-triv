@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
         { status: 404 }
       );
     }
-    player = { ...testPlayer } as typeof player;
+    player = { ...testPlayer } as unknown as typeof player;
     actingUserId = testPlayer.userId;
   }
 

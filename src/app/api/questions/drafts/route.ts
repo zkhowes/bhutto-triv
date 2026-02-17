@@ -78,23 +78,23 @@ export async function PUT(req: NextRequest) {
     );
   }
 
+  // Build update payload only from keys actually sent
+  const data: Record<string, unknown> = {};
+  const fields = ["category", "questionText", "answerFormat", "optionA", "optionB", "optionC", "optionD", "correctOption", "correctAnswer", "useOnNextRound"];
+  for (const field of fields) {
+    if (field in updateData) {
+      data[field] = updateData[field];
+    }
+  }
+  if ("acceptableAnswers" in updateData) {
+    data.acceptableAnswers = updateData.acceptableAnswers
+      ? JSON.stringify(updateData.acceptableAnswers)
+      : null;
+  }
+
   const updated = await prisma.questionDraft.update({
     where: { id },
-    data: {
-      category: updateData.category,
-      questionText: updateData.questionText,
-      answerFormat: updateData.answerFormat,
-      optionA: updateData.optionA,
-      optionB: updateData.optionB,
-      optionC: updateData.optionC,
-      optionD: updateData.optionD,
-      correctOption: updateData.correctOption,
-      correctAnswer: updateData.correctAnswer,
-      acceptableAnswers: updateData.acceptableAnswers
-        ? JSON.stringify(updateData.acceptableAnswers)
-        : null,
-      useOnNextRound: updateData.useOnNextRound,
-    },
+    data,
   });
 
   return NextResponse.json(updated);

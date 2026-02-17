@@ -129,6 +129,145 @@ Be concise, helpful, and enthusiastic about trivia. When suggesting questions, f
 }
 
 /**
+ * Generate a fun fact related to a trivia question
+ */
+export async function generateFunFact(
+  question: string,
+  answer: string,
+  category: string
+): Promise<string> {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return "";
+  }
+
+  try {
+    const anthropic = getClient();
+    const response = await anthropic.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 200,
+      messages: [
+        {
+          role: "user",
+          content: `Given this trivia question and answer, share one interesting "Did You Know?" fact related to the topic. Keep it to 1-2 sentences, fun and educational.
+
+Category: ${category}
+Question: ${question}
+Answer: ${answer}
+
+Respond with just the fact, no prefix.`,
+        },
+      ],
+    });
+
+    return response.content[0].type === "text" ? response.content[0].text : "";
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Generate an AI SVG avatar based on a description
+ */
+export async function generateAvatarSvg(description: string): Promise<string> {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    throw new Error("AI is not configured");
+  }
+
+  const anthropic = getClient();
+  const response = await anthropic.messages.create({
+    model: "claude-sonnet-4-20250514",
+    max_tokens: 2000,
+    messages: [
+      {
+        role: "user",
+        content: `Generate a simple, clean SVG avatar image (64x64 pixels) based on this description: "${description}"
+
+Requirements:
+- Must be valid SVG markup starting with <svg> and ending with </svg>
+- 64x64 viewBox
+- Use simple shapes (circles, rects, paths) - keep it minimal
+- Use bright, fun colors on a colored background
+- Make it look like a stylized avatar/icon
+- No text in the SVG
+- Return ONLY the SVG markup, nothing else`,
+      },
+    ],
+  });
+
+  const text = response.content[0].type === "text" ? response.content[0].text : "";
+  // Extract SVG from response
+  const svgMatch = text.match(/<svg[\s\S]*?<\/svg>/i);
+  if (!svgMatch) throw new Error("Failed to generate SVG");
+
+  const svg = svgMatch[0];
+  const base64 = Buffer.from(svg).toString("base64");
+  return `data:image/svg+xml;base64,${base64}`;
+}
+
+/**
+ * Parse AI workshop text into structured question fields
+ */
+export async function parseQuestionFromText(text: string): Promise<{
+  category: string;
+  questionText: string;
+  answerFormat: string;
+  optionA?: string;
+  optionB?: string;
+  optionC?: string;
+  optionD?: string;
+  correctOption?: string;
+  correctAnswer?: string;
+} | null> {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return null;
+  }
+
+  try {
+    const anthropic = getClient();
+    const response = await anthropic.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 500,
+      messages: [
+        {
+          role: "user",
+          content: `Parse this text into a structured trivia question. Extract the category, question, answer format, and answer details.
+
+Categories: Geography, Sports, Politics, Science, History, Entertainment, Arts & Literature, Food & Drink, Technology, General Knowledge
+
+Text to parse:
+${text}
+
+Respond with JSON only:
+{
+  "category": "one of the categories above",
+  "questionText": "the question",
+  "answerFormat": "multiple_choice" or "free_text",
+  "optionA": "option A (if multiple choice)",
+  "optionB": "option B (if multiple choice)",
+  "optionC": "option C (if multiple choice)",
+  "optionD": "option D (if multiple choice)",
+  "correctOption": "A", "B", "C", or "D" (if multiple choice),
+  "correctAnswer": "the correct answer text (if free text)"
+}
+
+If the text doesn't contain a clear question, return null.`,
+        },
+      ],
+    });
+
+    const responseText =
+      response.content[0].type === "text" ? response.content[0].text : "";
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return null;
+    const parsed = JSON.parse(jsonMatch[0]);
+    if (!parsed || parsed === "null" || !parsed.questionText) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Generate AI league name suggestions
  */
 export async function suggestLeagueNames(): Promise<string[]> {

@@ -1,9 +1,12 @@
 "use client";
 
+import Avatar from "@/components/ui/Avatar";
+
 interface RoundResultsProps {
   round: {
     id: string;
     number: number;
+    funFact?: string | null;
     question: {
       category: string;
       questionText: string;
@@ -35,7 +38,11 @@ interface RoundResultsProps {
       };
     }>;
     game: {
-      season: { league: { roundsPerGame: number } };
+      totalRounds: number;
+      playerStates: Array<{
+        leaguePlayerId: string;
+        points: number;
+      }>;
     };
   };
   myPlayerId: string | null;
@@ -113,6 +120,16 @@ export default function RoundResults({ round, myPlayerId }: RoundResultsProps) {
         </div>
       )}
 
+      {/* Did You Know? */}
+      {round.funFact && (
+        <div className="p-4 rounded-xl border border-purple-500/30 bg-gradient-to-r from-purple-500/5 to-indigo-500/5">
+          <p className="text-xs font-bold text-purple-400 uppercase tracking-wider mb-1">
+            Did You Know?
+          </p>
+          <p className="text-sm text-[#e8e8e8]">{round.funFact}</p>
+        </div>
+      )}
+
       {/* Scorecard */}
       <div className="card p-5">
         <h3 className="text-sm font-semibold text-[#a0a0b8] uppercase tracking-wider mb-3">
@@ -159,6 +176,11 @@ export default function RoundResults({ round, myPlayerId }: RoundResultsProps) {
                     </td>
                     <td className="py-2.5">
                       <div className="flex items-center gap-2">
+                        <Avatar
+                          src={answer.leaguePlayer.user.avatarUrl || answer.leaguePlayer.user.image}
+                          name={name}
+                          size="sm"
+                        />
                         <span className="text-white text-sm">
                           {name}
                           {isMe && (
@@ -202,7 +224,9 @@ export default function RoundResults({ round, myPlayerId }: RoundResultsProps) {
                     </td>
                     <td className="py-2.5 text-right">
                       <span className="text-sm font-bold text-[#fbbf24]">
-                        {answer.f1Points}
+                        {round.game.playerStates.find(
+                          (ps) => ps.leaguePlayerId === answer.leaguePlayerId
+                        )?.points ?? "-"}
                       </span>
                     </td>
                   </tr>

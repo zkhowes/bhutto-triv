@@ -164,21 +164,3 @@ export function calculateAbsenteePenalty(
   return Math.floor(currentPoints / remainingRounds);
 }
 
-/**
- * Calculate penalty for consecutive missed question submissions
- */
-export function calculateConsecutiveMissPenalty(
-  currentPoints: number,
-  penaltyType: string
-): number {
-  switch (penaltyType) {
-    case "half":
-      return Math.floor(currentPoints / 2);
-    case "quarter":
-      return Math.floor(currentPoints / 4);
-    case "none":
-      return 0;
-    default:
-      return Math.floor(currentPoints / 2);
-  }
-}

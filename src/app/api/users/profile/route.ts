@@ -41,7 +41,7 @@ export async function PUT(req: NextRequest) {
       nickname: nickname || undefined,
       phoneNumber: phoneNumber || undefined,
       timezone: timezone || undefined,
-      avatarUrl: avatarUrl || undefined,
+      avatarUrl: avatarUrl !== undefined ? (avatarUrl || null) : undefined,
       profileComplete: !!(nickname && phoneNumber && timezone),
     },
   });

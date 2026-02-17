@@ -5,14 +5,27 @@ import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import NavBar from "@/components/layout/NavBar";
 
+interface ParsedQuestion {
+  category: string;
+  questionText: string;
+  answerFormat: string;
+  optionA?: string;
+  optionB?: string;
+  optionC?: string;
+  optionD?: string;
+  correctOption?: string;
+  correctAnswer?: string;
+}
+
 export default function WorkshopPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [messages, setMessages] = useState<
-    Array<{ role: "user" | "assistant"; content: string }>
+    Array<{ role: "user" | "assistant"; content: string; parsed?: ParsedQuestion }>
   >([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [savingDraft, setSavingDraft] = useState<number | null>(null);
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/");
@@ -35,9 +48,26 @@ export default function WorkshopPage() {
         body: JSON.stringify({ messages: newMessages }),
       });
       const data = await res.json();
+      const assistantMessage = data.response || "No response";
+
+      // Try to parse the response into structured question data
+      let parsed: ParsedQuestion | undefined;
+      try {
+        const parseRes = await fetch("/api/questions/parse", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: assistantMessage }),
+        });
+        if (parseRes.ok) {
+          parsed = await parseRes.json();
+        }
+      } catch {
+        // Parsing failed, just show text
+      }
+
       setMessages([
         ...newMessages,
-        { role: "assistant", content: data.response || "No response" },
+        { role: "assistant", content: assistantMessage, parsed },
       ]);
     } catch {
       setMessages([
@@ -49,16 +79,43 @@ export default function WorkshopPage() {
     }
   };
 
-  const saveDraft = async (text: string) => {
+  const saveDraft = async (text: string, msgIndex: number) => {
+    setSavingDraft(msgIndex);
     try {
+      // First try to parse into structured fields
+      const parseRes = await fetch("/api/questions/parse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+
+      let draftBody: Record<string, unknown> = { questionText: text };
+
+      if (parseRes.ok) {
+        const parsed = await parseRes.json();
+        draftBody = {
+          category: parsed.category,
+          questionText: parsed.questionText,
+          answerFormat: parsed.answerFormat,
+          optionA: parsed.optionA || null,
+          optionB: parsed.optionB || null,
+          optionC: parsed.optionC || null,
+          optionD: parsed.optionD || null,
+          correctOption: parsed.correctOption || null,
+          correctAnswer: parsed.correctAnswer || null,
+        };
+      }
+
       await fetch("/api/questions/drafts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ questionText: text }),
+        body: JSON.stringify(draftBody),
       });
-      alert("Saved to drafts!");
+      alert(parseRes.ok ? "Saved to drafts (parsed)!" : "Saved to drafts (raw)!");
     } catch {
       alert("Failed to save draft");
+    } finally {
+      setSavingDraft(null);
     }
   };
 
@@ -122,23 +179,68 @@ export default function WorkshopPage() {
                 key={i}
                 className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
               >
-                <div
-                  className={`max-w-[80%] p-3 rounded-xl text-sm ${
-                    msg.role === "user"
-                      ? "bg-[#e94560]/20 text-white"
-                      : "bg-[#1e3a5f] text-[#e8e8e8]"
-                  }`}
-                >
-                  <p className="whitespace-pre-wrap">{msg.content}</p>
-                  {msg.role === "assistant" && (
+                {msg.role === "user" ? (
+                  <div className="max-w-[80%] p-3 rounded-xl text-sm bg-[#e94560]/20 text-white">
+                    <p className="whitespace-pre-wrap">{msg.content}</p>
+                  </div>
+                ) : msg.parsed ? (
+                  <div className="max-w-[90%] p-4 rounded-xl bg-[#1e3a5f] border border-[#254a73]">
+                    <div className="mb-3">
+                      <span className="text-xs font-semibold text-[#fbbf24] uppercase tracking-wider">
+                        {msg.parsed.category}
+                      </span>
+                    </div>
+                    <p className="text-white font-medium mb-3">{msg.parsed.questionText}</p>
+                    {msg.parsed.answerFormat === "multiple_choice" && (
+                      <div className="space-y-2 mb-3">
+                        {[
+                          { label: "A", text: msg.parsed.optionA },
+                          { label: "B", text: msg.parsed.optionB },
+                          { label: "C", text: msg.parsed.optionC },
+                          { label: "D", text: msg.parsed.optionD },
+                        ].map((opt) => opt.text && (
+                          <div
+                            key={opt.label}
+                            className={`p-2 rounded-lg text-sm ${
+                              opt.label === msg.parsed?.correctOption
+                                ? "bg-emerald-500/20 border border-emerald-500/50 text-emerald-400"
+                                : "bg-[#0f0f23] text-[#a0a0b8]"
+                            }`}
+                          >
+                            <span className="font-bold mr-2">{opt.label}.</span>
+                            {opt.text}
+                            {opt.label === msg.parsed?.correctOption && (
+                              <span className="ml-2 text-xs">✓ Correct</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {msg.parsed.answerFormat === "short_answer" && msg.parsed.correctAnswer && (
+                      <div className="mb-3 p-2 rounded-lg bg-emerald-500/20 text-emerald-400 text-sm">
+                        <span className="font-semibold">Answer:</span> {msg.parsed.correctAnswer}
+                      </div>
+                    )}
                     <button
-                      onClick={() => saveDraft(msg.content)}
+                      onClick={() => saveDraft(msg.content, i)}
+                      disabled={savingDraft === i}
+                      className="btn-primary text-xs"
+                    >
+                      {savingDraft === i ? "Saving..." : "Save to Drafts"}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="max-w-[80%] p-3 rounded-xl text-sm bg-[#1e3a5f] text-[#e8e8e8]">
+                    <p className="whitespace-pre-wrap">{msg.content}</p>
+                    <button
+                      onClick={() => saveDraft(msg.content, i)}
+                      disabled={savingDraft === i}
                       className="mt-2 text-xs text-[#e94560] hover:text-[#e94560]/80"
                     >
-                      Save to drafts
+                      {savingDraft === i ? "Saving..." : "Save to drafts"}
                     </button>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             ))}
             {loading && (

@@ -5,18 +5,19 @@ import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
 import NavBar from "@/components/layout/NavBar";
 import Link from "next/link";
+import Avatar from "@/components/ui/Avatar";
 
 interface GameData {
   id: string;
   number: number;
   status: string;
+  totalRounds: number;
   season: {
     id: string;
     number: number;
     league: {
       id: string;
       name: string;
-      roundsPerGame: number;
       dailyDeadline: string;
       deadlineTimezone: string;
     };
@@ -25,6 +26,7 @@ interface GameData {
     id: string;
     number: number;
     status: string;
+    isCancelled: boolean;
     atBatPlayerId: string | null;
     onDeckPlayerId: string | null;
     inTheHolePlayerId: string | null;
@@ -99,8 +101,8 @@ export default function GamePage() {
 
   const activeRound = game.rounds.find(
     (r) =>
-      r.status !== "pending" && r.status !== "graded"
-  ) || game.rounds[game.rounds.length - 1];
+      !r.isCancelled && r.status !== "pending" && r.status !== "graded"
+  ) || game.rounds.filter((r) => !r.isCancelled).pop() || game.rounds[game.rounds.length - 1];
 
   const getPlayerName = (playerId: string | null) => {
     if (!playerId) return "TBD";
@@ -114,8 +116,10 @@ export default function GamePage() {
     );
   };
 
-  const sortedStandings = [...game.playerStates].sort(
-    (a, b) => b.totalF1Points - a.totalF1Points
+  const sortedStandings = [...game.playerStates].sort((a, b) =>
+    game.status === "completed"
+      ? b.totalF1Points - a.totalF1Points
+      : b.points - a.points
   );
 
   return (
@@ -150,7 +154,7 @@ export default function GamePage() {
                   </span>
                   <span className="text-2xl text-[#a0a0b8]">of</span>
                   <span className="text-4xl font-bold text-[#a0a0b8]">
-                    {game.season.league.roundsPerGame}
+                    {game.totalRounds || game.rounds.filter((r) => !r.isCancelled).length}
                   </span>
                 </div>
                 <div className="mt-3">
@@ -223,21 +227,31 @@ export default function GamePage() {
               Rounds
             </h3>
             <div className="flex flex-wrap gap-2">
-              {game.rounds.map((r) => (
-                <Link
-                  key={r.id}
-                  href={`/rounds/${r.id}${actAsParam}`}
-                  className={`w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold transition-colors ${
-                    r.status === "graded"
-                      ? "bg-emerald-500/20 text-emerald-400"
-                      : r.status === "pending"
-                        ? "bg-[#0f0f23] text-[#666680]"
-                        : "bg-[#e94560]/20 text-[#e94560] animate-pulse-slow"
-                  }`}
-                >
-                  {r.number}
-                </Link>
-              ))}
+              {game.rounds.map((r) =>
+                r.isCancelled ? (
+                  <div
+                    key={r.id}
+                    className="w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold bg-gray-800/50 text-gray-600 line-through cursor-not-allowed"
+                    title="Cancelled"
+                  >
+                    {r.number}
+                  </div>
+                ) : (
+                  <Link
+                    key={r.id}
+                    href={`/rounds/${r.id}${actAsParam}`}
+                    className={`w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold transition-colors ${
+                      r.status === "graded"
+                        ? "bg-emerald-500/20 text-emerald-400"
+                        : r.status === "pending"
+                          ? "bg-[#0f0f23] text-[#666680]"
+                          : "bg-[#e94560]/20 text-[#e94560] animate-pulse-slow"
+                    }`}
+                  >
+                    {r.number}
+                  </Link>
+                )
+              )}
             </div>
           </div>
         </div>
@@ -253,11 +267,13 @@ export default function GamePage() {
                 <tr className="text-left">
                   <th className="table-header pb-3 w-10">#</th>
                   <th className="table-header pb-3">Player</th>
+                  {game.status === "completed" && (
+                    <th className="table-header pb-3 text-right">
+                      Season Points
+                    </th>
+                  )}
                   <th className="table-header pb-3 text-right">
-                    F1 Points
-                  </th>
-                  <th className="table-header pb-3 text-right">
-                    Bet Points
+                    Game Points
                   </th>
                   <th className="table-header pb-3 text-right">Status</th>
                 </tr>
@@ -282,23 +298,24 @@ export default function GamePage() {
                     </td>
                     <td className="py-3">
                       <div className="flex items-center gap-2">
-                        <div className="avatar-sm">
-                          {(
-                            ps.leaguePlayer.fakeNickname ||
-                            ps.leaguePlayer.user.nickname
-                          )?.[0]?.toUpperCase() || "?"}
-                        </div>
+                        <Avatar
+                          src={ps.leaguePlayer.user.avatarUrl || ps.leaguePlayer.user.image}
+                          name={ps.leaguePlayer.fakeNickname || ps.leaguePlayer.user.nickname}
+                          size="sm"
+                        />
                         <span className="text-white text-sm font-medium">
                           {ps.leaguePlayer.fakeNickname ||
                             ps.leaguePlayer.user.nickname}
                         </span>
                       </div>
                     </td>
-                    <td className="py-3 text-right">
-                      <span className="font-mono font-bold text-[#fbbf24]">
-                        {ps.totalF1Points}
-                      </span>
-                    </td>
+                    {game.status === "completed" && (
+                      <td className="py-3 text-right">
+                        <span className="font-mono font-bold text-[#fbbf24]">
+                          {ps.totalF1Points}
+                        </span>
+                      </td>
+                    )}
                     <td className="py-3 text-right">
                       <span className="font-mono text-[#a0a0b8]">
                         {ps.points}

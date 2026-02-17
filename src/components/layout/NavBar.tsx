@@ -3,6 +3,7 @@
 import { useSession, signOut } from "next-auth/react";
 import Link from "next/link";
 import { useState, useEffect } from "react";
+import Avatar from "@/components/ui/Avatar";
 
 export default function NavBar() {
   const { data: session } = useSession();
@@ -91,11 +92,11 @@ export default function NavBar() {
                 onClick={() => setMenuOpen(!menuOpen)}
                 className="flex items-center gap-2"
               >
-                <div className="avatar-sm">
-                  {session.user.nickname?.[0]?.toUpperCase() ||
-                    session.user.name?.[0]?.toUpperCase() ||
-                    "?"}
-                </div>
+                <Avatar
+                  src={session.user.avatarUrl || session.user.image}
+                  name={session.user.nickname || session.user.name}
+                  size="sm"
+                />
               </button>
               {menuOpen && (
                 <div className="absolute right-0 mt-2 w-48 card py-2 z-50">

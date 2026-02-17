@@ -67,11 +67,75 @@ export async function GET(
     ? league.players.find((p) => p.userId === session.user.id)
     : null;
 
+  // Compute season standings: aggregate F1 points across all completed games in active season
+  let seasonStandings: Array<{
+    leaguePlayerId: string;
+    nickname: string;
+    avatarUrl: string | null;
+    totalF1Points: number;
+    gamesPlayed: number;
+  }> = [];
+  let seasonChartData: Array<Record<string, number>> = [];
+
+  const activeSeason = league.seasons.find((s) => s.status === "active" || s.status === "completed");
+  if (activeSeason) {
+    // Fetch all games for this season (not just the latest)
+    const allSeasonGames = await prisma.game.findMany({
+      where: { seasonId: activeSeason.id, status: "completed" },
+      orderBy: { number: "asc" },
+      include: {
+        playerStates: {
+          include: {
+            leaguePlayer: {
+              include: {
+                user: { select: { nickname: true, avatarUrl: true, image: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (allSeasonGames.length > 0) {
+      // Aggregate F1 points per player across all completed games
+      const playerTotals: Record<string, { nickname: string; avatarUrl: string | null; totalF1Points: number; gamesPlayed: number }> = {};
+      // Track cumulative points per game for chart
+      const cumulativePoints: Record<string, number> = {};
+
+      for (const game of allSeasonGames) {
+        const chartPoint: Record<string, number> = { game: game.number };
+
+        for (const ps of game.playerStates) {
+          const pid = ps.leaguePlayerId;
+          const nickname = ps.leaguePlayer.fakeNickname || ps.leaguePlayer.user.nickname || "Unknown";
+          const avatarUrl = ps.leaguePlayer.user.avatarUrl || ps.leaguePlayer.user.image;
+
+          if (!playerTotals[pid]) {
+            playerTotals[pid] = { nickname, avatarUrl, totalF1Points: 0, gamesPlayed: 0 };
+            cumulativePoints[pid] = 0;
+          }
+          playerTotals[pid].totalF1Points += ps.totalF1Points;
+          playerTotals[pid].gamesPlayed++;
+          cumulativePoints[pid] += ps.totalF1Points;
+          chartPoint[nickname] = cumulativePoints[pid];
+        }
+
+        seasonChartData.push(chartPoint);
+      }
+
+      seasonStandings = Object.entries(playerTotals)
+        .map(([leaguePlayerId, data]) => ({ leaguePlayerId, ...data }))
+        .sort((a, b) => b.totalF1Points - a.totalF1Points);
+    }
+  }
+
   return NextResponse.json({
     ...league,
     isPlayer,
     myRole: myPlayer?.role || null,
     myPlayerId: myPlayer?.id || null,
+    seasonStandings,
+    seasonChartData,
   });
 }
 

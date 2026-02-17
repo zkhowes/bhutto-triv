@@ -10,6 +10,12 @@ interface Draft {
   category: string | null;
   questionText: string | null;
   answerFormat: string | null;
+  optionA: string | null;
+  optionB: string | null;
+  optionC: string | null;
+  optionD: string | null;
+  correctOption: string | null;
+  correctAnswer: string | null;
   useOnNextRound: boolean;
   createdAt: string;
   updatedAt: string;
@@ -20,6 +26,7 @@ export default function QuestionBankPage() {
   const router = useRouter();
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [loading, setLoading] = useState(true);
+  const [formatting, setFormatting] = useState<string | null>(null);
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/");
@@ -43,6 +50,14 @@ export default function QuestionBankPage() {
   };
 
   const toggleAutoSubmit = async (id: string, current: boolean) => {
+    const draft = drafts.find((d) => d.id === id);
+    // Warn if toggling on without structured fields
+    if (!current && draft && !draft.category && !draft.answerFormat) {
+      if (!confirm("This draft hasn't been formatted into a structured question yet. Auto-submit may not work correctly. Continue?")) {
+        return;
+      }
+    }
+
     await fetch("/api/questions/drafts", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -54,6 +69,72 @@ export default function QuestionBankPage() {
       )
     );
   };
+
+  const formatQuestion = async (id: string) => {
+    const draft = drafts.find((d) => d.id === id);
+    if (!draft?.questionText) return;
+
+    setFormatting(id);
+    try {
+      const res = await fetch("/api/questions/parse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: draft.questionText }),
+      });
+
+      if (!res.ok) {
+        alert("Could not parse this text into a structured question.");
+        return;
+      }
+
+      const parsed = await res.json();
+
+      // Update the draft with parsed data
+      await fetch("/api/questions/drafts", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id,
+          category: parsed.category,
+          questionText: parsed.questionText,
+          answerFormat: parsed.answerFormat,
+          optionA: parsed.optionA || null,
+          optionB: parsed.optionB || null,
+          optionC: parsed.optionC || null,
+          optionD: parsed.optionD || null,
+          correctOption: parsed.correctOption || null,
+          correctAnswer: parsed.correctAnswer || null,
+        }),
+      });
+
+      // Update local state
+      setDrafts(
+        drafts.map((d) =>
+          d.id === id
+            ? {
+                ...d,
+                category: parsed.category,
+                questionText: parsed.questionText,
+                answerFormat: parsed.answerFormat,
+                optionA: parsed.optionA || null,
+                optionB: parsed.optionB || null,
+                optionC: parsed.optionC || null,
+                optionD: parsed.optionD || null,
+                correctOption: parsed.correctOption || null,
+                correctAnswer: parsed.correctAnswer || null,
+              }
+            : d
+        )
+      );
+    } catch {
+      alert("Failed to format question");
+    } finally {
+      setFormatting(null);
+    }
+  };
+
+  const isStructured = (draft: Draft) =>
+    !!(draft.category && draft.answerFormat);
 
   return (
     <div className="min-h-screen">
@@ -84,14 +165,53 @@ export default function QuestionBankPage() {
               <div key={draft.id} className="card p-4">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    {draft.category && (
-                      <span className="badge bg-[#1e3a5f] text-[#a0a0b8] mb-2">
-                        {draft.category}
-                      </span>
-                    )}
+                    <div className="flex items-center gap-2 mb-1">
+                      {draft.category && (
+                        <span className="badge bg-[#1e3a5f] text-[#a0a0b8]">
+                          {draft.category}
+                        </span>
+                      )}
+                      {isStructured(draft) && (
+                        <span className="badge bg-emerald-500/20 text-emerald-400 text-[10px]">
+                          Formatted
+                        </span>
+                      )}
+                    </div>
                     <p className="text-white text-sm mt-1">
                       {draft.questionText || "Untitled draft"}
                     </p>
+                    {/* Show options preview for MC */}
+                    {draft.answerFormat === "multiple_choice" && draft.optionA && (
+                      <div className="mt-2 text-xs text-[#a0a0b8] space-y-0.5">
+                        {[
+                          { key: "A", val: draft.optionA },
+                          { key: "B", val: draft.optionB },
+                          { key: "C", val: draft.optionC },
+                          { key: "D", val: draft.optionD },
+                        ].map(
+                          (opt) =>
+                            opt.val && (
+                              <p key={opt.key}>
+                                <span
+                                  className={
+                                    draft.correctOption === opt.key
+                                      ? "text-emerald-400 font-bold"
+                                      : ""
+                                  }
+                                >
+                                  {opt.key}.
+                                </span>{" "}
+                                {opt.val}
+                              </p>
+                            )
+                        )}
+                      </div>
+                    )}
+                    {draft.answerFormat === "free_text" && draft.correctAnswer && (
+                      <p className="mt-1 text-xs text-emerald-400">
+                        Answer: {draft.correctAnswer}
+                      </p>
+                    )}
                     <p className="text-xs text-[#666680] mt-1">
                       {draft.answerFormat === "multiple_choice"
                         ? "Multiple Choice"
@@ -102,7 +222,16 @@ export default function QuestionBankPage() {
                       {new Date(draft.updatedAt).toLocaleDateString()}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2 ml-4">
+                  <div className="flex items-center gap-2 ml-4 flex-shrink-0">
+                    {!isStructured(draft) && (
+                      <button
+                        onClick={() => formatQuestion(draft.id)}
+                        disabled={formatting === draft.id}
+                        className="text-xs px-2 py-1 rounded bg-purple-500/20 text-purple-400 hover:bg-purple-500/30"
+                      >
+                        {formatting === draft.id ? "..." : "Format"}
+                      </button>
+                    )}
                     <button
                       onClick={() =>
                         toggleAutoSubmit(draft.id, draft.useOnNextRound)
