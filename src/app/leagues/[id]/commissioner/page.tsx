@@ -33,6 +33,7 @@ interface LeagueInfo {
   categoryRevealTime: string;
   answerTimerSeconds: number;
   absenteePenaltyType: string;
+  lightningMode: boolean;
   myRole: string | null;
   players: Player[];
   seasons: Array<{
@@ -137,6 +138,22 @@ export default function CommissionerPage() {
 
   const startNewSeason = async () => {
     await fetch(`/api/leagues/${leagueId}/start`, { method: "POST" });
+    await fetchLeague();
+  };
+
+  const toggleLightningMode = async () => {
+    const newValue = !league?.lightningMode;
+    if (!confirm(
+      newValue
+        ? "Enable Lightning Mode? AI will auto-grade all answers and rounds will progress automatically without manual review."
+        : "Disable Lightning Mode? You'll need to manually review and confirm grades for each round."
+    )) return;
+
+    await fetch(`/api/leagues/${leagueId}/settings`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lightningMode: newValue }),
+    });
     await fetchLeague();
   };
 
@@ -463,11 +480,32 @@ export default function CommissionerPage() {
                   {Math.floor(league.answerTimerSeconds / 60)}:{(league.answerTimerSeconds % 60).toString().padStart(2, "0")} min
                 </span>
               </div>
-              <div className="flex justify-between py-2">
+              <div className="flex justify-between py-2 border-b border-[#1e3a5f]">
                 <span className="text-[#a0a0b8]">Absentee Penalty</span>
                 <span className="text-white capitalize">
                   {league.absenteePenaltyType}
                 </span>
+              </div>
+              <div className="flex justify-between items-center py-3">
+                <div>
+                  <span className="text-[#a0a0b8] block">Lightning Mode</span>
+                  <span className="text-xs text-[#666680] block mt-1">
+                    AI auto-grades, game keeps moving without manual review
+                  </span>
+                </div>
+                <button
+                  onClick={toggleLightningMode}
+                  disabled={hasActiveSeason}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    league.lightningMode ? "bg-[#e94560]" : "bg-[#1e3a5f]"
+                  } ${hasActiveSeason ? "opacity-50 cursor-not-allowed" : ""}`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      league.lightningMode ? "translate-x-6" : "translate-x-1"
+                    }`}
+                  />
+                </button>
               </div>
             </div>
           </div>

@@ -307,7 +307,16 @@ export async function submitAnswer(
   const round = await prisma.round.findUnique({
     where: { id: roundId },
     include: {
-      game: { include: { playerStates: true } },
+      game: {
+        include: {
+          playerStates: true,
+          season: {
+            include: {
+              league: true,
+            },
+          },
+        },
+      },
     },
   });
 
@@ -325,12 +334,18 @@ export async function submitAnswer(
     });
 
     if (answeredCount >= eligiblePlayerIds.length) {
-      // Set to "closed" (awaiting grading review by at-bat player)
-      // instead of directly closing/grading the round
-      await prisma.round.update({
-        where: { id: roundId },
-        data: { status: ROUND_STATUS.CLOSED },
-      });
+      const isLightningMode = round.game.season.league.lightningMode;
+
+      if (isLightningMode) {
+        // Lightning Mode: AI has already graded, skip manual review and finalize immediately
+        await closeRound(roundId);
+      } else {
+        // Normal Mode: Set to "closed" (awaiting grading review by at-bat player)
+        await prisma.round.update({
+          where: { id: roundId },
+          data: { status: ROUND_STATUS.CLOSED },
+        });
+      }
     }
   }
 

@@ -53,6 +53,7 @@ export async function PUT(
     "categoryRevealTime",
     "answerTimerSeconds",
     "absenteePenaltyType",
+    "lightningMode",
   ];
 
   const updateData: Record<string, unknown> = {};

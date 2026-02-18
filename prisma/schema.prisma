@@ -95,6 +95,7 @@ model League {
   categoryRevealTime    String @default("07:00")
   answerTimerSeconds    Int @default(120) // Timer from category reveal to answer deadline
   absenteePenaltyType   String @default("half") // "half", "quarter", "none"
+  lightningMode       Boolean @default(false) // AI auto-grades, game keeps moving
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
