@@ -709,7 +709,9 @@ We need a single place to see all commissioners, leagues, players, games, rounds
  
 * Total players, total leagues, games started, come up with more.  
 
-Shareable Links 
+These need to be charted in a dashboard and viewable over time. There also should be a search function to help find players, games, questions. The entire question bank should be viewable here. 
+
+13. Shareable Links 
 
 Every round, game, and season has unique shareable URLs for: 
 

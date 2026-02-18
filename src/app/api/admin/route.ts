@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { authenticatedSessions } from "@/lib/admin-auth";
 
 // GET - Super admin dashboard data
 export async function GET() {
@@ -10,13 +11,12 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Verify super admin
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-  });
-
-  if (!user?.isSuperAdmin) {
-    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  // Check if session is authenticated with password
+  if (!authenticatedSessions.has(session.user.id)) {
+    return NextResponse.json(
+      { error: "Super admin authentication required" },
+      { status: 403 }
+    );
   }
 
   const now = new Date();
@@ -35,6 +35,9 @@ export async function GET() {
     activeUsers30d,
     recentLeagues,
     recentPlayers,
+    commissioners,
+    recentGames,
+    recentRounds,
   ] = await Promise.all([
     prisma.user.count(),
     prisma.league.count(),
@@ -79,6 +82,71 @@ export async function GET() {
         },
       },
     }),
+    // Get all commissioners
+    prisma.leaguePlayer.findMany({
+      where: { role: "commissioner" },
+      distinct: ["userId"],
+      include: {
+        user: {
+          select: {
+            id: true,
+            nickname: true,
+            email: true,
+            createdAt: true,
+          },
+        },
+        league: {
+          select: {
+            name: true,
+            _count: { select: { players: true } },
+          },
+        },
+      },
+    }),
+    // Get recent games
+    prisma.game.findMany({
+      take: 20,
+      orderBy: { createdAt: "desc" },
+      include: {
+        season: {
+          include: {
+            league: {
+              select: { id: true, name: true },
+            },
+          },
+        },
+        _count: {
+          select: {
+            rounds: true,
+          },
+        },
+        rounds: {
+          where: { status: "graded" },
+          select: { id: true },
+        },
+      },
+    }),
+    // Get recent rounds
+    prisma.round.findMany({
+      take: 20,
+      orderBy: { createdAt: "desc" },
+      include: {
+        game: {
+          include: {
+            season: {
+              include: {
+                league: {
+                  select: { id: true, name: true },
+                },
+              },
+            },
+          },
+        },
+        question: {
+          select: { category: true },
+        },
+      },
+    }),
   ]);
 
   // Calculate average league size
@@ -91,6 +159,37 @@ export async function GET() {
       ? allLeagueSizes.reduce((sum, l) => sum + l._count.players, 0) /
         allLeagueSizes.length
       : 0;
+
+  // Group commissioners by user
+  const commissionersByUser = new Map<
+    string,
+    { user: any; leagues: any[] }
+  >();
+  commissioners.forEach((c) => {
+    if (!commissionersByUser.has(c.userId)) {
+      commissionersByUser.set(c.userId, {
+        user: c.user,
+        leagues: [],
+      });
+    }
+    commissionersByUser.get(c.userId)!.leagues.push(c.league);
+  });
+
+  // Fetch at-bat players for recent rounds
+  const atBatPlayerIds = recentRounds
+    .map((r) => r.atBatPlayerId)
+    .filter((id): id is string => !!id);
+
+  const atBatPlayers = await prisma.leaguePlayer.findMany({
+    where: { id: { in: atBatPlayerIds } },
+    include: {
+      user: {
+        select: { nickname: true, email: true },
+      },
+    },
+  });
+
+  const atBatPlayerMap = new Map(atBatPlayers.map((p) => [p.id, p]));
 
   return NextResponse.json({
     overview: {
@@ -129,6 +228,53 @@ export async function GET() {
       createdAt: p.createdAt,
       lastLogin: p.lastLoginAt,
     })),
+    commissioners: Array.from(commissionersByUser.values()).map((c) => ({
+      id: c.user.id,
+      nickname: c.user.nickname,
+      email: c.user.email,
+      leagueCount: c.leagues.length,
+      totalPlayers: c.leagues.reduce((sum, l) => sum + l._count.players, 0),
+      createdAt: c.user.createdAt,
+    })),
+    recentGames: recentGames.map((g) => ({
+      id: g.id,
+      number: g.number,
+      status: g.status,
+      league: g.season.league,
+      season: {
+        id: g.season.id,
+        number: g.season.number,
+      },
+      totalRounds: g._count.rounds,
+      completedRounds: g.rounds.length,
+      startedAt: g.startedAt,
+      completedAt: g.completedAt,
+    })),
+    recentRounds: recentRounds.map((r) => {
+      const atBatPlayer = r.atBatPlayerId
+        ? atBatPlayerMap.get(r.atBatPlayerId)
+        : null;
+      return {
+        id: r.id,
+        number: r.number,
+        status: r.status,
+        game: {
+          id: r.game.id,
+          number: r.game.number,
+          league: r.game.season.league,
+        },
+        atBatPlayer: atBatPlayer
+          ? {
+              nickname:
+                atBatPlayer.user.nickname ||
+                atBatPlayer.user.email ||
+                "Unknown",
+            }
+          : null,
+        category: r.question?.category,
+        deadlineAt: r.deadlineAt,
+      };
+    }),
   });
 }
 
@@ -139,12 +285,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-  });
-
-  if (!user?.isSuperAdmin) {
-    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  // Check if session is authenticated with password
+  if (!authenticatedSessions.has(session.user.id)) {
+    return NextResponse.json(
+      { error: "Super admin authentication required" },
+      { status: 403 }
+    );
   }
 
   const { action, entityType, entityId, reason } = await req.json();
