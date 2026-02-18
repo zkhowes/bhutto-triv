@@ -180,7 +180,9 @@ export async function POST(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (process.env.NODE_ENV !== "development") {
+  // Allow test mode in development OR for specific production test account
+  const isTestModeAllowed = process.env.NODE_ENV === "development" || session.user.email === "zkhowes@gmail.com";
+  if (!isTestModeAllowed) {
     return NextResponse.json({ error: "Test mode only available in development" }, { status: 400 });
   }
 

@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(openssl rand:*)",
+      "Bash(npm run db:push:*)",
+      "Bash(where:*)",
+      "Bash(cmd.exe //c \"where npm\")",
+      "Bash(node --version:*)",
+      "Bash(npm --version:*)",
+      "Bash(npm install:*)",
+      "Bash(npx prisma generate:*)",
+      "Bash(npx prisma db push:*)",
+      "Bash(npm run db:seed:*)",
+      "Bash(npm run dev:*)",
+      "Bash(node -e:*)",
+      "Bash(ls:*)",
+      "Bash(npx tsc:*)",
+      "Bash(taskkill:*)",
+      "Bash(node node_modules/.bin/next dev:*)",
+      "Bash(npx next dev)",
+      "Bash(lsof:*)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(curl:*)",
+      "Bash(git add:*)",
+      "Bash(git reset:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git checkout:*)",
+      "Bash(vercel env add:*)",
+      "Bash(vercel list:*)",
+      "Bash(grep:*)"
+    ]
+  }
+}

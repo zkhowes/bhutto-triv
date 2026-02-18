@@ -98,6 +98,7 @@ export default function RoundPage() {
   const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
+  const [sharecopied, setShareCopied] = useState(false);
   const roundId = params.id as string;
   const actAsPlayerId = searchParams.get("actAs");
   const [round, setRound] = useState<RoundData | null>(null);
@@ -115,6 +116,13 @@ export default function RoundPage() {
       setLoading(false);
     }
   }, [roundId, router, actAsPlayerId]);
+
+  const shareRound = () => {
+    const shareUrl = `${window.location.origin}/rounds/${roundId}`;
+    navigator.clipboard.writeText(shareUrl);
+    setShareCopied(true);
+    setTimeout(() => setShareCopied(false), 2000);
+  };
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/");
@@ -240,17 +248,36 @@ export default function RoundPage() {
           </div>
         )}
 
-        {/* Breadcrumb */}
-        <div className="text-sm text-[#a0a0b8] mb-4">
-          <Link href={`/leagues/${league.id}`} className="hover:text-white">
-            {league.name}
-          </Link>
-          <span className="mx-2">&gt;</span>
-          <Link href={`/games/${round.game.id}`} className="hover:text-white">
-            Game {round.game.number}
-          </Link>
-          <span className="mx-2">&gt;</span>
-          <span className="text-white">Round {round.number}</span>
+        {/* Breadcrumb with Share */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="text-sm text-[#a0a0b8]">
+            <Link href={`/leagues/${league.id}`} className="hover:text-white">
+              {league.name}
+            </Link>
+            <span className="mx-2">&gt;</span>
+            <Link href={`/games/${round.game.id}`} className="hover:text-white">
+              Game {round.game.number}
+            </Link>
+            <span className="mx-2">&gt;</span>
+            <span className="text-white">Round {round.number}</span>
+          </div>
+          <button
+            onClick={shareRound}
+            className="btn-secondary text-xs flex items-center gap-1.5"
+            title="Share this round"
+          >
+            {sharecopied ? (
+              <>
+                <span>✓</span>
+                <span>Copied!</span>
+              </>
+            ) : (
+              <>
+                <span>🔗</span>
+                <span>Share</span>
+              </>
+            )}
+          </button>
         </div>
 
         {/* Round Card */}

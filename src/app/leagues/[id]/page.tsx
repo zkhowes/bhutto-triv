@@ -69,7 +69,6 @@ export default function LeagueDetailPage() {
   const [league, setLeague] = useState<LeagueData | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
-  const [addingTestPlayers, setAddingTestPlayers] = useState(false);
   const [startingSeason, setStartingSeason] = useState(false);
   const [advancing, setAdvancing] = useState(false);
   const [advanceMessage, setAdvanceMessage] = useState("");
@@ -98,27 +97,6 @@ export default function LeagueDetailPage() {
     navigator.clipboard.writeText(league.inviteCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  };
-
-  const addTestPlayers = async (count: number) => {
-    setAddingTestPlayers(true);
-    try {
-      const res = await fetch(`/api/leagues/${leagueId}/test-players`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ count }),
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        alert(data.error || "Failed to add test players");
-        return;
-      }
-      await fetchLeague();
-    } catch (err) {
-      alert("Failed to add test players: " + (err instanceof Error ? err.message : "unknown error"));
-    } finally {
-      setAddingTestPlayers(false);
-    }
   };
 
   const startSeason = async () => {
@@ -274,27 +252,6 @@ export default function LeagueDetailPage() {
             <h3 className="text-sm font-semibold text-purple-400">
               Test Mode Controls
             </h3>
-
-            {/* Add Players */}
-            <div>
-              <p className="text-xs text-[#a0a0b8] mb-1.5">Add Test Players</p>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => addTestPlayers(3)}
-                  disabled={addingTestPlayers}
-                  className="btn-secondary text-xs"
-                >
-                  {addingTestPlayers ? "Adding..." : "+3 Players"}
-                </button>
-                <button
-                  onClick={() => addTestPlayers(5)}
-                  disabled={addingTestPlayers}
-                  className="btn-secondary text-xs"
-                >
-                  {addingTestPlayers ? "Adding..." : "+5 Players"}
-                </button>
-              </div>
-            </div>
 
             {/* Player Switcher */}
             {league.players.length > 1 && (
