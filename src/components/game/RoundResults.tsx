@@ -96,7 +96,11 @@ export default function RoundResults({ round, myPlayerId }: RoundResultsProps) {
             <p className="text-sm text-[#a0a0b8]">
               {myAnswer.pointsWon > 0 ? "+" : ""}
               {myAnswer.pointsWon} points &middot; #{myAnswer.placement} place
-              {myAnswer.fastestLap && " ⚡ Fastest Lap"}
+              {myAnswer.fastestLap && (
+                <span className="text-purple-400 font-semibold ml-1">
+                  ⚡ +1
+                </span>
+              )}
             </p>
           </div>
         )}
@@ -190,8 +194,8 @@ export default function RoundResults({ round, myPlayerId }: RoundResultsProps) {
                           )}
                         </span>
                         {answer.fastestLap && (
-                          <span className="text-xs text-purple-400">
-                            &#9889;
+                          <span className="text-xs text-purple-400 font-semibold ml-1" title="Fastest Answer +1">
+                            ⚡
                           </span>
                         )}
                       </div>

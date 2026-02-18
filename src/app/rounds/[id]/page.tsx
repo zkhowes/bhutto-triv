@@ -108,14 +108,24 @@ export default function RoundPage() {
     try {
       const actAsParam = actAsPlayerId ? `?actAs=${actAsPlayerId}` : "";
       const res = await fetch(`/api/rounds/${roundId}${actAsParam}`);
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        // Only redirect if round doesn't exist (404) and this is the first fetch
+        if (res.status === 404 && !round) {
+          router.push("/dashboard");
+        }
+        throw new Error(`Failed to fetch round: ${res.status}`);
+      }
       setRound(await res.json());
-    } catch {
-      router.push("/dashboard");
+    } catch (error) {
+      console.error("Error fetching round:", error);
+      // Don't redirect on subsequent fetch errors (refreshes)
+      if (!round) {
+        router.push("/dashboard");
+      }
     } finally {
       setLoading(false);
     }
-  }, [roundId, router, actAsPlayerId]);
+  }, [roundId, router, actAsPlayerId, round]);
 
   const shareRound = () => {
     const shareUrl = `${window.location.origin}/rounds/${roundId}`;
@@ -125,8 +135,13 @@ export default function RoundPage() {
   };
 
   useEffect(() => {
-    if (status === "unauthenticated") router.push("/");
-    if (session?.user) fetchRound();
+    if (status === "unauthenticated") {
+      router.push("/");
+      return;
+    }
+    if (status === "authenticated" && session?.user) {
+      fetchRound();
+    }
   }, [status, session, router, fetchRound]);
 
   useEffect(() => {
@@ -411,6 +426,7 @@ export default function RoundPage() {
               answers={round.answers}
               question={round.question}
               atBatPlayerId={round.atBatPlayerId}
+              categoryRevealAt={round.categoryRevealAt}
               onGradingComplete={fetchRound}
             />
           )}

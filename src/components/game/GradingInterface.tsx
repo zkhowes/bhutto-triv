@@ -9,6 +9,8 @@ interface Answer {
   freeTextAnswer: string | null;
   isCorrect: boolean | null;
   gradedBy: string | null;
+  answeredAt: string | null;
+  betPlacedAt: string | null;
   leaguePlayer: {
     id: string;
     fakeNickname: string | null;
@@ -33,6 +35,7 @@ interface GradingInterfaceProps {
   answers: Answer[];
   question: Question;
   atBatPlayerId: string | null;
+  categoryRevealAt: string | null;
   onGradingComplete: () => void;
 }
 
@@ -41,6 +44,7 @@ export default function GradingInterface({
   answers,
   question,
   atBatPlayerId,
+  categoryRevealAt,
   onGradingComplete,
 }: GradingInterfaceProps) {
   // Only show non-at-bat player answers (at-bat doesn't answer)
@@ -51,6 +55,14 @@ export default function GradingInterface({
   const [overrides, setOverrides] = useState<Record<string, boolean>>({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  const getAnswerTime = (answer: Answer): string | null => {
+    if (!categoryRevealAt || !answer.answeredAt) return null;
+    const start = new Date(categoryRevealAt).getTime();
+    const end = new Date(answer.answeredAt).getTime();
+    const seconds = Math.round((end - start) / 1000);
+    return `${seconds}s`;
+  };
 
   const getEffectiveGrade = (answer: Answer): boolean => {
     if (answer.id in overrides) return overrides[answer.id];
@@ -160,7 +172,14 @@ export default function GradingInterface({
             >
               <div className="flex items-center justify-between">
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-white">{playerName}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-semibold text-white">{playerName}</p>
+                    {getAnswerTime(answer) && (
+                      <span className="text-xs text-purple-400 font-mono">
+                        ⏱️ {getAnswerTime(answer)}
+                      </span>
+                    )}
+                  </div>
                   <p className="text-sm text-[#a0a0b8] mt-1 truncate">{answerText}</p>
                   {answer.gradedBy === "ai" && (
                     <p className="text-xs text-[#666680] mt-1">
