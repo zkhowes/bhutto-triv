@@ -102,7 +102,10 @@ export default function RoundPage() {
   const roundId = params.id as string;
   const actAsPlayerId = searchParams.get("actAs");
   const [round, setRound] = useState<RoundData | null>(null);
+  const [previousRound, setPreviousRound] = useState<RoundData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isCommissioner, setIsCommissioner] = useState(false);
+  const [editingGrades, setEditingGrades] = useState(false);
 
   const fetchRound = useCallback(async () => {
     try {
@@ -115,7 +118,43 @@ export default function RoundPage() {
         }
         throw new Error(`Failed to fetch round: ${res.status}`);
       }
-      setRound(await res.json());
+      const data = await res.json();
+      setRound(data);
+
+      // Fetch previous graded round to show results
+      if (data.number > 1) {
+        const gameRes = await fetch(`/api/games/${data.game.id}`);
+        if (gameRes.ok) {
+          const gameData = await gameRes.json();
+          const prevRound = gameData.rounds?.find((r: any) =>
+            r.number === data.number - 1 && r.status === "graded"
+          );
+          if (prevRound) {
+            // Fetch full round data for previous round
+            const prevRoundRes = await fetch(`/api/rounds/${prevRound.id}`);
+            if (prevRoundRes.ok) {
+              setPreviousRound(await prevRoundRes.json());
+            }
+          }
+        }
+      }
+
+      // If this round is graded, check if there's a next active round to auto-progress to
+      if (data.status === "graded" && round?.status === "closed") {
+        // Round just transitioned from closed to graded - check for next round
+        const gameRes = await fetch(`/api/games/${data.game.id}`);
+        if (gameRes.ok) {
+          const gameData = await gameRes.json();
+          const nextRound = gameData.rounds?.find((r: any) => r.status === "awaiting_question" || r.status === "question_submitted" || r.status === "category_revealed");
+          if (nextRound) {
+            // Auto-navigate to next round after brief delay to show results
+            setTimeout(() => {
+              const actAsParam = actAsPlayerId ? `?actAs=${actAsPlayerId}` : "";
+              router.push(`/rounds/${nextRound.id}${actAsParam}`);
+            }, 2000);
+          }
+        }
+      }
     } catch (error) {
       console.error("Error fetching round:", error);
       // Don't redirect on subsequent fetch errors (refreshes)
@@ -149,6 +188,18 @@ export default function RoundPage() {
     const interval = setInterval(fetchRound, 15000);
     return () => clearInterval(interval);
   }, [session, round, fetchRound]);
+
+  // Check if user is commissioner
+  useEffect(() => {
+    if (!round) return;
+    const leagueId = round.game.season.league.id;
+    fetch(`/api/leagues/${leagueId}`)
+      .then((res) => res.json())
+      .then((data) => {
+        setIsCommissioner(data.myRole === "commissioner");
+      })
+      .catch(() => setIsCommissioner(false));
+  }, [round]);
 
   if (status === "loading" || loading || !round) {
     return (
@@ -419,8 +470,8 @@ export default function RoundPage() {
             />
           )}
 
-          {/* At Bat - grading review */}
-          {isAwaitingGrading && isAtBat && round.question && (
+          {/* At Bat or Commissioner - grading review */}
+          {isAwaitingGrading && (isAtBat || isCommissioner) && round.question && (
             <GradingInterface
               roundId={round.id}
               answers={round.answers}
@@ -431,8 +482,8 @@ export default function RoundPage() {
             />
           )}
 
-          {/* Non-at-bat waiting for grading review */}
-          {isAwaitingGrading && !isAtBat && (
+          {/* Non-at-bat, non-commissioner waiting for grading review */}
+          {isAwaitingGrading && !isAtBat && !isCommissioner && (
             <div className="card p-6 text-center">
               <p className="text-lg font-bold text-orange-400 mb-2">
                 Awaiting Review
@@ -471,8 +522,19 @@ export default function RoundPage() {
           )}
 
           {/* Results */}
-          {isGraded && (
+          {isGraded && !editingGrades && (
             <>
+              {isCommissioner && round.question && (
+                <div className="mb-4">
+                  <button
+                    onClick={() => setEditingGrades(true)}
+                    className="btn-secondary text-sm w-full"
+                  >
+                    ✏️ Edit Grades
+                  </button>
+                </div>
+              )}
+
               <RoundResults
                 round={round}
                 myPlayerId={myPlayerId || null}
@@ -494,6 +556,39 @@ export default function RoundPage() {
                   Continue to Next Round
                 </Link>
               )}
+            </>
+          )}
+
+          {/* Commissioner editing grades on graded round */}
+          {isGraded && editingGrades && isCommissioner && round.question && (
+            <>
+              <div className="mb-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                <p className="text-sm text-amber-400 font-medium">
+                  ⚠️ Editing completed round
+                </p>
+                <p className="text-xs text-[#a0a0b8] mt-1">
+                  Changes will recalculate scores and may affect standings.
+                </p>
+              </div>
+
+              <GradingInterface
+                roundId={round.id}
+                answers={round.answers}
+                question={round.question}
+                atBatPlayerId={round.atBatPlayerId}
+                categoryRevealAt={round.categoryRevealAt}
+                onGradingComplete={() => {
+                  setEditingGrades(false);
+                  fetchRound();
+                }}
+              />
+
+              <button
+                onClick={() => setEditingGrades(false)}
+                className="btn-secondary text-sm w-full mt-3"
+              >
+                Cancel
+              </button>
             </>
           )}
         </div>
@@ -554,6 +649,57 @@ export default function RoundPage() {
             })}
           </div>
         </div>
+
+        {/* Previous Round Results */}
+        {previousRound && (
+          <div className="mt-6 space-y-4">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="h-px flex-1 bg-gradient-to-r from-transparent via-[#1e3a5f] to-transparent"></div>
+              <h2 className="text-sm font-semibold text-[#a0a0b8] uppercase tracking-wider">
+                Last Round Results
+              </h2>
+              <div className="h-px flex-1 bg-gradient-to-r from-[#1e3a5f] via-[#1e3a5f] to-transparent"></div>
+            </div>
+
+            {/* Question & Answer */}
+            {previousRound.question && (
+              <div className="card p-5">
+                <p className="text-xs text-[#a0a0b8] uppercase tracking-wider mb-1">
+                  Round {previousRound.number} · {previousRound.question.category}
+                </p>
+                <p className="text-white font-medium mb-3">
+                  {previousRound.question.questionText}
+                </p>
+                <p className="text-sm text-emerald-400">
+                  Correct answer:{" "}
+                  {previousRound.question.answerFormat === "multiple_choice"
+                    ? `${previousRound.question.correctOption}. ${
+                        previousRound.question[
+                          `option${previousRound.question.correctOption}` as keyof typeof previousRound.question
+                        ]
+                      }`
+                    : previousRound.question.correctAnswer}
+                </p>
+              </div>
+            )}
+
+            {/* Did You Know? */}
+            {previousRound.funFact && (
+              <div className="p-4 rounded-xl border border-purple-500/30 bg-gradient-to-r from-purple-500/5 to-indigo-500/5">
+                <p className="text-xs font-bold text-purple-400 uppercase tracking-wider mb-1">
+                  Did You Know?
+                </p>
+                <p className="text-sm text-[#e8e8e8]">{previousRound.funFact}</p>
+              </div>
+            )}
+
+            {/* Previous Round Scorecard */}
+            <RoundResults
+              round={previousRound}
+              myPlayerId={myPlayerId || null}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

@@ -299,7 +299,15 @@ export default function CommissionerPage() {
                       Reveal Category
                     </button>
                   )}
-                  {activeRound.status !== "graded" &&
+                  {activeRound.status === "closed" ? (
+                    <Link
+                      href={`/rounds/${activeRound.id}`}
+                      className="btn-primary text-sm inline-block"
+                    >
+                      Review & Grade Answers
+                    </Link>
+                  ) : (
+                    activeRound.status !== "graded" &&
                     activeRound.status !== "pending" && (
                       <button
                         onClick={() => closeRound(activeRound.id)}
@@ -307,12 +315,73 @@ export default function CommissionerPage() {
                       >
                         Close Round & Score
                       </button>
-                    )}
+                    )
+                  )}
                 </div>
               </div>
             ) : (
               <div className="card p-5 text-center text-[#666680]">
                 No active round. Start a season or wait for the next round.
+              </div>
+            )}
+
+            {/* All Rounds - Edit Grades */}
+            {currentGame && currentGame.rounds.length > 0 && (
+              <div className="card p-5">
+                <h2 className="text-sm font-semibold text-[#a0a0b8] uppercase tracking-wider mb-3">
+                  All Rounds (Edit Grades)
+                </h2>
+                <p className="text-xs text-[#666680] mb-3">
+                  Click any round to view details and edit grades if needed.
+                </p>
+                <div className="space-y-2">
+                  {currentGame.rounds
+                    .slice()
+                    .sort((a, b) => a.number - b.number)
+                    .map((round) => {
+                      const statusColor =
+                        round.status === "graded"
+                          ? "text-emerald-400"
+                          : round.status === "closed"
+                            ? "text-orange-400"
+                            : round.status === "category_revealed"
+                              ? "text-blue-400"
+                              : "text-[#a0a0b8]";
+                      const atBatPlayer = league.players.find(
+                        (p) => p.id === round.atBatPlayerId
+                      );
+                      const atBatName = atBatPlayer
+                        ? atBatPlayer.fakeNickname || atBatPlayer.user.nickname
+                        : "Unknown";
+
+                      return (
+                        <div
+                          key={round.id}
+                          className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-[#0f0f23]/50"
+                        >
+                          <div className="flex-1">
+                            <span className="text-white text-sm font-medium">
+                              Round {round.number}
+                            </span>
+                            <span className={`ml-2 text-xs ${statusColor}`}>
+                              {round.status.replace(/_/g, " ")}
+                            </span>
+                            {round.atBatPlayerId && (
+                              <span className="ml-2 text-xs text-[#666680]">
+                                @ {atBatName}
+                              </span>
+                            )}
+                          </div>
+                          <Link
+                            href={`/rounds/${round.id}`}
+                            className="text-xs text-[#e94560] hover:text-[#ff6b6b]"
+                          >
+                            {round.status === "graded" ? "Edit Grades" : "View"}
+                          </Link>
+                        </div>
+                      );
+                    })}
+                </div>
               </div>
             )}
           </div>

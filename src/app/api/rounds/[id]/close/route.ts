@@ -54,9 +54,14 @@ export async function POST(
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 
-  // Only allow closing from "closed" (awaiting review) status
-  if (round.status !== "closed") {
-    return NextResponse.json({ error: "Round is not awaiting review" }, { status: 400 });
+  // Allow closing from "closed" (awaiting review) or "graded" (re-grading) status
+  // Re-grading is only allowed for commissioners
+  if (round.status === "graded" && !isCommissioner) {
+    return NextResponse.json({ error: "Only commissioners can re-grade completed rounds" }, { status: 403 });
+  }
+
+  if (round.status !== "closed" && round.status !== "graded") {
+    return NextResponse.json({ error: "Round is not in a gradable state" }, { status: 400 });
   }
 
   try {
