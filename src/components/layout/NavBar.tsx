@@ -11,12 +11,21 @@ export default function NavBar() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
-    if (session?.user) {
+    if (!session?.user) return;
+
+    const fetchNotifications = () => {
       fetch("/api/notifications")
         .then((r) => r.json())
         .then((d) => setUnreadCount(d.unreadCount || 0))
         .catch(() => {});
-    }
+    };
+
+    // Fetch immediately
+    fetchNotifications();
+
+    // Poll every 30 seconds for updates
+    const interval = setInterval(fetchNotifications, 30000);
+    return () => clearInterval(interval);
   }, [session]);
 
   if (!session?.user) return null;
