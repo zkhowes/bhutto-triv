@@ -650,8 +650,8 @@ export default function RoundPage() {
           </div>
         </div>
 
-        {/* Previous Round Results */}
-        {previousRound && (
+        {/* Previous Round Results - only show when current round is not graded yet */}
+        {previousRound && !isGraded && (
           <div className="mt-6 space-y-4">
             <div className="flex items-center gap-2 mb-4">
               <div className="h-px flex-1 bg-gradient-to-r from-transparent via-[#1e3a5f] to-transparent"></div>
