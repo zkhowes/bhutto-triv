@@ -391,20 +391,23 @@ export async function closeRound(roundId: string): Promise<void> {
     (id) => !answeredPlayerIds.includes(id) && id !== round.atBatPlayerId
   );
 
-  // Create absent records
+  // Create absent records for all non-participating players (including eliminated)
   for (const playerId of absentPlayerIds) {
     const playerState = game.playerStates.find(
       (ps) => ps.leaguePlayerId === playerId
     );
-    if (!playerState || playerState.isEliminated) continue;
+    if (!playerState) continue;
 
-    const remainingRounds = game.rounds.filter(
-      (r) => !r.isCancelled && r.status !== ROUND_STATUS.GRADED && r.id !== roundId
-    ).length;
-    const penalty = calculateAbsenteePenalty(
-      playerState.points,
-      Math.max(remainingRounds, 1)
-    );
+    // Calculate penalty only for non-eliminated players
+    const penalty = playerState.isEliminated ? 0 : (() => {
+      const remainingRounds = game.rounds.filter(
+        (r) => !r.isCancelled && r.status !== ROUND_STATUS.GRADED && r.id !== roundId
+      ).length;
+      return calculateAbsenteePenalty(
+        playerState.points,
+        Math.max(remainingRounds, 1)
+      );
+    })();
 
     await prisma.roundAnswer.upsert({
       where: {

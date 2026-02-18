@@ -661,39 +661,7 @@ export default function RoundPage() {
               <div className="h-px flex-1 bg-gradient-to-r from-[#1e3a5f] via-[#1e3a5f] to-transparent"></div>
             </div>
 
-            {/* Question & Answer */}
-            {previousRound.question && (
-              <div className="card p-5">
-                <p className="text-xs text-[#a0a0b8] uppercase tracking-wider mb-1">
-                  Round {previousRound.number} · {previousRound.question.category}
-                </p>
-                <p className="text-white font-medium mb-3">
-                  {previousRound.question.questionText}
-                </p>
-                <p className="text-sm text-emerald-400">
-                  Correct answer:{" "}
-                  {previousRound.question.answerFormat === "multiple_choice"
-                    ? `${previousRound.question.correctOption}. ${
-                        previousRound.question[
-                          `option${previousRound.question.correctOption}` as keyof typeof previousRound.question
-                        ]
-                      }`
-                    : previousRound.question.correctAnswer}
-                </p>
-              </div>
-            )}
-
-            {/* Did You Know? */}
-            {previousRound.funFact && (
-              <div className="p-4 rounded-xl border border-purple-500/30 bg-gradient-to-r from-purple-500/5 to-indigo-500/5">
-                <p className="text-xs font-bold text-purple-400 uppercase tracking-wider mb-1">
-                  Did You Know?
-                </p>
-                <p className="text-sm text-[#e8e8e8]">{previousRound.funFact}</p>
-              </div>
-            )}
-
-            {/* Previous Round Scorecard */}
+            {/* RoundResults includes question, answer, fun fact, and scorecard */}
             <RoundResults
               round={previousRound}
               myPlayerId={myPlayerId || null}
