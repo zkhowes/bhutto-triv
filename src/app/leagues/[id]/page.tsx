@@ -70,6 +70,7 @@ export default function LeagueDetailPage() {
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [startingSeason, setStartingSeason] = useState(false);
+  const [startingNextGame, setStartingNextGame] = useState(false);
   const [advancing, setAdvancing] = useState(false);
   const [advanceMessage, setAdvanceMessage] = useState("");
   const [activeTestPlayerId, setActiveTestPlayerId] = useState<string | null>(null);
@@ -115,6 +116,25 @@ export default function LeagueDetailPage() {
       alert("Failed to start season");
     } finally {
       setStartingSeason(false);
+    }
+  };
+
+  const startNextGame = async () => {
+    setStartingNextGame(true);
+    try {
+      const res = await fetch(`/api/leagues/${leagueId}/next-game`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || "Failed to start next game");
+        return;
+      }
+      await fetchLeague();
+    } catch {
+      alert("Failed to start next game");
+    } finally {
+      setStartingNextGame(false);
     }
   };
 
@@ -166,6 +186,11 @@ export default function LeagueDetailPage() {
   const isCommissioner = league.myRole === "commissioner";
   const activeSeason = currentSeason?.status === "active";
   const hasEnoughPlayers = league.players.length >= 2;
+  const canStartNextGame =
+    isCommissioner &&
+    activeSeason &&
+    currentGame?.status === "completed" &&
+    (currentGame?.number ?? 0) < league.gamesPerSeason;
 
   return (
     <div className="min-h-screen">
@@ -547,12 +572,23 @@ export default function LeagueDetailPage() {
                 Game {currentGame.number}{" "}
                 <span className="text-sm font-normal text-[#fbbf24]">Complete</span>
               </h2>
-              <Link
-                href={`/games/${currentGame.id}${actAsParam}`}
-                className="btn-primary text-sm"
-              >
-                View Results
-              </Link>
+              <div className="flex gap-2">
+                {canStartNextGame && (
+                  <button
+                    onClick={startNextGame}
+                    disabled={startingNextGame}
+                    className="btn-gold text-sm"
+                  >
+                    {startingNextGame ? "Starting..." : `Start Game ${currentGame.number + 1}`}
+                  </button>
+                )}
+                <Link
+                  href={`/games/${currentGame.id}${actAsParam}`}
+                  className="btn-primary text-sm"
+                >
+                  View Results
+                </Link>
+              </div>
             </div>
 
             {/* Final Standings */}

@@ -141,6 +141,17 @@ export default function CommissionerPage() {
     await fetchLeague();
   };
 
+  const startNextGame = async () => {
+    if (!confirm("Start the next game? All current league members will be included.")) return;
+    const res = await fetch(`/api/leagues/${leagueId}/next-game`, { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.error || "Failed to start next game");
+      return;
+    }
+    await fetchLeague();
+  };
+
   const toggleLightningMode = async () => {
     const newValue = !league?.lightningMode;
     if (!confirm(
@@ -174,6 +185,9 @@ export default function CommissionerPage() {
     (r) => r.status !== "pending" && r.status !== "graded" && r.status !== "cancelled"
   );
   const hasActiveSeason = currentSeason?.status === "active";
+  const latestGameComplete = currentGame?.status === "completed";
+  const seasonComplete = (currentGame?.number ?? 0) >= league.gamesPerSeason;
+  const canStartNextGame = hasActiveSeason && latestGameComplete && !seasonComplete;
 
   return (
     <div className="min-h-screen">
@@ -413,15 +427,28 @@ export default function CommissionerPage() {
               </h2>
               {hasActiveSeason ? (
                 <div>
-                  <p className="text-white mb-3">
+                  <p className="text-white mb-1">
                     Season {currentSeason.number} is active
                   </p>
-                  <button
-                    onClick={() => pauseSeason(currentSeason.id)}
-                    className="btn-secondary text-sm"
-                  >
-                    Pause Season
-                  </button>
+                  <p className="text-sm text-[#a0a0b8] mb-4">
+                    Game {currentGame?.number ?? 0} of {league.gamesPerSeason}{latestGameComplete ? " complete" : " in progress"}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {canStartNextGame && (
+                      <button
+                        onClick={startNextGame}
+                        className="btn-gold text-sm"
+                      >
+                        Start Game {(currentGame?.number ?? 0) + 1}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => pauseSeason(currentSeason.id)}
+                      className="btn-secondary text-sm"
+                    >
+                      Pause Season
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div>
