@@ -330,14 +330,23 @@ export default function CommissionerPage() {
                       Reveal Category
                     </button>
                   )}
-                  {activeRound.status === "closed" ? (
-                    <Link
-                      href={`/rounds/${activeRound.id}`}
-                      className="btn-primary text-sm inline-block"
-                    >
-                      Review & Grade Answers
-                    </Link>
-                  ) : (
+                  {activeRound.status === "closed" && (
+                    <>
+                      <Link
+                        href={`/rounds/${activeRound.id}`}
+                        className="btn-primary text-sm inline-block"
+                      >
+                        Review & Grade Answers
+                      </Link>
+                      <button
+                        onClick={() => closeRound(activeRound.id)}
+                        className="btn-danger text-sm"
+                      >
+                        Force Grade & Score
+                      </button>
+                    </>
+                  )}
+                  {activeRound.status !== "closed" &&
                     activeRound.status !== "graded" &&
                     activeRound.status !== "pending" && (
                       <button
@@ -346,8 +355,7 @@ export default function CommissionerPage() {
                       >
                         Close Round & Score
                       </button>
-                    )
-                  )}
+                    )}
                 </div>
               </div>
             ) : (

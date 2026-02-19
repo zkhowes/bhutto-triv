@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { initializeGame } from "@/lib/game-engine";
+import { getF1PointsForPlacement } from "@/lib/scoring";
 
 export async function POST(
   _req: NextRequest,
@@ -53,13 +54,44 @@ export async function POST(
     return NextResponse.json({ error: "No active season" }, { status: 400 });
   }
 
-  // Check latest game is completed
+  // Check latest game is completed (or auto-complete if all rounds are terminal)
   const latestGame = season.games[0];
-  if (!latestGame || latestGame.status !== "completed") {
-    return NextResponse.json(
-      { error: "Current game is not yet complete" },
-      { status: 400 }
-    );
+  if (!latestGame) {
+    return NextResponse.json({ error: "No game found in active season" }, { status: 400 });
+  }
+
+  if (latestGame.status !== "completed") {
+    // Check if game is stuck: all rounds are graded or cancelled but game wasn't marked complete
+    const activeRounds = await prisma.round.findMany({
+      where: {
+        gameId: latestGame.id,
+        isCancelled: false,
+        status: { notIn: ["graded", "pending"] },
+      },
+    });
+
+    if (activeRounds.length > 0) {
+      return NextResponse.json(
+        { error: `Current game still has ${activeRounds.length} round(s) in progress. Grade all rounds first.` },
+        { status: 400 }
+      );
+    }
+
+    // All non-pending rounds are graded — auto-complete the game with F1 scoring
+    const finalStates = await prisma.gamePlayerState.findMany({
+      where: { gameId: latestGame.id },
+    });
+    const sortedByPoints = [...finalStates].sort((a, b) => b.points - a.points);
+    for (let i = 0; i < sortedByPoints.length; i++) {
+      await prisma.gamePlayerState.update({
+        where: { id: sortedByPoints[i].id },
+        data: { totalF1Points: getF1PointsForPlacement(i + 1, sortedByPoints.length) },
+      });
+    }
+    await prisma.game.update({
+      where: { id: latestGame.id },
+      data: { status: "completed", completedAt: new Date() },
+    });
   }
 
   // Check season is not yet complete
