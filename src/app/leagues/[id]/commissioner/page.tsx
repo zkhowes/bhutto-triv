@@ -141,6 +141,21 @@ export default function CommissionerPage() {
     await fetchLeague();
   };
 
+  const continueSeason = async (newGamesPerSeason?: number) => {
+    const body = newGamesPerSeason ? { gamesPerSeason: newGamesPerSeason } : {};
+    const res = await fetch(`/api/leagues/${leagueId}/continue-season`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.error || "Failed to continue season");
+      return;
+    }
+    await fetchLeague();
+  };
+
   const startNextGame = async () => {
     if (!confirm("Start the next game? All current league members will be included.")) return;
     const res = await fetch(`/api/leagues/${leagueId}/next-game`, { method: "POST" });
@@ -185,6 +200,10 @@ export default function CommissionerPage() {
     (r) => r.status !== "pending" && r.status !== "graded" && r.status !== "cancelled"
   );
   const hasActiveSeason = currentSeason?.status === "active";
+  // Season completed early = completed but fewer games than gamesPerSeason
+  // currentGame.number is the total games played (games are numbered sequentially)
+  const completedSeasonGameCount = currentGame?.number ?? 0;
+  const seasonCompletedEarly = currentSeason?.status === "completed" && completedSeasonGameCount < league.gamesPerSeason;
   // Game is effectively done if it's "completed", or if it's "active" but has no remaining active rounds
   const latestGameComplete =
     currentGame?.status === "completed" ||
@@ -467,6 +486,32 @@ export default function CommissionerPage() {
                       className="btn-secondary text-sm"
                     >
                       Pause Season
+                    </button>
+                  </div>
+                </div>
+              ) : seasonCompletedEarly ? (
+                <div>
+                  <p className="text-white mb-1">
+                    Season {currentSeason!.number} ended early
+                  </p>
+                  <p className="text-sm text-amber-400 mb-1">
+                    {completedSeasonGameCount} of {league.gamesPerSeason} games played — season was auto-completed before all games finished.
+                  </p>
+                  <p className="text-xs text-[#666680] mb-4">
+                    This usually happens when <strong>Games per Season</strong> was set to {completedSeasonGameCount} at the time. You can resume the season and play the remaining games.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => continueSeason()}
+                      className="btn-gold text-sm"
+                    >
+                      Resume Season &amp; Start Game {completedSeasonGameCount + 1}
+                    </button>
+                    <button
+                      onClick={startNewSeason}
+                      className="btn-secondary text-sm"
+                    >
+                      Start New Season Instead
                     </button>
                   </div>
                 </div>
