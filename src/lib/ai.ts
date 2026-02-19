@@ -205,18 +205,22 @@ Requirements:
 }
 
 /**
- * Parse AI workshop text into structured question fields
+ * Parse AI workshop text into structured question fields with both MC and free text formats
  */
 export async function parseQuestionFromText(text: string): Promise<{
   category: string;
   questionText: string;
-  answerFormat: string;
-  optionA?: string;
-  optionB?: string;
-  optionC?: string;
-  optionD?: string;
-  correctOption?: string;
-  correctAnswer?: string;
+  multipleChoice: {
+    optionA: string;
+    optionB: string;
+    optionC: string;
+    optionD: string;
+    correctOption: string;
+  };
+  freeText: {
+    correctAnswer: string;
+    acceptableAnswers: string[];
+  };
 } | null> {
   if (!process.env.ANTHROPIC_API_KEY) {
     return null;
@@ -226,11 +230,11 @@ export async function parseQuestionFromText(text: string): Promise<{
     const anthropic = getClient();
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-20250514",
-      max_tokens: 500,
+      max_tokens: 600,
       messages: [
         {
           role: "user",
-          content: `Parse this text into a structured trivia question. Extract the category, question, answer format, and answer details.
+          content: `Parse this text into a structured trivia question and provide BOTH multiple choice and free text formats.
 
 Categories: Geography, Sports, Politics, Science, History, Entertainment, Arts & Literature, Food & Drink, Technology, General Knowledge
 
@@ -240,14 +244,18 @@ ${text}
 Respond with JSON only:
 {
   "category": "one of the categories above",
-  "questionText": "the question",
-  "answerFormat": "multiple_choice" or "free_text",
-  "optionA": "option A (if multiple choice)",
-  "optionB": "option B (if multiple choice)",
-  "optionC": "option C (if multiple choice)",
-  "optionD": "option D (if multiple choice)",
-  "correctOption": "A", "B", "C", or "D" (if multiple choice),
-  "correctAnswer": "the correct answer text (if free text)"
+  "questionText": "the question text",
+  "multipleChoice": {
+    "optionA": "first option",
+    "optionB": "second option",
+    "optionC": "third option",
+    "optionD": "fourth option",
+    "correctOption": "A"
+  },
+  "freeText": {
+    "correctAnswer": "the exact correct answer",
+    "acceptableAnswers": ["variation1", "variation2"]
+  }
 }
 
 If the text doesn't contain a clear question, return null.`,
