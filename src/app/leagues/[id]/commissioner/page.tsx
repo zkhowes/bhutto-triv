@@ -185,7 +185,10 @@ export default function CommissionerPage() {
     (r) => r.status !== "pending" && r.status !== "graded" && r.status !== "cancelled"
   );
   const hasActiveSeason = currentSeason?.status === "active";
-  const latestGameComplete = currentGame?.status === "completed";
+  // Game is effectively done if it's "completed", or if it's "active" but has no remaining active rounds
+  const latestGameComplete =
+    currentGame?.status === "completed" ||
+    (!!currentGame && currentGame.status === "active" && !activeRound);
   const seasonComplete = (currentGame?.number ?? 0) >= league.gamesPerSeason;
   const canStartNextGame = hasActiveSeason && latestGameComplete && !seasonComplete;
 
@@ -360,7 +363,16 @@ export default function CommissionerPage() {
               </div>
             ) : (
               <div className="card p-5 text-center text-[#666680]">
-                No active round. Start a season or wait for the next round.
+                {canStartNextGame ? (
+                  <div>
+                    <p className="mb-3">All rounds complete — ready for the next game.</p>
+                    <button onClick={startNextGame} className="btn-gold text-sm">
+                      Start Game {(currentGame?.number ?? 0) + 1}
+                    </button>
+                  </div>
+                ) : (
+                  "No active round. Start a season or wait for the next round."
+                )}
               </div>
             )}
 

@@ -186,10 +186,16 @@ export default function LeagueDetailPage() {
   const isCommissioner = league.myRole === "commissioner";
   const activeSeason = currentSeason?.status === "active";
   const hasEnoughPlayers = league.players.length >= 2;
+  // Game is effectively done if completed, or active with all rounds graded/cancelled
+  const gameEffectivelyDone =
+    currentGame?.status === "completed" ||
+    (currentGame?.status === "active" &&
+      !!currentGame.rounds?.length &&
+      currentGame.rounds.every((r) => r.status === "graded" || r.isCancelled));
   const canStartNextGame =
     isCommissioner &&
     activeSeason &&
-    currentGame?.status === "completed" &&
+    gameEffectivelyDone &&
     (currentGame?.number ?? 0) < league.gamesPerSeason;
 
   return (
@@ -468,13 +474,27 @@ export default function LeagueDetailPage() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold text-white">
                 Game {currentGame.number}
+                {gameEffectivelyDone && (
+                  <span className="ml-2 text-sm font-normal text-[#fbbf24]">Complete</span>
+                )}
               </h2>
-              <Link
-                href={`/games/${currentGame.id}${actAsParam}`}
-                className="btn-primary text-sm"
-              >
-                View Game
-              </Link>
+              <div className="flex gap-2">
+                {canStartNextGame && (
+                  <button
+                    onClick={startNextGame}
+                    disabled={startingNextGame}
+                    className="btn-gold text-sm"
+                  >
+                    {startingNextGame ? "Starting..." : `Start Game ${currentGame.number + 1}`}
+                  </button>
+                )}
+                <Link
+                  href={`/games/${currentGame.id}${actAsParam}`}
+                  className="btn-primary text-sm"
+                >
+                  View Game
+                </Link>
+              </div>
             </div>
 
             {/* Round Card */}
