@@ -849,9 +849,9 @@ Hall of Fame and season awards
 
 Commissioner tools 
 
-Out of Scope (Future Versions): 
+Out of Scope (Future Versions):
 
-SMS notifications via Twilio 
+
 
 Playoffs and championships 
 
@@ -889,21 +889,45 @@ Shareable link tokens
 
 Notifications 
 
-In-app notification system 
+In-app and SMS notification system
 
-Trigger points:  
+Notification Modes (commissioner-configurable per league, player can override in profile):
 
-5pm: "You're Up!" (At Bat) 
+None - In-app bell only, no SMS
 
-7am: "Category revealed - time to bet!" 
+Low - Minimum SMS to progress the game
 
-2 hours before deadline: Reminder if not answered 
+High - Verbose SMS including round results and deadline warnings
 
-Round close: "Results are in!" 
+Global override in Super Admin: force all leagues to None or restore commissioner setting
 
-Season end: "Awards announced!" 
+Notification Triggers (SMS sending gated by mode):
 
-Badge counters for pending actions 
+You're up – time to submit a question (Low + High → at-bat player, on new round)
+
+New question is ready – get your bets in (Low + High → all non-at-bat players, on question submit)
+
+All questions submitted – time to grade (Low + High → at-bat player, when all answers in)
+
+You're on deck – start preparing (Low → on-deck player, on new round)
+
+Round results (High → all players, after round scored)
+
+You're about to be skipped – get your bet in soon (High → last player without bet+answer, via Vercel Cron 30–90 min before deadline)
+
+SMS provider: Twilio (configured via TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER env vars)
+
+Click tracking: SMS links go through /api/notifications/click/[id] to record click-through before redirect
+
+Vercel Cron job runs every 15 min to fire deadline-approaching alerts
+
+Badge counters for pending actions (unread count in bell)
+
+Full notification center page at /notifications with All/Unread filter and pagination
+
+Bell dropdown shows last 10 notifications with mark-all-read
+
+Super Admin Notifications tab: total sent, SMS sent, click-through rate, by-type breakdown, recent table, global override control
 
 AI Integration 
 

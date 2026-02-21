@@ -34,6 +34,7 @@ interface LeagueInfo {
   answerTimerSeconds: number;
   absenteePenaltyType: string;
   lightningMode: boolean;
+  notificationMode: string;
   myRole: string | null;
   players: Player[];
   seasons: Array<{
@@ -164,6 +165,15 @@ export default function CommissionerPage() {
       alert(data.error || "Failed to start next game");
       return;
     }
+    await fetchLeague();
+  };
+
+  const saveNotificationMode = async (mode: string) => {
+    await fetch(`/api/leagues/${leagueId}/notification-settings`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ notificationMode: mode }),
+    });
     await fetchLeague();
   };
 
@@ -578,7 +588,7 @@ export default function CommissionerPage() {
                   {league.absenteePenaltyType}
                 </span>
               </div>
-              <div className="flex justify-between items-center py-3">
+              <div className="flex justify-between items-center py-3 border-b border-[#1e3a5f]">
                 <div>
                   <span className="text-[#a0a0b8] block">Lightning Mode</span>
                   <span className="text-xs text-[#666680] block mt-1">
@@ -598,6 +608,43 @@ export default function CommissionerPage() {
                     }`}
                   />
                 </button>
+              </div>
+
+              {/* Notification Mode */}
+              <div className="py-3">
+                <span className="text-[#a0a0b8] block mb-1">Notification Mode</span>
+                <span className="text-xs text-[#666680] block mb-3">
+                  Controls how players are notified via SMS. In-app notifications always show in the bell.
+                </span>
+                <div className="flex flex-col gap-2">
+                  {[
+                    { value: "none", label: "None", desc: "In-app only – no SMS messages" },
+                    { value: "low", label: "Low", desc: "Minimum SMS to keep the game moving (you're up, new question, time to grade)" },
+                    { value: "high", label: "High", desc: "Verbose – includes round results, deadline warnings, and all Low alerts" },
+                  ].map((opt) => (
+                    <label
+                      key={opt.value}
+                      className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                        league.notificationMode === opt.value
+                          ? "border-[#e94560] bg-[#e94560]/10"
+                          : "border-[#1e3a5f] hover:border-[#4fc3f7]/50"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="notificationMode"
+                        value={opt.value}
+                        checked={league.notificationMode === opt.value}
+                        onChange={() => saveNotificationMode(opt.value)}
+                        className="mt-0.5 accent-[#e94560]"
+                      />
+                      <div>
+                        <span className="text-white text-sm font-medium">{opt.label}</span>
+                        <span className="text-xs text-[#a0a0b8] block mt-0.5">{opt.desc}</span>
+                      </div>
+                    </label>
+                  ))}
+                </div>
               </div>
             </div>
           </div>

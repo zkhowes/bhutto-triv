@@ -30,6 +30,7 @@ export default function ProfilePage() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [timezone, setTimezone] = useState("America/Los_Angeles");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [notificationPreference, setNotificationPreference] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [loaded, setLoaded] = useState(false);
@@ -53,6 +54,7 @@ export default function ProfilePage() {
             setPhoneNumber(data.phoneNumber || "");
             setTimezone(data.timezone || "America/Los_Angeles");
             setAvatarUrl(data.avatarUrl || null);
+            setNotificationPreference(data.notificationPreference ?? null);
           }
           setLoaded(true);
         })
@@ -125,6 +127,7 @@ export default function ProfilePage() {
           phoneNumber: phoneNumber.trim(),
           timezone,
           avatarUrl,
+          notificationPreference,
         }),
       });
 
@@ -259,6 +262,45 @@ export default function ProfilePage() {
                 </option>
               ))}
             </select>
+          </div>
+
+          {/* Notification Preferences */}
+          <div>
+            <label className="block text-sm font-medium text-[#a0a0b8] mb-1.5">
+              Notification Preference
+            </label>
+            <p className="text-xs text-[#666680] mb-2">
+              Override the league notification setting for your account. In-app notifications always appear in the bell.
+            </p>
+            <div className="space-y-2">
+              {[
+                { value: null, label: "Use League Default", desc: "Follow whatever the commissioner has set for the league" },
+                { value: "none", label: "None", desc: "In-app only – suppress all SMS" },
+                { value: "low", label: "Low", desc: "Minimum SMS to keep you in the game" },
+                { value: "high", label: "High", desc: "All notifications including round results and deadline warnings" },
+              ].map((opt) => (
+                <label
+                  key={opt.value ?? "default"}
+                  className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                    notificationPreference === opt.value
+                      ? "border-[#e94560] bg-[#e94560]/10"
+                      : "border-[#1e3a5f] hover:border-[#4fc3f7]/50"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="notificationPreference"
+                    checked={notificationPreference === opt.value}
+                    onChange={() => setNotificationPreference(opt.value)}
+                    className="mt-0.5 accent-[#e94560]"
+                  />
+                  <div>
+                    <span className="text-white text-sm font-medium">{opt.label}</span>
+                    <span className="text-xs text-[#a0a0b8] block mt-0.5">{opt.desc}</span>
+                  </div>
+                </label>
+              ))}
+            </div>
           </div>
 
           {error && (

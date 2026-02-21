@@ -124,6 +124,7 @@ export default function AdminPage() {
     | "games"
     | "rounds"
     | "questions"
+    | "notifications"
   >("overview");
 
   // Password authentication state
@@ -153,6 +154,30 @@ export default function AdminPage() {
   );
   const [questionAnswers, setQuestionAnswers] = useState<QuestionAnswer[]>([]);
   const [questionDetailsLoading, setQuestionDetailsLoading] = useState(false);
+
+  // Notifications tab state
+  interface NotifStats {
+    totalSent: number;
+    totalSms: number;
+    totalClicks: number;
+    clickRate: number;
+    byType: Array<{ type: string; count: number; smsCount: number; clickCount: number }>;
+    dailyTrend: Array<{ date: string; count: number; smsCount: number }>;
+    globalOverride: string;
+    recentNotifications: Array<{
+      id: string;
+      type: string;
+      title: string;
+      userId: string;
+      userNickname: string;
+      smsStatus: string | null;
+      clickedAt: string | null;
+      createdAt: string;
+    }>;
+  }
+  const [notifStats, setNotifStats] = useState<NotifStats | null>(null);
+  const [notifLoading, setNotifLoading] = useState(false);
+  const [savingOverride, setSavingOverride] = useState(false);
 
   // Redirect if not logged in at all
   useEffect(() => {
@@ -194,6 +219,18 @@ export default function AdminPage() {
       loadQuestions();
     }
   }, [tab, questionsPage, filterLeague, filterCategory, filterDateFrom, filterDateTo, isAuthenticated]);
+
+  // Load notification stats when tab changes to notifications
+  useEffect(() => {
+    if (tab === "notifications" && isAuthenticated) {
+      setNotifLoading(true);
+      fetch("/api/admin/notification-stats")
+        .then((r) => r.json())
+        .then((d) => setNotifStats(d))
+        .catch(() => {})
+        .finally(() => setNotifLoading(false));
+    }
+  }, [tab, isAuthenticated]);
 
   const loadQuestions = async () => {
     setQuestionsLoading(true);
@@ -458,6 +495,7 @@ export default function AdminPage() {
               "games",
               "rounds",
               "questions",
+              "notifications",
             ] as const
           ).map((t) => (
             <button
@@ -1026,6 +1064,143 @@ export default function AdminPage() {
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Notifications Tab */}
+        {tab === "notifications" && (
+          <div className="space-y-6">
+            {notifLoading ? (
+              <div className="py-12 text-center text-[#a0a0b8]">Loading...</div>
+            ) : !notifStats ? (
+              <div className="py-12 text-center text-[#a0a0b8]">No data</div>
+            ) : (
+              <>
+                {/* Global Override Control */}
+                <div className="bg-[#1e3a5f] rounded-lg p-5 border border-[#2a4a6f]">
+                  <h2 className="text-sm font-semibold text-[#a0a0b8] uppercase tracking-wider mb-2">
+                    Global Notification Override
+                  </h2>
+                  <p className="text-xs text-[#666680] mb-3">
+                    Overrides all league commissioner settings. Use &quot;Force None&quot; if SMS is going haywire.
+                  </p>
+                  <div className="flex gap-3 flex-wrap">
+                    {[
+                      { value: "commissioner", label: "Commissioner Specified" },
+                      { value: "none", label: "Force All to None" },
+                    ].map((opt) => (
+                      <button
+                        key={opt.value}
+                        disabled={savingOverride || notifStats.globalOverride === opt.value}
+                        onClick={async () => {
+                          setSavingOverride(true);
+                          await fetch("/api/admin/global-settings", {
+                            method: "PUT",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ notificationOverride: opt.value }),
+                          });
+                          setNotifStats((prev) => prev ? { ...prev, globalOverride: opt.value } : prev);
+                          setSavingOverride(false);
+                        }}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${
+                          notifStats.globalOverride === opt.value
+                            ? "border-amber-500 bg-amber-500/10 text-amber-400"
+                            : "border-[#2a4a6f] text-[#a0a0b8] hover:border-amber-500/50"
+                        }`}
+                      >
+                        {opt.label}
+                        {notifStats.globalOverride === opt.value && " ✓"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Stats Cards */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {[
+                    { label: "Total Sent", value: notifStats.totalSent.toLocaleString() },
+                    { label: "SMS Sent", value: notifStats.totalSms.toLocaleString() },
+                    { label: "Link Clicks", value: notifStats.totalClicks.toLocaleString() },
+                    { label: "Click Rate", value: `${notifStats.clickRate.toFixed(1)}%` },
+                  ].map((stat) => (
+                    <div key={stat.label} className="bg-[#1e3a5f] rounded-lg p-4 border border-[#2a4a6f] text-center">
+                      <div className="text-2xl font-bold text-amber-400">{stat.value}</div>
+                      <div className="text-xs text-[#a0a0b8] mt-1">{stat.label}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* By Type Breakdown */}
+                <div className="bg-[#1e3a5f] rounded-lg p-5 border border-[#2a4a6f]">
+                  <h2 className="text-sm font-semibold text-[#a0a0b8] uppercase tracking-wider mb-3">
+                    Notifications by Type
+                  </h2>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-[#2a4a6f]">
+                          <th className="p-2 text-left text-[#a0a0b8]">Type</th>
+                          <th className="p-2 text-right text-[#a0a0b8]">Total</th>
+                          <th className="p-2 text-right text-[#a0a0b8]">SMS</th>
+                          <th className="p-2 text-right text-[#a0a0b8]">Clicks</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {notifStats.byType.map((row) => (
+                          <tr key={row.type} className="border-b border-[#2a4a6f]/50">
+                            <td className="p-2 text-white capitalize">{row.type.replace(/_/g, " ")}</td>
+                            <td className="p-2 text-right text-[#a0a0b8]">{row.count}</td>
+                            <td className="p-2 text-right text-[#a0a0b8]">{row.smsCount}</td>
+                            <td className="p-2 text-right text-[#a0a0b8]">{row.clickCount}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Recent Notifications */}
+                <div className="bg-[#1e3a5f] rounded-lg p-5 border border-[#2a4a6f]">
+                  <h2 className="text-sm font-semibold text-[#a0a0b8] uppercase tracking-wider mb-3">
+                    Recent Notifications (last 50)
+                  </h2>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-[#2a4a6f]">
+                          <th className="p-2 text-left text-[#a0a0b8]">Type</th>
+                          <th className="p-2 text-left text-[#a0a0b8]">Title</th>
+                          <th className="p-2 text-left text-[#a0a0b8]">Player</th>
+                          <th className="p-2 text-center text-[#a0a0b8]">SMS</th>
+                          <th className="p-2 text-center text-[#a0a0b8]">Clicked</th>
+                          <th className="p-2 text-right text-[#a0a0b8]">Sent</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {notifStats.recentNotifications.map((n) => (
+                          <tr key={n.id} className="border-b border-[#2a4a6f]/50">
+                            <td className="p-2 text-[#a0a0b8] capitalize text-xs">{n.type.replace(/_/g, " ")}</td>
+                            <td className="p-2 text-white text-xs max-w-[180px] truncate">{n.title}</td>
+                            <td className="p-2 text-[#a0a0b8] text-xs">{n.userNickname}</td>
+                            <td className="p-2 text-center">
+                              <span className={`text-xs ${n.smsStatus === "sent" ? "text-green-400" : n.smsStatus === "failed" ? "text-red-400" : "text-[#666680]"}`}>
+                                {n.smsStatus ?? "—"}
+                              </span>
+                            </td>
+                            <td className="p-2 text-center text-xs">
+                              {n.clickedAt ? <span className="text-green-400">✓</span> : <span className="text-[#666680]">—</span>}
+                            </td>
+                            <td className="p-2 text-right text-xs text-[#666680]">
+                              {new Date(n.createdAt).toLocaleDateString()}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>

@@ -7,6 +7,13 @@ import {
   SKIP_PENALTY_PERCENTAGE,
 } from "./constants";
 import { scoreRound, calculateAbsenteePenalty, getF1PointsForPlacement } from "./scoring";
+import {
+  notifyAtBat,
+  notifyNewQuestion,
+  notifyAllAnswersIn,
+  notifyOnDeck,
+  notifyRoundResults,
+} from "./notifications";
 
 /**
  * Initialize a new season for a league
@@ -95,12 +102,13 @@ export async function initializeGame(
 
   // Create rounds — one per player (each player bats exactly once)
   const roundsPerGame = playerIds.length;
+  let firstRoundId: string | null = null;
   for (let i = 0; i < roundsPerGame; i++) {
     const atBatIndex = i % shuffled.length;
     const onDeckIndex = (i + 1) % shuffled.length;
     const inTheHoleIndex = (i + 2) % shuffled.length;
 
-    await prisma.round.create({
+    const round = await prisma.round.create({
       data: {
         gameId: game.id,
         number: i + 1,
@@ -110,6 +118,13 @@ export async function initializeGame(
         inTheHolePlayerId: shuffled[inTheHoleIndex],
       },
     });
+    if (i === 0) firstRoundId = round.id;
+  }
+
+  // Notify the first at-bat and on-deck players
+  if (firstRoundId) {
+    await notifyAtBat(firstRoundId);
+    await notifyOnDeck(firstRoundId);
   }
 
   return game.id;
@@ -168,6 +183,9 @@ export async function submitQuestion(
     where: { id: roundId },
     data: { status: ROUND_STATUS.QUESTION_SUBMITTED },
   });
+
+  // Notify all other players that a new question is ready
+  await notifyNewQuestion(roundId);
 
   return question.id;
 }
@@ -345,6 +363,8 @@ export async function submitAnswer(
           where: { id: roundId },
           data: { status: ROUND_STATUS.CLOSED },
         });
+        // Notify at-bat player that all answers are in and it's time to grade
+        await notifyAllAnswersIn(roundId);
       }
     }
   }
@@ -523,6 +543,9 @@ export async function closeRound(roundId: string): Promise<void> {
     data: { status: ROUND_STATUS.GRADED, funFact },
   });
 
+  // Notify all players of round results
+  await notifyRoundResults(roundId);
+
   // Check if game should end (all players at 0 or no remaining rounds)
   const remainingActiveRounds = game.rounds.filter(
     (r) => !r.isCancelled && r.status !== ROUND_STATUS.GRADED && r.id !== roundId
@@ -586,6 +609,9 @@ export async function closeRound(roundId: string): Promise<void> {
         where: { id: nextRound.id },
         data: { status: ROUND_STATUS.AWAITING_QUESTION },
       });
+      // Notify the new at-bat and on-deck players
+      await notifyAtBat(nextRound.id);
+      await notifyOnDeck(nextRound.id);
     }
   }
 }
@@ -701,6 +727,10 @@ export async function skipPlayerTurn(
       }
     }
 
+    // Notify the player now at bat for the current (reordered) round
+    await notifyAtBat(round.id);
+    await notifyOnDeck(round.id);
+
     return { cancelled: false };
   } else {
     // ── SECOND SKIP (or more): penalty + cancel round ──
@@ -765,6 +795,8 @@ export async function skipPlayerTurn(
           where: { id: nextPending.id },
           data: { status: ROUND_STATUS.AWAITING_QUESTION },
         });
+        await notifyAtBat(nextPending.id);
+        await notifyOnDeck(nextPending.id);
       }
     }
 
