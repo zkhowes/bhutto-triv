@@ -117,7 +117,7 @@ export default function AdminPage() {
   const [data, setData] = useState<AdminData | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<
-    | "overview"
+    | "monitoring"
     | "leagues"
     | "players"
     | "commissioners"
@@ -125,7 +125,13 @@ export default function AdminPage() {
     | "rounds"
     | "questions"
     | "notifications"
-  >("overview");
+    | "test"
+  >("monitoring");
+
+  // Test tab state
+  const [testPhone, setTestPhone] = useState("");
+  const [testAppend, setTestAppend] = useState("");
+  const [testStatus, setTestStatus] = useState<Record<string, "idle" | "sending" | "sent" | "failed">>({});
 
   // Password authentication state
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
@@ -488,7 +494,7 @@ export default function AdminPage() {
         <div className="flex gap-2 mb-6 overflow-x-auto">
           {(
             [
-              "overview",
+              "monitoring",
               "leagues",
               "players",
               "commissioners",
@@ -496,6 +502,7 @@ export default function AdminPage() {
               "rounds",
               "questions",
               "notifications",
+              "test",
             ] as const
           ).map((t) => (
             <button
@@ -503,7 +510,7 @@ export default function AdminPage() {
               onClick={() => setTab(t)}
               className={`px-4 py-2 rounded-lg text-sm font-medium capitalize whitespace-nowrap ${
                 tab === t
-                  ? "bg-amber-500 text-black"
+                  ? t === "test" ? "bg-[#e94560] text-white" : "bg-amber-500 text-black"
                   : "bg-[#1e3a5f] text-[#a0a0b8]"
               }`}
             >
@@ -512,7 +519,7 @@ export default function AdminPage() {
           ))}
         </div>
 
-        {tab === "overview" && (
+        {tab === "monitoring" && (
           <>
             {/* Stat Cards */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-8">
@@ -1063,6 +1070,113 @@ export default function AdminPage() {
                   </table>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Test Tab */}
+        {tab === "test" && (
+          <div className="space-y-6 max-w-2xl">
+            <div className="bg-[#1e3a5f] rounded-lg p-5 border border-[#2a4a6f]">
+              <h2 className="text-base font-semibold text-white mb-1">SMS Test Console</h2>
+              <p className="text-xs text-[#666680] mb-5">
+                Sends a real SMS via Twilio. Notifications are not recorded in the database.
+              </p>
+
+              {/* Phone number */}
+              <div className="mb-4">
+                <label className="block text-xs font-medium text-[#a0a0b8] uppercase tracking-wider mb-1.5">
+                  Destination phone number
+                </label>
+                <input
+                  type="tel"
+                  value={testPhone}
+                  onChange={(e) => setTestPhone(e.target.value)}
+                  placeholder="+1 (555) 123-4567"
+                  className="w-full px-3 py-2 bg-[#0f0f23] border border-[#2a4a6f] rounded-lg text-white placeholder-[#666680] text-sm focus:outline-none focus:border-[#e94560]"
+                />
+              </div>
+
+              {/* Append text */}
+              <div className="mb-6">
+                <label className="block text-xs font-medium text-[#a0a0b8] uppercase tracking-wider mb-1.5">
+                  Additional text to append (optional)
+                </label>
+                <textarea
+                  value={testAppend}
+                  onChange={(e) => setTestAppend(e.target.value)}
+                  placeholder="Paste anything extra here to include at the end of the message…"
+                  rows={3}
+                  className="w-full px-3 py-2 bg-[#0f0f23] border border-[#2a4a6f] rounded-lg text-white placeholder-[#666680] text-sm focus:outline-none focus:border-[#e94560] resize-none"
+                />
+              </div>
+
+              {/* Notification type buttons */}
+              <div className="text-xs font-medium text-[#a0a0b8] uppercase tracking-wider mb-3">
+                Send test notification
+              </div>
+              <div className="space-y-2">
+                {[
+                  { type: "at_bat",               icon: "⚾", label: "You're Up",           desc: "at_bat player – time to submit question" },
+                  { type: "new_question",          icon: "❓", label: "New Question",        desc: "all other players – bets are open" },
+                  { type: "all_answers_in",        icon: "✅", label: "All Answers In",      desc: "at_bat player – time to grade" },
+                  { type: "on_deck",               icon: "🎯", label: "On Deck",             desc: "on_deck player – low level only" },
+                  { type: "round_results",         icon: "🏆", label: "Round Results",       desc: "all players – high level only" },
+                  { type: "about_to_be_skipped",   icon: "⚠️", label: "About to Be Skipped", desc: "last holdout – high level only" },
+                ].map(({ type, icon, label, desc }) => {
+                  const s = testStatus[type] ?? "idle";
+                  return (
+                    <div
+                      key={type}
+                      className="flex items-center justify-between gap-3 px-4 py-3 bg-[#0f0f23] rounded-lg border border-[#2a4a6f]"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="text-xl shrink-0">{icon}</span>
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-white">{label}</div>
+                          <div className="text-xs text-[#666680] truncate">{desc}</div>
+                        </div>
+                      </div>
+                      <button
+                        disabled={s === "sending" || !testPhone.trim()}
+                        onClick={async () => {
+                          setTestStatus((prev) => ({ ...prev, [type]: "sending" }));
+                          try {
+                            const res = await fetch("/api/admin/test-sms", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ to: testPhone, type, appendText: testAppend }),
+                            });
+                            const data = await res.json();
+                            setTestStatus((prev) => ({ ...prev, [type]: data.error ? "failed" : "sent" }));
+                            if (data.error) {
+                              alert(`Failed: ${data.error}`);
+                            }
+                          } catch {
+                            setTestStatus((prev) => ({ ...prev, [type]: "failed" }));
+                            alert("Request failed");
+                          }
+                          // Reset to idle after 4 seconds
+                          setTimeout(() => setTestStatus((prev) => ({ ...prev, [type]: "idle" })), 4000);
+                        }}
+                        className={`shrink-0 px-4 py-1.5 rounded-lg text-xs font-semibold transition-all border ${
+                          s === "sent"
+                            ? "bg-green-500/20 border-green-500/50 text-green-400"
+                            : s === "failed"
+                            ? "bg-red-500/20 border-red-500/50 text-red-400"
+                            : s === "sending"
+                            ? "bg-[#1e3a5f] border-[#2a4a6f] text-[#666680] cursor-wait"
+                            : !testPhone.trim()
+                            ? "bg-[#1e3a5f] border-[#2a4a6f] text-[#666680] cursor-not-allowed"
+                            : "bg-[#e94560]/10 border-[#e94560]/40 text-[#e94560] hover:bg-[#e94560]/20"
+                        }`}
+                      >
+                        {s === "sending" ? "Sending…" : s === "sent" ? "✓ Sent" : s === "failed" ? "✗ Failed" : "Send"}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}
