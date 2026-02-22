@@ -109,7 +109,16 @@ export default function HomePage() {
 
       {/* Footer */}
       <footer className="py-6 text-center text-xs text-[#666680]">
-        Bhutto Wisdom &copy; {new Date().getFullYear()}
+        <div className="mb-2">Bhutto Wisdom &copy; {new Date().getFullYear()}</div>
+        <div className="flex items-center justify-center gap-4">
+          <a href="/privacy" className="hover:text-[#a0a0b8] transition-colors">
+            Privacy Policy
+          </a>
+          <span>&middot;</span>
+          <a href="/terms" className="hover:text-[#a0a0b8] transition-colors">
+            Terms &amp; Conditions
+          </a>
+        </div>
       </footer>
     </div>
   );
