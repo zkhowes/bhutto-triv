@@ -132,6 +132,7 @@ export default function AdminPage() {
   const [testPhone, setTestPhone] = useState("");
   const [testAppend, setTestAppend] = useState("");
   const [testStatus, setTestStatus] = useState<Record<string, "idle" | "sending" | "sent" | "failed">>({});
+  const [testTabPassword, setTestTabPassword] = useState("");
 
   // Password authentication state
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
@@ -196,7 +197,10 @@ export default function AdminPage() {
     if (session?.user) {
       // Restore saved password so test-sms works after page reload
       const saved = sessionStorage.getItem("adminPw");
-      if (saved) adminPasswordRef.current = saved;
+      if (saved) {
+        adminPasswordRef.current = saved;
+        setTestTabPassword(saved);
+      }
 
       fetch("/api/admin/auth")
         .then((r) => r.json())
@@ -355,6 +359,7 @@ export default function AdminPage() {
         setIsAuthenticated(true);
         adminPasswordRef.current = passwordInput;
         sessionStorage.setItem("adminPw", passwordInput);
+        setTestTabPassword(passwordInput);
         setPasswordInput("");
       } else {
         setPasswordError(data.error || "Incorrect password");
@@ -1090,6 +1095,23 @@ export default function AdminPage() {
                 Sends a real SMS via Twilio. Notifications are not recorded in the database.
               </p>
 
+              {/* Admin password */}
+              <div className="mb-4">
+                <label className="block text-xs font-medium text-[#a0a0b8] uppercase tracking-wider mb-1.5">
+                  Admin password
+                </label>
+                <input
+                  type="password"
+                  value={testTabPassword}
+                  onChange={(e) => {
+                    setTestTabPassword(e.target.value);
+                    sessionStorage.setItem("adminPw", e.target.value);
+                  }}
+                  placeholder="Enter admin password"
+                  className="w-full px-3 py-2 bg-[#0f0f23] border border-[#2a4a6f] rounded-lg text-white placeholder-[#666680] text-sm focus:outline-none focus:border-[#e94560]"
+                />
+              </div>
+
               {/* Phone number */}
               <div className="mb-4">
                 <label className="block text-xs font-medium text-[#a0a0b8] uppercase tracking-wider mb-1.5">
@@ -1145,14 +1167,14 @@ export default function AdminPage() {
                         </div>
                       </div>
                       <button
-                        disabled={s === "sending" || !testPhone.trim()}
+                        disabled={s === "sending" || !testPhone.trim() || !testTabPassword.trim()}
                         onClick={async () => {
                           setTestStatus((prev) => ({ ...prev, [type]: "sending" }));
                           try {
                             const res = await fetch("/api/admin/test-sms", {
                               method: "POST",
                               headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ to: testPhone, type, appendText: testAppend, adminPassword: adminPasswordRef.current }),
+                              body: JSON.stringify({ to: testPhone, type, appendText: testAppend, adminPassword: testTabPassword }),
                             });
                             const data = await res.json();
                             setTestStatus((prev) => ({ ...prev, [type]: data.error ? "failed" : "sent" }));
@@ -1173,7 +1195,7 @@ export default function AdminPage() {
                             ? "bg-red-500/20 border-red-500/50 text-red-400"
                             : s === "sending"
                             ? "bg-[#1e3a5f] border-[#2a4a6f] text-[#666680] cursor-wait"
-                            : !testPhone.trim()
+                            : (!testPhone.trim() || !testTabPassword.trim())
                             ? "bg-[#1e3a5f] border-[#2a4a6f] text-[#666680] cursor-not-allowed"
                             : "bg-[#e94560]/10 border-[#e94560]/40 text-[#e94560] hover:bg-[#e94560]/20"
                         }`}
