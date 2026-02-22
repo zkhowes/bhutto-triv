@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { authenticatedSessions } from "@/lib/admin-auth";
 import { sendSms, isSmsConfigured } from "@/lib/sms";
 
 const SAMPLE_MESSAGES: Record<string, { title: string; body: string }> = {
@@ -32,7 +33,10 @@ const SAMPLE_MESSAGES: Record<string, { title: string; body: string }> = {
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.isSuperAdmin) {
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!authenticatedSessions.has(session.user.id)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
