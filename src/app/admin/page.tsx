@@ -194,6 +194,10 @@ export default function AdminPage() {
   // Check if already authenticated as super admin
   useEffect(() => {
     if (session?.user) {
+      // Restore saved password so test-sms works after page reload
+      const saved = sessionStorage.getItem("adminPw");
+      if (saved) adminPasswordRef.current = saved;
+
       fetch("/api/admin/auth")
         .then((r) => r.json())
         .then((data) => {
@@ -350,6 +354,7 @@ export default function AdminPage() {
       if (res.ok && data.authenticated) {
         setIsAuthenticated(true);
         adminPasswordRef.current = passwordInput;
+        sessionStorage.setItem("adminPw", passwordInput);
         setPasswordInput("");
       } else {
         setPasswordError(data.error || "Incorrect password");
