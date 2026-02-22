@@ -2,7 +2,7 @@
 
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import NavBar from "@/components/layout/NavBar";
 import ChartCard from "@/components/admin/ChartCard";
 
@@ -138,6 +138,7 @@ export default function AdminPage() {
   const [passwordInput, setPasswordInput] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const adminPasswordRef = useRef<string>("");
 
   // Search state
   const [searchQuery, setSearchQuery] = useState("");
@@ -348,6 +349,7 @@ export default function AdminPage() {
 
       if (res.ok && data.authenticated) {
         setIsAuthenticated(true);
+        adminPasswordRef.current = passwordInput;
         setPasswordInput("");
       } else {
         setPasswordError(data.error || "Incorrect password");
@@ -1145,7 +1147,7 @@ export default function AdminPage() {
                             const res = await fetch("/api/admin/test-sms", {
                               method: "POST",
                               headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ to: testPhone, type, appendText: testAppend }),
+                              body: JSON.stringify({ to: testPhone, type, appendText: testAppend, adminPassword: adminPasswordRef.current }),
                             });
                             const data = await res.json();
                             setTestStatus((prev) => ({ ...prev, [type]: data.error ? "failed" : "sent" }));

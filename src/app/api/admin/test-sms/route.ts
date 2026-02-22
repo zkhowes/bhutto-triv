@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { authenticatedSessions } from "@/lib/admin-auth";
 import { sendSms, isSmsConfigured } from "@/lib/sms";
 
 const SAMPLE_MESSAGES: Record<string, { title: string; body: string }> = {
@@ -36,7 +35,17 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (!authenticatedSessions.has(session.user.id)) {
+
+  const body = await req.json();
+  const { to, type, appendText, adminPassword } = body as {
+    to: string;
+    type: string;
+    appendText?: string;
+    adminPassword?: string;
+  };
+
+  const correctPassword = process.env.SUPER_ADMIN_PASSWORD;
+  if (!correctPassword || adminPassword !== correctPassword) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -47,12 +56,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const body = await req.json();
-  const { to, type, appendText } = body as {
-    to: string;
-    type: string;
-    appendText?: string;
-  };
+  // (body already parsed above)
 
   if (!to || !to.trim()) {
     return NextResponse.json({ error: "Phone number is required" }, { status: 400 });
