@@ -61,9 +61,28 @@ export default function NavBar() {
         .catch(() => {});
     };
 
+    let interval: ReturnType<typeof setInterval>;
+
+    const startPolling = () => {
+      interval = setInterval(fetchNotifications, 90000);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        clearInterval(interval);
+      } else {
+        fetchNotifications();
+        startPolling();
+      }
+    };
+
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000);
-    return () => clearInterval(interval);
+    startPolling();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [session]);
 
   // Close dropdowns when clicking outside

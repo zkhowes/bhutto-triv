@@ -185,8 +185,29 @@ export default function RoundPage() {
 
   useEffect(() => {
     if (!session?.user || !round) return;
-    const interval = setInterval(fetchRound, 15000);
-    return () => clearInterval(interval);
+    if (round.status === "graded") return; // terminal state, no more updates
+
+    let interval: ReturnType<typeof setInterval>;
+
+    const startPolling = () => {
+      interval = setInterval(fetchRound, 45000);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        clearInterval(interval);
+      } else {
+        fetchRound();
+        startPolling();
+      }
+    };
+
+    startPolling();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [session, round, fetchRound]);
 
   // Check if user is commissioner

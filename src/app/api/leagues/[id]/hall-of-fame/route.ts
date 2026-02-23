@@ -17,7 +17,7 @@ export async function GET(
     },
   });
 
-  // Get all round answers for this league
+  // Get all round answers for this league (capped at 2000 for transfer safety)
   const answers = await prisma.roundAnswer.findMany({
     where: {
       round: {
@@ -26,6 +26,7 @@ export async function GET(
         },
       },
     },
+    take: 2000,
     include: {
       round: {
         include: {

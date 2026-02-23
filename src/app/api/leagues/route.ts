@@ -34,6 +34,7 @@ export async function GET() {
             include: {
               rounds: {
                 orderBy: { number: "asc" },
+                take: 20,
               },
             },
           },

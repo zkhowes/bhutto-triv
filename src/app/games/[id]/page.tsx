@@ -81,11 +81,32 @@ export default function GamePage() {
     if (session?.user) fetchGame();
   }, [status, session, router, fetchGame]);
 
-  // Poll for updates every 30 seconds
+  // Poll for updates every 90 seconds; stop for completed games; pause when tab hidden
   useEffect(() => {
     if (!session?.user || !game) return;
-    const interval = setInterval(fetchGame, 30000);
-    return () => clearInterval(interval);
+    if (game.status === "completed") return; // terminal state, no more updates
+
+    let interval: ReturnType<typeof setInterval>;
+
+    const startPolling = () => {
+      interval = setInterval(fetchGame, 90000);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        clearInterval(interval);
+      } else {
+        fetchGame();
+        startPolling();
+      }
+    };
+
+    startPolling();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [session, game, fetchGame]);
 
   if (status === "loading" || loading || !game) {
