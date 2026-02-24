@@ -209,3 +209,33 @@ Production deployed to Vercel (bwiz.zkhowes.fun):
 - Database: Neon PostgreSQL (serverless)
 - Environment variables configured in Vercel dashboard
 - Prisma generates on build via `postinstall` script
+
+### Neon Transfer Budget (5 GB/month)
+
+Polling loops and unbounded queries are the primary risk. Always follow these rules:
+
+**Polling intervals (minimum):**
+- Active gameplay page (round): 45s
+- Overview pages (game, league): 90s
+- NavBar notifications: 90s
+
+**Always use Page Visibility API on polling loops** — pause when tab is hidden, refresh immediately on focus:
+```typescript
+let interval: ReturnType<typeof setInterval>;
+const startPolling = () => { interval = setInterval(fetch, 45000); };
+const handleVisibilityChange = () => {
+  if (document.hidden) clearInterval(interval);
+  else { fetch(); startPolling(); }
+};
+startPolling();
+document.addEventListener("visibilitychange", handleVisibilityChange);
+return () => { clearInterval(interval); document.removeEventListener("visibilitychange", handleVisibilityChange); };
+```
+
+**Stop polling for terminal states:**
+- Round page: skip if `round.status === "graded"`
+- Game page: skip if `game.status === "completed"`
+
+**Always add `take:` limits to Prisma queries** — never leave a `findMany` unbounded, especially on nested includes. Current caps:
+- Rounds in leagues list: `take: 20`
+- Hall-of-fame answers: `take: 2000`
