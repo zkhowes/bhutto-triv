@@ -106,10 +106,15 @@ export async function workshopQuestion(
 
 Your role:
 - Help brainstorm question ideas
-- Suggest whether a question works better as multiple choice or free text
+- Suggest whether a question works better as multiple choice, free text, or Price is Right
 - Generate multiple choice options when requested
 - Validate question difficulty and clarity
 - Ensure questions have clear, unambiguous correct answers
+
+Answer formats:
+- Multiple Choice: 4 options, one correct answer
+- Free Text: Player types in their answer, AI grades for spelling variations
+- Price is Right: Numeric answer — player guesses a number, closest without going over wins (e.g. "How many bones are in the human body?" answer: 206)
 
 Categories: Geography, Sports, Politics, Science, History, Entertainment, Arts & Literature, Food & Drink, Technology, General Knowledge
 
@@ -272,6 +277,105 @@ If the text doesn't contain a clear question, return null.`,
     return parsed;
   } catch {
     return null;
+  }
+}
+
+/**
+ * Generate a hint for a free-text question without revealing the answer
+ */
+export async function generateHint(
+  questionText: string,
+  correctAnswer: string,
+  acceptableAnswers: string[]
+): Promise<string> {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return "No hint available (AI not configured).";
+  }
+
+  try {
+    const anthropic = getClient();
+    const response = await anthropic.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 150,
+      messages: [
+        {
+          role: "user",
+          content: `You are giving a helpful hint for a trivia question. Give a hint that narrows down the answer WITHOUT revealing it directly.
+
+Question: ${questionText}
+Correct answer: ${correctAnswer}
+${acceptableAnswers.length > 0 ? `Also acceptable: ${acceptableAnswers.join(", ")}` : ""}
+
+Respond with a single helpful hint sentence only, no preamble.`,
+        },
+      ],
+    });
+    return response.content[0].type === "text"
+      ? response.content[0].text.trim()
+      : "Think carefully about the category and context.";
+  } catch {
+    return "Think carefully about the category and context.";
+  }
+}
+
+/**
+ * For a multiple choice question, identify a wrong option to eliminate as a helpful hint
+ */
+export async function eliminateWrongOption(
+  questionText: string,
+  optionA: string,
+  optionB: string,
+  optionC: string,
+  optionD: string,
+  correctOption: string
+): Promise<"A" | "B" | "C" | "D"> {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    // Fallback: return first non-correct option
+    const wrong = (["A", "B", "C", "D"] as const).find(
+      (o) => o !== correctOption
+    );
+    return wrong || "A";
+  }
+
+  try {
+    const anthropic = getClient();
+    const response = await anthropic.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 50,
+      messages: [
+        {
+          role: "user",
+          content: `For this trivia question, pick one WRONG answer option to eliminate. Choose the one that is most clearly wrong, to give players a useful hint. Do NOT eliminate the correct answer (${correctOption}).
+
+Question: ${questionText}
+A: ${optionA}
+B: ${optionB}
+C: ${optionC}
+D: ${optionD}
+Correct: ${correctOption}
+
+Respond with a single letter only: A, B, C, or D (must NOT be ${correctOption}).`,
+        },
+      ],
+    });
+
+    const text =
+      response.content[0].type === "text"
+        ? response.content[0].text.trim().toUpperCase()
+        : "";
+    if (["A", "B", "C", "D"].includes(text) && text !== correctOption) {
+      return text as "A" | "B" | "C" | "D";
+    }
+    // Fallback: first non-correct option
+    const wrong = (["A", "B", "C", "D"] as const).find(
+      (o) => o !== correctOption
+    );
+    return wrong || "A";
+  } catch {
+    const wrong = (["A", "B", "C", "D"] as const).find(
+      (o) => o !== correctOption
+    );
+    return wrong || "A";
   }
 }
 

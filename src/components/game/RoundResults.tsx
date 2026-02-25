@@ -115,12 +115,46 @@ export default function RoundResults({ round, myPlayerId }: RoundResultsProps) {
           <p className="text-white font-medium mb-3">
             {round.question.questionText}
           </p>
-          <p className="text-sm text-emerald-400">
-            Correct answer:{" "}
-            {round.question.answerFormat === "multiple_choice"
-              ? `${round.question.correctOption}. ${getOptionText(round.question.correctOption)}`
-              : round.question.correctAnswer}
-          </p>
+          {round.question.answerFormat === "price_is_right" ? (
+            <div>
+              <p className="text-sm text-emerald-400">
+                Target answer: {round.question.correctAnswer}
+              </p>
+              {(() => {
+                const target = parseFloat(round.question.correctAnswer ?? "NaN");
+                const winner = sortedAnswers.find((a) => a.isCorrect);
+                const winnerName = winner
+                  ? winner.leaguePlayer.fakeNickname ||
+                    winner.leaguePlayer.user.nickname
+                  : null;
+                const winnerGuess = winner?.freeTextAnswer;
+                if (winner && winnerGuess) {
+                  return (
+                    <p className="text-sm text-[#a0a0b8] mt-1">
+                      Closest guess:{" "}
+                      <span className="text-white font-semibold">{winnerGuess}</span>
+                      {" "}by {winnerName}
+                      {parseFloat(winnerGuess) === target && (
+                        <span className="ml-1 text-emerald-400">(exact!)</span>
+                      )}
+                    </p>
+                  );
+                }
+                return (
+                  <p className="text-sm text-red-400 mt-1">
+                    Everyone went over — nobody wins this round
+                  </p>
+                );
+              })()}
+            </div>
+          ) : (
+            <p className="text-sm text-emerald-400">
+              Correct answer:{" "}
+              {round.question.answerFormat === "multiple_choice"
+                ? `${round.question.correctOption}. ${getOptionText(round.question.correctOption)}`
+                : round.question.correctAnswer}
+            </p>
+          )}
         </div>
       )}
 

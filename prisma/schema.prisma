@@ -321,6 +321,11 @@ model RoundAnswer {
   placement      Int?     // 1st, 2nd, etc.
   fastestLap     Boolean  @default(false)
 
+  // Power-ups
+  powerUpType    String?  // "hint" | "elimination" | "highlow"
+  powerUpCost    Int      @default(0)
+  powerUpData    String?  // JSON: { hint?, eliminatedOption?, probeValue?, direction? }
+
   // Absentee
   isAbsent       Boolean  @default(false)
 

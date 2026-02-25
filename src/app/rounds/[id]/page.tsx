@@ -49,6 +49,9 @@ interface RoundData {
     placement: number | null;
     fastestLap: boolean;
     isAbsent: boolean;
+    powerUpType: string | null;
+    powerUpCost: number;
+    powerUpData: string | null;
     leaguePlayer: {
       id: string;
       fakeNickname: string | null;
@@ -474,6 +477,7 @@ export default function RoundPage() {
                 leaguePlayerId={myPlayerId}
                 maxPoints={myPlayerState.points}
                 category={round.question.category}
+                answerFormat={round.question.answerFormat}
                 answerDeadline={answerDeadline}
                 onBetPlaced={fetchRound}
               />
@@ -486,7 +490,13 @@ export default function RoundPage() {
               leaguePlayerId={myPlayerId}
               question={round.question}
               betAmount={myAnswer?.betAmount || 0}
+              playerPoints={myPlayerState?.points ?? 0}
+              allActivePoints={round.game.playerStates
+                .filter((ps) => ps.points > 0)
+                .map((ps) => ps.points)}
               answerDeadline={answerDeadline}
+              powerUpType={myAnswer?.powerUpType ?? null}
+              actAsPlayerId={actAsPlayerId}
               onAnswered={fetchRound}
             />
           )}

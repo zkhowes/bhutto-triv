@@ -272,7 +272,7 @@ export async function submitAnswer(
     selectedOption?: string;
     freeTextAnswer?: string;
   }
-): Promise<{ isCorrect: boolean | null; gradedBy: string }> {
+): Promise<{ isCorrect: boolean | null; gradedBy: string | null }> {
   const roundAnswer = await prisma.roundAnswer.findUnique({
     where: {
       roundId_leaguePlayerId: { roundId, leaguePlayerId },
@@ -288,11 +288,15 @@ export async function submitAnswer(
 
   const question = roundAnswer.question;
   let isCorrect: boolean | null = null;
-  let gradedBy = "pending";
+  let gradedBy: string | null = "pending";
 
   if (question.answerFormat === "multiple_choice") {
     isCorrect = answer.selectedOption === question.correctOption;
     gradedBy = "auto";
+  } else if (question.answerFormat === "price_is_right") {
+    // Grading deferred to closeRound (needs all answers to determine closest-without-going-over)
+    isCorrect = null;
+    gradedBy = null;
   } else {
     // Free text - use AI grading
     const { gradeAnswer: aiGrade } = await import("./ai");
@@ -379,6 +383,7 @@ export async function closeRound(roundId: string): Promise<void> {
   const round = await prisma.round.findUnique({
     where: { id: roundId },
     include: {
+      question: true,
       answers: {
         include: {
           leaguePlayer: {
@@ -461,6 +466,46 @@ export async function closeRound(roundId: string): Promise<void> {
       },
     },
   });
+
+  // Price is Right: determine winner (closest without going over) before scoring
+  if (round.question?.answerFormat === "price_is_right") {
+    const target = parseFloat(round.question.correctAnswer ?? "NaN");
+    if (!isNaN(target)) {
+      interface GuessEntry { id: string; value: number }
+      const guesses: GuessEntry[] = allAnswers
+        .filter((a) => !a.isAbsent)
+        .map((a) => ({
+          id: a.id,
+          value: parseFloat(a.freeTextAnswer ?? "NaN"),
+        }))
+        .filter((g) => !isNaN(g.value));
+
+      // Find exact match or closest without going over
+      const underOrEqual = guesses.filter((g) => g.value <= target);
+      const winnerId =
+        underOrEqual.length === 0
+          ? null
+          : underOrEqual.sort((a, b) => b.value - a.value)[0].id;
+
+      for (const answer of allAnswers) {
+        if (answer.isAbsent) continue;
+        await prisma.roundAnswer.update({
+          where: { id: answer.id },
+          data: {
+            isCorrect: answer.id === winnerId,
+            gradedBy: "auto",
+          },
+        });
+      }
+
+      // Refresh allAnswers after updating isCorrect
+      const refreshed = await prisma.roundAnswer.findMany({
+        where: { roundId },
+        include: { leaguePlayer: { include: { user: true } } },
+      });
+      allAnswers.splice(0, allAnswers.length, ...refreshed);
+    }
+  }
 
   // Score the round
   const results = allAnswers.map((a) => ({

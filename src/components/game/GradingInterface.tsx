@@ -11,6 +11,7 @@ interface Answer {
   gradedBy: string | null;
   answeredAt: string | null;
   betPlacedAt: string | null;
+  isAbsent: boolean;
   leaguePlayer: {
     id: string;
     fakeNickname: string | null;
@@ -47,9 +48,14 @@ export default function GradingInterface({
   categoryRevealAt,
   onGradingComplete,
 }: GradingInterfaceProps) {
-  // Only show non-at-bat player answers (at-bat doesn't answer)
+  const isPriceIsRight = question.answerFormat === "price_is_right";
+
+  // Only show non-at-bat player answers
+  // For Price is Right, isCorrect is null until closeRound, so show all non-absent answers
   const playerAnswers = answers.filter(
-    (a) => a.leaguePlayerId !== atBatPlayerId && a.isCorrect !== null
+    (a) =>
+      a.leaguePlayerId !== atBatPlayerId &&
+      (isPriceIsRight ? !a.isAbsent : a.isCorrect !== null)
   );
 
   const [overrides, setOverrides] = useState<Record<string, boolean>>({});
@@ -132,7 +138,9 @@ export default function GradingInterface({
     <div className="card p-6">
       <h2 className="text-lg font-bold text-[#e94560] mb-1">Review Answers</h2>
       <p className="text-sm text-[#a0a0b8] mb-4">
-        All players have answered. Review the grades below and override if needed.
+        {isPriceIsRight
+          ? "All players have submitted their guesses. Close the round to determine the winner."
+          : "All players have answered. Review the grades below and override if needed."}
       </p>
 
       {/* Question & correct answer */}
@@ -142,7 +150,7 @@ export default function GradingInterface({
         </p>
         <p className="text-white font-medium mb-2">{question.questionText}</p>
         <p className="text-sm text-emerald-400">
-          Correct answer:{" "}
+          {isPriceIsRight ? "Target: " : "Correct answer: "}
           {question.answerFormat === "multiple_choice"
             ? `${question.correctOption}. ${getOptionText(question.correctOption || "")}`
             : question.correctAnswer}
@@ -152,14 +160,45 @@ export default function GradingInterface({
       {/* Player answers */}
       <div className="space-y-3 mb-5">
         {playerAnswers.map((answer) => {
-          const grade = getEffectiveGrade(answer);
-          const isOverridden = answer.id in overrides;
           const playerName =
             answer.leaguePlayer.fakeNickname || answer.leaguePlayer.user.nickname;
           const answerText =
             question.answerFormat === "multiple_choice"
               ? `${answer.selectedOption}. ${getOptionText(answer.selectedOption || "")}`
               : answer.freeTextAnswer || "(no answer)";
+
+          if (isPriceIsRight) {
+            // Price is Right: just show guesses, no override buttons
+            const guessValue = parseFloat(answer.freeTextAnswer ?? "NaN");
+            const target = parseFloat(question.correctAnswer ?? "NaN");
+            const isOver = !isNaN(guessValue) && !isNaN(target) && guessValue > target;
+            return (
+              <div
+                key={answer.id}
+                className="rounded-lg p-4 border border-[#1e3a5f] bg-[#0f0f23]"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-white">{playerName}</p>
+                    <p className="text-sm text-[#a0a0b8] mt-1">
+                      Guess: <span className="font-mono text-white">{answerText}</span>
+                      {isOver && (
+                        <span className="ml-2 text-xs text-red-400">over</span>
+                      )}
+                    </p>
+                  </div>
+                  {getAnswerTime(answer) && (
+                    <span className="text-xs text-purple-400 font-mono">
+                      ⏱️ {getAnswerTime(answer)}
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          }
+
+          const grade = getEffectiveGrade(answer);
+          const isOverridden = answer.id in overrides;
 
           return (
             <div
@@ -206,7 +245,7 @@ export default function GradingInterface({
         })}
       </div>
 
-      {Object.keys(overrides).length > 0 && (
+      {!isPriceIsRight && Object.keys(overrides).length > 0 && (
         <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 mb-4 text-sm text-amber-400">
           {Object.keys(overrides).length} grade{Object.keys(overrides).length > 1 ? "s" : ""} overridden
         </div>

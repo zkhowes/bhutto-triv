@@ -134,6 +134,9 @@ export async function GET(
       f1Points: 0,
       placement: null,
       fastestLap: false,
+      powerUpType: null,
+      powerUpCost: 0,
+      powerUpData: null,
       leaguePlayer: answer.leaguePlayer,
     };
   });
@@ -145,7 +148,7 @@ export async function GET(
       ? round.answers.find((a) => a.leaguePlayerId === actAsPlayerId)
       : round.answers.find((a) => a.userId === userId);
     if (!myAnswer?.betPlacedAt) {
-      // Player hasn't bet yet, only show category
+      // Player hasn't bet yet, only show category + answerFormat (safe to reveal format)
       questionData = {
         ...questionData,
         questionText: "[Place your bet to see the question]",

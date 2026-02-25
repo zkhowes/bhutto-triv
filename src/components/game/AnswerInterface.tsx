@@ -16,7 +16,11 @@ interface AnswerInterfaceProps {
     optionD: string | null;
   };
   betAmount: number;
+  playerPoints: number; // current points before the bet
+  allActivePoints: number[]; // points of all active (non-eliminated) players
   answerDeadline?: string | null;
+  powerUpType?: string | null; // already-purchased power-up this round
+  actAsPlayerId?: string | null;
   onAnswered: () => void;
 }
 
@@ -25,15 +29,28 @@ export default function AnswerInterface({
   leaguePlayerId,
   question,
   betAmount,
+  playerPoints,
+  allActivePoints,
   answerDeadline,
+  powerUpType,
+  actAsPlayerId,
   onAnswered,
 }: AnswerInterfaceProps) {
   const [selectedOption, setSelectedOption] = useState("");
   const [freeTextAnswer, setFreeTextAnswer] = useState("");
+  const [priceAnswer, setPriceAnswer] = useState("");
+  const [eliminatedOption, setEliminatedOption] = useState<string | null>(null);
+  const [highLowResult, setHighLowResult] = useState<string | null>(null);
+  const [hint, setHint] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [buyingPowerUp, setBuyingPowerUp] = useState(false);
+  const [powerUpUsed, setPowerUpUsed] = useState(!!powerUpType);
   const [error, setError] = useState("");
 
   const isMultipleChoice = question.answerFormat === "multiple_choice";
+  const isPriceIsRight = question.answerFormat === "price_is_right";
+  const isFreeText = !isMultipleChoice && !isPriceIsRight;
+
   const options = [
     { key: "A", text: question.optionA },
     { key: "B", text: question.optionB },
@@ -41,27 +58,41 @@ export default function AnswerInterface({
     { key: "D", text: question.optionD },
   ].filter((o) => o.text);
 
+  const availableAfterBet = playerPoints - betAmount;
+  const canAffordPowerUp = availableAfterBet >= 1; // rough check; server validates exact cost
+
   const handleSubmit = async () => {
     if (isMultipleChoice && !selectedOption) {
       setError("Please select an answer");
       return;
     }
-    if (!isMultipleChoice && !freeTextAnswer.trim()) {
+    if (isFreeText && !freeTextAnswer.trim()) {
       setError("Please enter an answer");
       return;
+    }
+    if (isPriceIsRight) {
+      if (!priceAnswer.trim() || isNaN(parseFloat(priceAnswer))) {
+        setError("Please enter a valid number");
+        return;
+      }
     }
 
     setSubmitting(true);
     setError("");
 
     try {
-      const res = await fetch(`/api/rounds/${roundId}/answer`, {
+      const actAsParam = actAsPlayerId ? `?actAs=${actAsPlayerId}` : "";
+      const res = await fetch(`/api/rounds/${roundId}/answer${actAsParam}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           leaguePlayerId,
           selectedOption: isMultipleChoice ? selectedOption : undefined,
-          freeTextAnswer: !isMultipleChoice ? freeTextAnswer.trim() : undefined,
+          freeTextAnswer: isFreeText
+            ? freeTextAnswer.trim()
+            : isPriceIsRight
+              ? priceAnswer.trim()
+              : undefined,
         }),
       });
 
@@ -76,6 +107,67 @@ export default function AnswerInterface({
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleBuyPowerUp = async () => {
+    setBuyingPowerUp(true);
+    setError("");
+
+    try {
+      const powerUpTypeForFormat: Record<string, string> = {
+        multiple_choice: "elimination",
+        free_text: "hint",
+        price_is_right: "highlow",
+      };
+      const type = powerUpTypeForFormat[question.answerFormat];
+      if (!type) {
+        setError("No power-up available for this question type");
+        return;
+      }
+
+      const body: Record<string, unknown> = { leaguePlayerId, type };
+      if (type === "highlow") {
+        const probe = parseFloat(priceAnswer);
+        if (isNaN(probe)) {
+          setError("Enter a number first to check High/Low");
+          return;
+        }
+        body.probeValue = probe;
+      }
+
+      const actAsParam = actAsPlayerId ? `?actAs=${actAsPlayerId}` : "";
+      const res = await fetch(`/api/rounds/${roundId}/powerup${actAsParam}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to purchase power-up");
+      }
+
+      const data = await res.json();
+      const result = data.result as Record<string, unknown>;
+
+      if (result.hint) setHint(result.hint as string);
+      if (result.eliminatedOption)
+        setEliminatedOption(result.eliminatedOption as string);
+      if (result.direction)
+        setHighLowResult(result.direction as string);
+
+      setPowerUpUsed(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to buy power-up");
+    } finally {
+      setBuyingPowerUp(false);
+    }
+  };
+
+  const powerUpLabel: Record<string, string> = {
+    multiple_choice: "Eliminate a Wrong Answer",
+    free_text: "Buy a Hint",
+    price_is_right: "Check High/Low",
   };
 
   return (
@@ -107,24 +199,64 @@ export default function AnswerInterface({
 
       {/* Answer input */}
       {isMultipleChoice ? (
-        <div className="space-y-2 mb-6">
-          {options.map((opt) => (
-            <button
-              key={opt.key}
-              onClick={() => setSelectedOption(opt.key)}
-              className={`w-full text-left p-4 rounded-lg border transition-all ${
-                selectedOption === opt.key
-                  ? "border-[#e94560] bg-[#e94560]/10 text-white"
-                  : "border-[#1e3a5f] bg-[#0f0f23] text-[#a0a0b8] hover:border-[#2a5a8f]"
+        <div className="space-y-2 mb-4">
+          {options.map((opt) => {
+            const isEliminated = eliminatedOption === opt.key;
+            return (
+              <button
+                key={opt.key}
+                onClick={() => !isEliminated && setSelectedOption(opt.key)}
+                disabled={isEliminated}
+                className={`w-full text-left p-4 rounded-lg border transition-all ${
+                  isEliminated
+                    ? "border-[#1e3a5f] bg-[#0a0a1a] text-[#444460] line-through opacity-50 cursor-not-allowed"
+                    : selectedOption === opt.key
+                      ? "border-[#e94560] bg-[#e94560]/10 text-white"
+                      : "border-[#1e3a5f] bg-[#0f0f23] text-[#a0a0b8] hover:border-[#2a5a8f]"
+                }`}
+              >
+                <span className="font-bold mr-3">{opt.key}.</span>
+                {opt.text}
+                {isEliminated && (
+                  <span className="ml-2 text-xs text-[#e94560]">eliminated</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      ) : isPriceIsRight ? (
+        <div className="mb-4">
+          <input
+            type="number"
+            value={priceAnswer}
+            onChange={(e) => setPriceAnswer(e.target.value)}
+            className="input-field text-lg"
+            placeholder="Enter your number..."
+            step="any"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !submitting) handleSubmit();
+            }}
+          />
+          {highLowResult && (
+            <div
+              className={`mt-2 p-2 rounded-lg text-sm font-semibold text-center ${
+                highLowResult === "high"
+                  ? "bg-red-500/10 text-red-400"
+                  : highLowResult === "low"
+                    ? "bg-blue-500/10 text-blue-400"
+                    : "bg-emerald-500/10 text-emerald-400"
               }`}
             >
-              <span className="font-bold mr-3">{opt.key}.</span>
-              {opt.text}
-            </button>
-          ))}
+              {highLowResult === "high"
+                ? "Too High — adjust your guess down"
+                : highLowResult === "low"
+                  ? "Too Low — adjust your guess up"
+                  : "Exact match!"}
+            </div>
+          )}
         </div>
       ) : (
-        <div className="mb-6">
+        <div className="mb-4">
           <input
             type="text"
             value={freeTextAnswer}
@@ -135,6 +267,45 @@ export default function AnswerInterface({
               if (e.key === "Enter" && !submitting) handleSubmit();
             }}
           />
+        </div>
+      )}
+
+      {/* Hint display */}
+      {hint && (
+        <div className="mb-4 p-3 rounded-lg border border-amber-500/30 bg-amber-500/5 text-sm text-amber-300">
+          <span className="font-semibold">Hint: </span>{hint}
+        </div>
+      )}
+
+      {/* Power-up section */}
+      {!powerUpUsed && canAffordPowerUp && (
+        <div className="mb-4 p-3 rounded-lg border border-[#1e3a5f] bg-[#0a0a1a]">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs text-[#a0a0b8] font-medium">
+                Power-Up Available
+              </p>
+              <p className="text-sm text-white">
+                {powerUpLabel[question.answerFormat] ?? "Power-Up"}
+              </p>
+              <p className="text-xs text-[#666680] mt-0.5">
+                Cost depends on standings
+              </p>
+            </div>
+            <button
+              onClick={handleBuyPowerUp}
+              disabled={buyingPowerUp || (isPriceIsRight && !priceAnswer.trim())}
+              className="btn-secondary text-sm"
+            >
+              {buyingPowerUp ? "..." : "Buy"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {powerUpUsed && !hint && !eliminatedOption && !highLowResult && (
+        <div className="mb-4 text-xs text-[#666680] text-center">
+          Power-up used this round
         </div>
       )}
 

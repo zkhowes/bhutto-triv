@@ -72,6 +72,7 @@ export default function QuestionSubmitForm({
           } else {
             setCorrectAnswer(autoSubmitDraft.correctAnswer || "");
           }
+          // price_is_right uses correctAnswer field same as free_text
         }
         setDraftLoaded(true);
       })
@@ -94,6 +95,11 @@ export default function QuestionSubmitForm({
       }
       if (!correctOption) {
         setError("Select the correct answer");
+        return;
+      }
+    } else if (answerFormat === "price_is_right") {
+      if (!correctAnswer.trim() || isNaN(parseFloat(correctAnswer.trim()))) {
+        setError("Provide a valid numeric correct answer");
         return;
       }
     } else {
@@ -121,6 +127,8 @@ export default function QuestionSubmitForm({
         body.optionC = optionC;
         body.optionD = optionD;
         body.correctOption = correctOption;
+      } else if (answerFormat === "price_is_right") {
+        body.correctAnswer = correctAnswer.trim();
       } else {
         body.correctAnswer = correctAnswer.trim();
         body.acceptableAnswers = acceptableAnswers
@@ -317,6 +325,17 @@ export default function QuestionSubmitForm({
             >
               Free Text
             </button>
+            <button
+              type="button"
+              onClick={() => setAnswerFormat("price_is_right")}
+              className={`flex-1 py-2 px-3 rounded-lg border text-sm ${
+                answerFormat === "price_is_right"
+                  ? "border-[#e94560] bg-[#e94560]/10 text-white"
+                  : "border-[#1e3a5f] text-[#a0a0b8]"
+              }`}
+            >
+              Price is Right
+            </button>
           </div>
         </div>
 
@@ -383,6 +402,28 @@ export default function QuestionSubmitForm({
                 placeholder="alt answer 1, alt answer 2"
               />
             </div>
+          </div>
+        )}
+
+        {/* Price is Right Answer */}
+        {answerFormat === "price_is_right" && (
+          <div className="space-y-3 mb-4">
+            <div>
+              <label className="block text-sm font-medium text-[#a0a0b8] mb-1">
+                Correct Answer (number) *
+              </label>
+              <input
+                type="number"
+                value={correctAnswer}
+                onChange={(e) => setCorrectAnswer(e.target.value)}
+                className="input-field"
+                placeholder="e.g. 116 or 116.5"
+                step="any"
+              />
+            </div>
+            <p className="text-xs text-[#666680]">
+              Players guess a number — closest without going over wins. If everyone goes over, nobody wins.
+            </p>
           </div>
         )}
 

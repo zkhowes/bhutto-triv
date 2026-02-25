@@ -154,6 +154,22 @@ export function scoreRound(results: PlayerRoundResult[]): ScoredResult[] {
 }
 
 /**
+ * Compute power-up cost for a player based on parity ranking.
+ * Poorest active player pays 1 pt, richest pays 8 pts.
+ */
+export function computePowerUpCost(
+  playerPoints: number,
+  allActivePoints: number[]
+): number {
+  if (allActivePoints.length === 0) return 1;
+  const sorted = [...allActivePoints].sort((a, b) => a - b);
+  // rank = number of players with points <= player (0-indexed)
+  const rank = sorted.filter((p) => p <= playerPoints).length - 1;
+  const ratio = sorted.length > 1 ? rank / (sorted.length - 1) : 0;
+  return Math.max(1, Math.ceil(1 + 7 * ratio)); // 1–8 pts
+}
+
+/**
  * Calculate absentee penalty for missing a bet/answer
  */
 export function calculateAbsenteePenalty(

@@ -31,6 +31,18 @@ export const DEFAULT_SETTINGS = {
   absenteePenaltyType: "half" as const,
 };
 
+export const ANSWER_FORMAT = {
+  MULTIPLE_CHOICE: "multiple_choice",
+  FREE_TEXT: "free_text",
+  PRICE_IS_RIGHT: "price_is_right",
+} as const;
+
+export const POWER_UP_TYPE = {
+  HINT: "hint",
+  ELIMINATION: "elimination",
+  HIGHLOW: "highlow",
+} as const;
+
 export const ROUND_STATUS = {
   PENDING: "pending",
   AWAITING_QUESTION: "awaiting_question",

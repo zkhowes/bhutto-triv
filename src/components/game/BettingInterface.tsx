@@ -8,15 +8,23 @@ interface BettingInterfaceProps {
   leaguePlayerId: string;
   maxPoints: number;
   category: string;
+  answerFormat?: string | null;
   answerDeadline?: string | null;
   onBetPlaced: () => void;
 }
+
+const FORMAT_LABELS: Record<string, string> = {
+  multiple_choice: "Multiple Choice",
+  free_text: "Free Answer",
+  price_is_right: "Price is Right",
+};
 
 export default function BettingInterface({
   roundId,
   leaguePlayerId,
   maxPoints,
   category,
+  answerFormat,
   answerDeadline,
   onBetPlaced,
 }: BettingInterfaceProps) {
@@ -56,6 +64,11 @@ export default function BettingInterface({
           Category
         </p>
         <p className="text-2xl font-bold text-[#fbbf24] mt-1">{category}</p>
+        {answerFormat && (
+          <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium bg-[#1e3a5f] text-[#a0a0b8]">
+            {FORMAT_LABELS[answerFormat] ?? answerFormat}
+          </span>
+        )}
         {answerDeadline && (
           <div className="mt-2">
             <CountdownTimer deadlineTime={answerDeadline} />
