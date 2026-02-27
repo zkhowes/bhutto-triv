@@ -1092,7 +1092,7 @@ export default function AdminPage() {
             <div className="bg-[#1e3a5f] rounded-lg p-5 border border-[#2a4a6f]">
               <h2 className="text-base font-semibold text-white mb-1">SMS Test Console</h2>
               <p className="text-xs text-[#666680] mb-5">
-                Sends a real SMS via Twilio. Notifications are not recorded in the database.
+                Sends a real SMS via Mosio. Notifications are not recorded in the database.
               </p>
 
               {/* Admin password */}

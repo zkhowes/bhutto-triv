@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
 
   if (!isSmsConfigured()) {
     return NextResponse.json(
-      { error: "SMS is not configured. Add TWILIO_* environment variables." },
+      { error: "SMS is not configured. Add MOSIO_API_KEY environment variable." },
       { status: 400 }
     );
   }
