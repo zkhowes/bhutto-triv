@@ -495,6 +495,7 @@ export default function RoundPage() {
                 .filter((ps) => ps.points > 0)
                 .map((ps) => ps.points)}
               answerDeadline={answerDeadline}
+              roundStatus={round.status}
               powerUpType={myAnswer?.powerUpType ?? null}
               actAsPlayerId={actAsPlayerId}
               onAnswered={fetchRound}

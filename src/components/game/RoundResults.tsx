@@ -31,6 +31,8 @@ interface RoundResultsProps {
       placement: number | null;
       fastestLap: boolean;
       isAbsent: boolean;
+      powerUpType: string | null;
+      powerUpCost: number;
       leaguePlayer: {
         id: string;
         fakeNickname: string | null;
@@ -230,6 +232,14 @@ export default function RoundResults({ round, myPlayerId }: RoundResultsProps) {
                         {answer.fastestLap && (
                           <span className="text-xs text-purple-400 font-semibold ml-1" title="Fastest Answer +1">
                             ⚡
+                          </span>
+                        )}
+                        {answer.powerUpType && (
+                          <span
+                            className="text-xs text-amber-400 ml-1"
+                            title={`Used power-up: ${answer.powerUpType} (${answer.powerUpCost}pt)`}
+                          >
+                            {answer.powerUpType === "hint" ? "💡" : answer.powerUpType === "elimination" ? "✂️" : "↕️"}
                           </span>
                         )}
                       </div>

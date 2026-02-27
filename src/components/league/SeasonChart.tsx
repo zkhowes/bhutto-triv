@@ -50,7 +50,7 @@ export default function SeasonChart({ data, playerNames }: SeasonChartProps) {
             <YAxis
               stroke="#666680"
               tick={{ fill: "#a0a0b8", fontSize: 12 }}
-              label={{ value: "F1 Points", angle: -90, position: "insideLeft", fill: "#666680", fontSize: 11 }}
+              label={{ value: "Season Points", angle: -90, position: "insideLeft", fill: "#666680", fontSize: 11 }}
             />
             <Tooltip
               contentStyle={{

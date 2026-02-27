@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import CountdownTimer from "./CountdownTimer";
+import { computePowerUpCost } from "@/lib/scoring";
 
 interface AnswerInterfaceProps {
   roundId: string;
@@ -19,6 +20,7 @@ interface AnswerInterfaceProps {
   playerPoints: number; // current points before the bet
   allActivePoints: number[]; // points of all active (non-eliminated) players
   answerDeadline?: string | null;
+  roundStatus: string;
   powerUpType?: string | null; // already-purchased power-up this round
   actAsPlayerId?: string | null;
   onAnswered: () => void;
@@ -32,6 +34,7 @@ export default function AnswerInterface({
   playerPoints,
   allActivePoints,
   answerDeadline,
+  roundStatus,
   powerUpType,
   actAsPlayerId,
   onAnswered,
@@ -59,7 +62,9 @@ export default function AnswerInterface({
   ].filter((o) => o.text);
 
   const availableAfterBet = playerPoints - betAmount;
-  const canAffordPowerUp = availableAfterBet >= 1; // rough check; server validates exact cost
+  const powerUpCost = computePowerUpCost(playerPoints, allActivePoints);
+  const canAffordPowerUp = availableAfterBet >= powerUpCost;
+  const isAnswerPhase = roundStatus === "category_revealed";
 
   const handleSubmit = async () => {
     if (isMultipleChoice && !selectedOption) {
@@ -278,7 +283,7 @@ export default function AnswerInterface({
       )}
 
       {/* Power-up section */}
-      {!powerUpUsed && canAffordPowerUp && (
+      {!powerUpUsed && isAnswerPhase && canAffordPowerUp && (
         <div className="mb-4 p-3 rounded-lg border border-[#1e3a5f] bg-[#0a0a1a]">
           <div className="flex items-center justify-between">
             <div>
@@ -289,7 +294,7 @@ export default function AnswerInterface({
                 {powerUpLabel[question.answerFormat] ?? "Power-Up"}
               </p>
               <p className="text-xs text-[#666680] mt-0.5">
-                Cost depends on standings
+                Cost: {powerUpCost} pt{powerUpCost !== 1 ? "s" : ""}
               </p>
             </div>
             <button

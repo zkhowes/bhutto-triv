@@ -15,7 +15,7 @@ interface BettingInterfaceProps {
 
 const FORMAT_LABELS: Record<string, string> = {
   multiple_choice: "Multiple Choice",
-  free_text: "Free Answer",
+  free_text: "Free Text Answer",
   price_is_right: "Price is Right",
 };
 

@@ -12,6 +12,8 @@ interface Answer {
   answeredAt: string | null;
   betPlacedAt: string | null;
   isAbsent: boolean;
+  powerUpType: string | null;
+  powerUpCost: number;
   leaguePlayer: {
     id: string;
     fakeNickname: string | null;
@@ -87,6 +89,16 @@ export default function GradingInterface({
       }
       return { ...prev, [answerId]: newGrade };
     });
+  };
+
+  const getPowerUpBadge = (type: string | null, cost: number) => {
+    if (!type) return null;
+    const labels: Record<string, string> = {
+      hint: "💡 Hint",
+      elimination: "✂️ Elim",
+      highlow: "↕️ Hi/Lo",
+    };
+    return `${labels[type] ?? type} (${cost}pt)`;
   };
 
   const getOptionText = (key: string): string => {
@@ -179,7 +191,14 @@ export default function GradingInterface({
               >
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-semibold text-white">{playerName}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-white">{playerName}</p>
+                      {getPowerUpBadge(answer.powerUpType, answer.powerUpCost) && (
+                        <span className="text-xs text-amber-400 font-medium">
+                          {getPowerUpBadge(answer.powerUpType, answer.powerUpCost)}
+                        </span>
+                      )}
+                    </div>
                     <p className="text-sm text-[#a0a0b8] mt-1">
                       Guess: <span className="font-mono text-white">{answerText}</span>
                       {isOver && (
@@ -213,6 +232,11 @@ export default function GradingInterface({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-semibold text-white">{playerName}</p>
+                    {getPowerUpBadge(answer.powerUpType, answer.powerUpCost) && (
+                      <span className="text-xs text-amber-400 font-medium">
+                        {getPowerUpBadge(answer.powerUpType, answer.powerUpCost)}
+                      </span>
+                    )}
                     {getAnswerTime(answer) && (
                       <span className="text-xs text-purple-400 font-mono">
                         ⏱️ {getAnswerTime(answer)}
