@@ -205,10 +205,18 @@ Required for development (see `.env.example`):
 ## Deployment
 
 Production deployed to Vercel (bwiz.zkhowes.fun):
-- Auto-deploys from default branch
+- **Auto-deploys via GitHub Action** (`.github/workflows/deploy.yml`) on every push to `main`
+- Do NOT rely on Vercel's built-in git integration for production — it only creates preview builds
 - Database: Neon PostgreSQL (serverless)
 - Environment variables configured in Vercel dashboard
 - Prisma generates on build via `postinstall` script
+
+**Required GitHub Secrets** (Settings → Secrets → Actions):
+- `VERCEL_TOKEN` — Vercel API token
+- `VERCEL_ORG_ID` — `team_q19bRUQXcAoAVjfrhi1gxRr9`
+- `VERCEL_PROJECT_ID` — `prj_gKAasKGXZ0UEVzqhKqo5lWSV6nnr`
+
+**If bwiz.zkhowes.fun stops updating:** Check GitHub Actions tab for failed runs. If the action is green but the site is stale, use `vercel promote <deployment-id>` with the token.
 
 ### Neon Transfer Budget (5 GB/month)
 
