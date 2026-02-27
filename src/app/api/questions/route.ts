@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
   let actingUserId = session.user.id;
 
   if (!player) {
-    const testPlayer = await resolveTestPlayer(leaguePlayerId, session.user.id);
+    const testPlayer = await resolveTestPlayer(leaguePlayerId, session.user.id, session.user.isSuperAdmin);
     if (!testPlayer) {
       return NextResponse.json(
         { error: "Player not found" },

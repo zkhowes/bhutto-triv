@@ -100,8 +100,8 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Validate test mode only in development
-  if (type === "test" && process.env.NODE_ENV !== "development") {
+  // Validate test mode only in development or for super admins
+  if (type === "test" && process.env.NODE_ENV !== "development" && !session.user.isSuperAdmin) {
     return NextResponse.json(
       { error: "Test mode only available in development" },
       { status: 400 }

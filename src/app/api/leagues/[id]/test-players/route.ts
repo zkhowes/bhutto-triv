@@ -25,7 +25,7 @@ export async function POST(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (process.env.NODE_ENV !== "development") {
+  if (process.env.NODE_ENV !== "development" && !session.user.isSuperAdmin) {
     return NextResponse.json(
       { error: "Test mode only available in development" },
       { status: 400 }

@@ -6,9 +6,10 @@ import { prisma } from "./prisma";
  */
 export async function resolveTestPlayer(
   leaguePlayerId: string,
-  sessionUserId: string
+  sessionUserId: string,
+  isSuperAdmin = false
 ): Promise<{ id: string; userId: string; leagueId: string } | null> {
-  if (process.env.NODE_ENV !== "development") return null;
+  if (process.env.NODE_ENV !== "development" && !isSuperAdmin) return null;
 
   const player = await prisma.leaguePlayer.findUnique({
     where: { id: leaguePlayerId },

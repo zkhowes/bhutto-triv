@@ -17,7 +17,7 @@ export default function CreateLeaguePage() {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
   const [suggestions, setSuggestions] = useState<string[]>([]);
-  const isDev = process.env.NODE_ENV === "development";
+  const isDev = process.env.NODE_ENV === "development" || session?.user?.isSuperAdmin;
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/");
