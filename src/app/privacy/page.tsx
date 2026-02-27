@@ -187,15 +187,15 @@ export default function PrivacyPage() {
                 </a>.
               </li>
               <li>
-                <strong className="text-white">Twilio</strong> — delivers SMS messages to your phone number.
-                Twilio receives your phone number and the message text only. Governed by{" "}
+                <strong className="text-white">Mosio</strong> — delivers SMS messages to your phone number.
+                Mosio receives your phone number and the message text only. Governed by{" "}
                 <a
-                  href="https://www.twilio.com/en-us/legal/privacy"
+                  href="https://www.mosio.com/privacy-policy"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-[#3b82f6] hover:underline"
                 >
-                  Twilio&rsquo;s Privacy Policy
+                  Mosio&rsquo;s Privacy Policy
                 </a>.
               </li>
               <li>

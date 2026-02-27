@@ -915,7 +915,7 @@ Round results (High → all players, after round scored)
 
 You're about to be skipped – get your bet in soon (High → last player without bet+answer, via Vercel Cron 30–90 min before deadline)
 
-SMS provider: Twilio (configured via TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER env vars)
+SMS provider: Mosio (configured via MOSIO_API_KEY, MOSIO_FROM_NUMBER env vars)
 
 Click tracking: SMS links go through /api/notifications/click/[id] to record click-through before redirect
 
