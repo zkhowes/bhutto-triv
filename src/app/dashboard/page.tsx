@@ -19,21 +19,10 @@ interface LeagueSummary {
   inviteCode: string;
 }
 
-interface NotificationItem {
-  id: string;
-  type: string;
-  title: string;
-  message: string;
-  isRead: boolean;
-  createdAt: string;
-  data: string | null;
-}
-
 export default function DashboardPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [leagues, setLeagues] = useState<LeagueSummary[]>([]);
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [joinCode, setJoinCode] = useState("");
   const [joinError, setJoinError] = useState("");
@@ -44,13 +33,10 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (session?.user) {
-      Promise.all([
-        fetch("/api/leagues").then((r) => r.json()),
-        fetch("/api/notifications").then((r) => r.json()),
-      ])
-        .then(([leagueData, notifData]) => {
+      fetch("/api/leagues")
+        .then((r) => r.json())
+        .then((leagueData) => {
           setLeagues(Array.isArray(leagueData) ? leagueData : []);
-          setNotifications(notifData.notifications || []);
           setLoading(false);
         })
         .catch(() => setLoading(false));
@@ -104,8 +90,6 @@ export default function DashboardPage() {
     }
   };
 
-  const unreadNotifs = notifications.filter((n) => !n.isRead);
-
   return (
     <div className="min-h-screen">
       <NavBar />
@@ -121,26 +105,6 @@ export default function DashboardPage() {
               : "Join a league or create one to get started!"}
           </p>
         </div>
-
-        {/* Notifications */}
-        {unreadNotifs.length > 0 && (
-          <div className="mb-6 space-y-2">
-            {unreadNotifs.slice(0, 3).map((n) => (
-              <div
-                key={n.id}
-                className="card p-3 flex items-center gap-3 border-l-4 border-l-[#e94560]"
-              >
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-white">{n.title}</p>
-                  <p className="text-xs text-[#a0a0b8]">{n.message}</p>
-                </div>
-                <span className="text-xs text-[#666680]">
-                  {new Date(n.createdAt).toLocaleDateString()}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
 
         {/* Quick Actions */}
         <div className="grid grid-cols-2 gap-3 mb-6">

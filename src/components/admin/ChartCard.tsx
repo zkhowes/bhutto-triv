@@ -19,11 +19,14 @@ interface ChartCardProps {
 export default function ChartCard({ title, metric }: ChartCardProps) {
   const [data, setData] = useState<Array<{ date: string; value: number }>>([]);
   const [range, setRange] = useState<"7d" | "30d" | "90d" | "all">("30d");
+  const [chartType, setChartType] = useState<"total" | "active">("total");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/admin/timeseries?metric=${metric}&range=${range}`)
+    fetch(
+      `/api/admin/timeseries?metric=${metric}&range=${range}&type=${chartType}`
+    )
       .then((r) => r.json())
       .then((result) => {
         setData(result.data || []);
@@ -33,22 +36,46 @@ export default function ChartCard({ title, metric }: ChartCardProps) {
         setData([]);
       })
       .finally(() => setLoading(false));
-  }, [metric, range]);
+  }, [metric, range, chartType]);
 
   return (
     <div className="bg-[#1e3a5f] rounded-lg p-6 border border-[#2a4a6f]">
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-lg font-semibold text-amber-400">{title}</h3>
-        <select
-          value={range}
-          onChange={(e) => setRange(e.target.value as any)}
-          className="px-3 py-1 bg-[#0d1b2a] border border-[#2a4a6f] rounded-lg text-white text-sm focus:outline-none focus:border-amber-500"
-        >
-          <option value="7d">7 Days</option>
-          <option value="30d">30 Days</option>
-          <option value="90d">90 Days</option>
-          <option value="all">All Time</option>
-        </select>
+        <div className="flex items-center gap-2">
+          <div className="flex rounded overflow-hidden border border-[#2a4a6f] text-sm">
+            <button
+              onClick={() => setChartType("total")}
+              className={`px-3 py-1 transition-colors ${
+                chartType === "total"
+                  ? "bg-amber-500 text-[#0d1b2a] font-medium"
+                  : "bg-[#0d1b2a] text-[#a0a0b8] hover:text-white"
+              }`}
+            >
+              Total
+            </button>
+            <button
+              onClick={() => setChartType("active")}
+              className={`px-3 py-1 transition-colors ${
+                chartType === "active"
+                  ? "bg-amber-500 text-[#0d1b2a] font-medium"
+                  : "bg-[#0d1b2a] text-[#a0a0b8] hover:text-white"
+              }`}
+            >
+              Active
+            </button>
+          </div>
+          <select
+            value={range}
+            onChange={(e) => setRange(e.target.value as "7d" | "30d" | "90d" | "all")}
+            className="px-3 py-1 bg-[#0d1b2a] border border-[#2a4a6f] rounded-lg text-white text-sm focus:outline-none focus:border-amber-500"
+          >
+            <option value="7d">7 Days</option>
+            <option value="30d">30 Days</option>
+            <option value="90d">90 Days</option>
+            <option value="all">All Time</option>
+          </select>
+        </div>
       </div>
 
       {loading ? (
@@ -68,18 +95,15 @@ export default function ChartCard({ title, metric }: ChartCardProps) {
               stroke="#a0a0b8"
               tick={{ fontSize: 12 }}
               tickFormatter={(value) => {
-                // Format date based on range
                 const date = new Date(value);
-                if (range === "7d" || range === "30d") {
-                  return `${date.getMonth() + 1}/${date.getDate()}`;
-                } else if (range === "90d") {
+                if (range === "7d" || range === "30d" || range === "90d") {
                   return `${date.getMonth() + 1}/${date.getDate()}`;
                 } else {
                   return `${date.getMonth() + 1}/${date.getFullYear().toString().slice(2)}`;
                 }
               }}
             />
-            <YAxis stroke="#a0a0b8" tick={{ fontSize: 12 }} />
+            <YAxis stroke="#a0a0b8" tick={{ fontSize: 12 }} allowDecimals={false} />
             <Tooltip
               contentStyle={{
                 backgroundColor: "#0d1b2a",
