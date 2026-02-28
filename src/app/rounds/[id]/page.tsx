@@ -109,7 +109,6 @@ export default function RoundPage() {
   const [loading, setLoading] = useState(true);
   const [isCommissioner, setIsCommissioner] = useState(false);
   const [editingGrades, setEditingGrades] = useState(false);
-  const [commissionerLoading, setCommissionerLoading] = useState<string | null>(null);
 
   const fetchRound = useCallback(async () => {
     try {
@@ -285,49 +284,6 @@ export default function RoundPage() {
     );
   };
 
-  // Commissioner inline actions
-  const commissionerSkipPlayer = async () => {
-    setCommissionerLoading("skip");
-    try {
-      await fetch(`/api/rounds/${round.id}/skip`, { method: "POST" });
-      await fetchRound();
-    } finally {
-      setCommissionerLoading(null);
-    }
-  };
-
-  const commissionerRevealCategory = async () => {
-    setCommissionerLoading("reveal");
-    try {
-      await fetch(`/api/rounds/${round.id}/reveal`, { method: "POST" });
-      await fetchRound();
-    } finally {
-      setCommissionerLoading(null);
-    }
-  };
-
-  const commissionerForceClose = async () => {
-    if (!confirm("Force close this round? Players who haven't answered will be marked absent.")) return;
-    setCommissionerLoading("force-close");
-    try {
-      await fetch(`/api/rounds/${round.id}/force-close`, { method: "POST" });
-      await fetchRound();
-    } finally {
-      setCommissionerLoading(null);
-    }
-  };
-
-  const commissionerForceGrade = async () => {
-    if (!confirm("Force grade and score this round?")) return;
-    setCommissionerLoading("force-grade");
-    try {
-      await fetch(`/api/rounds/${round.id}/close`, { method: "POST" });
-      await fetchRound();
-    } finally {
-      setCommissionerLoading(null);
-    }
-  };
-
   // Player status for dashboard
   const getPlayerStatus = (answer: RoundData["answers"][0]) => {
     // At-bat player submitted the question, they don't bet/answer
@@ -467,52 +423,15 @@ export default function RoundPage() {
           </div>
         </div>
 
-        {/* Inline Commissioner Controls */}
-        {isCommissioner && !isGraded && (
-          <div className="card p-3 mb-4 border-[#e94560]/20">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-xs font-semibold text-[#e94560] uppercase tracking-wider flex-shrink-0">
-                Commissioner
-              </span>
-              <div className="flex flex-wrap gap-2">
-                {round.status === "awaiting_question" && (
-                  <button
-                    onClick={commissionerSkipPlayer}
-                    disabled={commissionerLoading !== null}
-                    className="btn-secondary text-xs"
-                  >
-                    {commissionerLoading === "skip" ? "Skipping..." : "Skip At-Bat Player"}
-                  </button>
-                )}
-                {round.status === "question_submitted" && (
-                  <button
-                    onClick={commissionerRevealCategory}
-                    disabled={commissionerLoading !== null}
-                    className="btn-primary text-xs"
-                  >
-                    {commissionerLoading === "reveal" ? "Revealing..." : "Reveal Category"}
-                  </button>
-                )}
-                {round.status === "category_revealed" && (
-                  <button
-                    onClick={commissionerForceClose}
-                    disabled={commissionerLoading !== null}
-                    className="btn-danger text-xs"
-                  >
-                    {commissionerLoading === "force-close" ? "Closing..." : "Force Close Round"}
-                  </button>
-                )}
-                {round.status === "closed" && (
-                  <button
-                    onClick={commissionerForceGrade}
-                    disabled={commissionerLoading !== null}
-                    className="btn-danger text-xs"
-                  >
-                    {commissionerLoading === "force-grade" ? "Grading..." : "Force Grade & Score"}
-                  </button>
-                )}
-              </div>
-            </div>
+        {/* Commissioner Tools link */}
+        {isCommissioner && (
+          <div className="mb-4">
+            <Link
+              href={`/leagues/${league.id}/commissioner`}
+              className="btn-secondary text-sm w-full text-center block"
+            >
+              Commissioner Tools
+            </Link>
           </div>
         )}
 

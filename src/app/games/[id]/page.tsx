@@ -64,7 +64,6 @@ export default function GamePage() {
   const [game, setGame] = useState<GameData | null>(null);
   const [loading, setLoading] = useState(true);
   const [isCommissioner, setIsCommissioner] = useState(false);
-  const [commissionerLoading, setCommissionerLoading] = useState<string | null>(null);
 
   const fetchGame = useCallback(async () => {
     try {
@@ -151,53 +150,6 @@ export default function GamePage() {
     );
   };
 
-  // Commissioner inline actions
-  const commissionerSkipPlayer = async () => {
-    if (!activeRound) return;
-    setCommissionerLoading("skip");
-    try {
-      await fetch(`/api/rounds/${activeRound.id}/skip`, { method: "POST" });
-      await fetchGame();
-    } finally {
-      setCommissionerLoading(null);
-    }
-  };
-
-  const commissionerRevealCategory = async () => {
-    if (!activeRound) return;
-    setCommissionerLoading("reveal");
-    try {
-      await fetch(`/api/rounds/${activeRound.id}/reveal`, { method: "POST" });
-      await fetchGame();
-    } finally {
-      setCommissionerLoading(null);
-    }
-  };
-
-  const commissionerForceClose = async () => {
-    if (!activeRound) return;
-    if (!confirm("Force close this round? Players who haven't answered will be marked absent.")) return;
-    setCommissionerLoading("force-close");
-    try {
-      await fetch(`/api/rounds/${activeRound.id}/force-close`, { method: "POST" });
-      await fetchGame();
-    } finally {
-      setCommissionerLoading(null);
-    }
-  };
-
-  const commissionerForceGrade = async () => {
-    if (!activeRound) return;
-    if (!confirm("Force grade and score this round?")) return;
-    setCommissionerLoading("force-grade");
-    try {
-      await fetch(`/api/rounds/${activeRound.id}/close`, { method: "POST" });
-      await fetchGame();
-    } finally {
-      setCommissionerLoading(null);
-    }
-  };
-
   const sortedStandings = [...game.playerStates].sort((a, b) =>
     game.status === "completed"
       ? b.totalF1Points - a.totalF1Points
@@ -267,52 +219,15 @@ export default function GamePage() {
           </div>
         </div>
 
-        {/* Inline Commissioner Controls */}
-        {isCommissioner && activeRound && game.status !== "completed" && (
-          <div className="card p-3 mb-4 border-[#e94560]/20">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-xs font-semibold text-[#e94560] uppercase tracking-wider flex-shrink-0">
-                Commissioner
-              </span>
-              <div className="flex flex-wrap gap-2">
-                {activeRound.status === "awaiting_question" && (
-                  <button
-                    onClick={commissionerSkipPlayer}
-                    disabled={commissionerLoading !== null}
-                    className="btn-secondary text-xs"
-                  >
-                    {commissionerLoading === "skip" ? "Skipping..." : "Skip At-Bat Player"}
-                  </button>
-                )}
-                {activeRound.status === "question_submitted" && (
-                  <button
-                    onClick={commissionerRevealCategory}
-                    disabled={commissionerLoading !== null}
-                    className="btn-primary text-xs"
-                  >
-                    {commissionerLoading === "reveal" ? "Revealing..." : "Reveal Category"}
-                  </button>
-                )}
-                {activeRound.status === "category_revealed" && (
-                  <button
-                    onClick={commissionerForceClose}
-                    disabled={commissionerLoading !== null}
-                    className="btn-danger text-xs"
-                  >
-                    {commissionerLoading === "force-close" ? "Closing..." : "Force Close Round"}
-                  </button>
-                )}
-                {activeRound.status === "closed" && (
-                  <button
-                    onClick={commissionerForceGrade}
-                    disabled={commissionerLoading !== null}
-                    className="btn-danger text-xs"
-                  >
-                    {commissionerLoading === "force-grade" ? "Grading..." : "Force Grade & Score"}
-                  </button>
-                )}
-              </div>
-            </div>
+        {/* Commissioner Tools link */}
+        {isCommissioner && (
+          <div className="mb-4">
+            <Link
+              href={`/leagues/${game.season.league.id}/commissioner`}
+              className="btn-secondary text-sm w-full text-center block"
+            >
+              Commissioner Tools
+            </Link>
           </div>
         )}
 
