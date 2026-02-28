@@ -181,7 +181,7 @@ export async function POST(
   }
 
   // Allow test mode in development OR for specific production test account
-  const isTestModeAllowed = process.env.NODE_ENV === "development" || session.user.email === "zkhowes@gmail.com";
+  const isTestModeAllowed = process.env.NODE_ENV === "development" || session.user.isSuperAdmin;
   if (!isTestModeAllowed) {
     return NextResponse.json({ error: "Test mode only available in development" }, { status: 400 });
   }

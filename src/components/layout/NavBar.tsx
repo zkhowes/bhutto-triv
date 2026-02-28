@@ -136,6 +136,11 @@ export default function NavBar() {
           >
             <span className="text-[#e94560]">BW</span>
             <span className="hidden sm:inline text-white">Bhutto Wisdom</span>
+            {session.user.isSuperAdmin && (
+              <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded ml-2">
+                SA
+              </span>
+            )}
           </Link>
 
           {/* Desktop Nav */}
