@@ -623,6 +623,12 @@ export async function closeRound(roundId: string): Promise<void> {
       data: { status: GAME_STATUS.COMPLETED, completedAt: new Date() },
     });
 
+    // Mark all unread notifications for this game as read
+    await prisma.notification.updateMany({
+      where: { gameId: game.id, isRead: false },
+      data: { isRead: true },
+    });
+
     // Check if season should end
     const allGames = await prisma.game.findMany({
       where: { seasonId: game.seasonId },
@@ -650,6 +656,12 @@ export async function closeRound(roundId: string): Promise<void> {
       (r) => r.number > round.number && !r.isCancelled && r.status === ROUND_STATUS.PENDING
     );
     if (nextRound) {
+      // Mark all unread notifications from the completed round as read
+      await prisma.notification.updateMany({
+        where: { roundId: round.id, isRead: false },
+        data: { isRead: true },
+      });
+
       await prisma.round.update({
         where: { id: nextRound.id },
         data: { status: ROUND_STATUS.AWAITING_QUESTION },

@@ -100,7 +100,14 @@ export default function NavBar() {
   }, []);
 
   const openNotifications = () => {
-    setNotifOpen((prev) => !prev);
+    setNotifOpen((prev) => {
+      if (!prev && unreadCount > 0) {
+        fetch("/api/notifications", { method: "PUT", body: JSON.stringify({}) });
+        setNotifications((n) => n.map((x) => ({ ...x, isRead: true })));
+        setUnreadCount(0);
+      }
+      return !prev;
+    });
     setMenuOpen(false);
   };
 
