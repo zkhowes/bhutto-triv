@@ -63,6 +63,8 @@ export default function GamePage() {
   const actAsParam = actAsPlayerId ? `?actAs=${actAsPlayerId}` : "";
   const [game, setGame] = useState<GameData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isCommissioner, setIsCommissioner] = useState(false);
+  const [commissionerLoading, setCommissionerLoading] = useState<string | null>(null);
 
   const fetchGame = useCallback(async () => {
     try {
@@ -109,6 +111,18 @@ export default function GamePage() {
     };
   }, [session, game, fetchGame]);
 
+  // Check if user is commissioner
+  useEffect(() => {
+    if (!game) return;
+    const leagueId = game.season.league.id;
+    fetch(`/api/leagues/${leagueId}`)
+      .then((res) => res.json())
+      .then((data) => {
+        setIsCommissioner(data.myRole === "commissioner");
+      })
+      .catch(() => setIsCommissioner(false));
+  }, [game?.season.league.id]);
+
   if (status === "loading" || loading || !game) {
     return (
       <div className="min-h-screen">
@@ -135,6 +149,53 @@ export default function GamePage() {
       bo?.leaguePlayer.user.nickname ||
       "Unknown"
     );
+  };
+
+  // Commissioner inline actions
+  const commissionerSkipPlayer = async () => {
+    if (!activeRound) return;
+    setCommissionerLoading("skip");
+    try {
+      await fetch(`/api/rounds/${activeRound.id}/skip`, { method: "POST" });
+      await fetchGame();
+    } finally {
+      setCommissionerLoading(null);
+    }
+  };
+
+  const commissionerRevealCategory = async () => {
+    if (!activeRound) return;
+    setCommissionerLoading("reveal");
+    try {
+      await fetch(`/api/rounds/${activeRound.id}/reveal`, { method: "POST" });
+      await fetchGame();
+    } finally {
+      setCommissionerLoading(null);
+    }
+  };
+
+  const commissionerForceClose = async () => {
+    if (!activeRound) return;
+    if (!confirm("Force close this round? Players who haven't answered will be marked absent.")) return;
+    setCommissionerLoading("force-close");
+    try {
+      await fetch(`/api/rounds/${activeRound.id}/force-close`, { method: "POST" });
+      await fetchGame();
+    } finally {
+      setCommissionerLoading(null);
+    }
+  };
+
+  const commissionerForceGrade = async () => {
+    if (!activeRound) return;
+    if (!confirm("Force grade and score this round?")) return;
+    setCommissionerLoading("force-grade");
+    try {
+      await fetch(`/api/rounds/${activeRound.id}/close`, { method: "POST" });
+      await fetchGame();
+    } finally {
+      setCommissionerLoading(null);
+    }
   };
 
   const sortedStandings = [...game.playerStates].sort((a, b) =>
@@ -205,6 +266,55 @@ export default function GamePage() {
             )}
           </div>
         </div>
+
+        {/* Inline Commissioner Controls */}
+        {isCommissioner && activeRound && game.status !== "completed" && (
+          <div className="card p-3 mb-4 border-[#e94560]/20">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs font-semibold text-[#e94560] uppercase tracking-wider flex-shrink-0">
+                Commissioner
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {activeRound.status === "awaiting_question" && (
+                  <button
+                    onClick={commissionerSkipPlayer}
+                    disabled={commissionerLoading !== null}
+                    className="btn-secondary text-xs"
+                  >
+                    {commissionerLoading === "skip" ? "Skipping..." : "Skip At-Bat Player"}
+                  </button>
+                )}
+                {activeRound.status === "question_submitted" && (
+                  <button
+                    onClick={commissionerRevealCategory}
+                    disabled={commissionerLoading !== null}
+                    className="btn-primary text-xs"
+                  >
+                    {commissionerLoading === "reveal" ? "Revealing..." : "Reveal Category"}
+                  </button>
+                )}
+                {activeRound.status === "category_revealed" && (
+                  <button
+                    onClick={commissionerForceClose}
+                    disabled={commissionerLoading !== null}
+                    className="btn-danger text-xs"
+                  >
+                    {commissionerLoading === "force-close" ? "Closing..." : "Force Close Round"}
+                  </button>
+                )}
+                {activeRound.status === "closed" && (
+                  <button
+                    onClick={commissionerForceGrade}
+                    disabled={commissionerLoading !== null}
+                    className="btn-danger text-xs"
+                  >
+                    {commissionerLoading === "force-grade" ? "Grading..." : "Force Grade & Score"}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           {/* Batting Order */}

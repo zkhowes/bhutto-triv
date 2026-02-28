@@ -8,7 +8,8 @@ export type NotificationType =
   | "all_answers_in"
   | "on_deck"
   | "round_results"
-  | "about_to_be_skipped";
+  | "about_to_be_skipped"
+  | "round_closed_by_commissioner";
 
 // Which levels each notification type gets sent at
 const LEVEL_MAP: Record<NotificationType, NotificationLevel[]> = {
@@ -18,6 +19,7 @@ const LEVEL_MAP: Record<NotificationType, NotificationLevel[]> = {
   on_deck: ["low"],
   round_results: ["high"],
   about_to_be_skipped: ["high"],
+  round_closed_by_commissioner: ["low"],
 };
 
 // ─── Effective Level Resolution ───────────────────────────────────────────────
@@ -366,5 +368,69 @@ export async function notifyAboutToBeSkipped(
     });
   } catch (err) {
     console.error("[Notifications] notifyAboutToBeSkipped failed:", err);
+  }
+}
+
+/**
+ * "Commissioner closed the round"
+ * Level: Low | Recipient: all players except commissioner
+ * Trigger: Commissioner force-closes a round
+ */
+export async function notifyRoundClosedByCommissioner(
+  roundId: string,
+  absentPlayerNames: string[]
+): Promise<void> {
+  try {
+    const round = await getRoundContext(roundId);
+    if (!round) return;
+
+    const leagueId = round.game.season.league.id;
+    const appUrl = process.env.NEXTAUTH_URL ?? "";
+
+    // Find the commissioner's userId
+    const commissioner = await prisma.leaguePlayer.findFirst({
+      where: { leagueId, role: "commissioner", isActive: true },
+      select: { userId: true },
+    });
+    const commissionerUserId = commissioner?.userId;
+
+    // Find the next active round to link to
+    const nextRound = await prisma.round.findFirst({
+      where: {
+        gameId: round.gameId,
+        status: { in: ["awaiting_question", "question_submitted", "category_revealed"] },
+      },
+      orderBy: { number: "asc" },
+    });
+
+    const absentText = absentPlayerNames.length > 0
+      ? ` ${absentPlayerNames.join(", ")} marked absent.`
+      : "";
+    const destinationUrl = nextRound
+      ? `${appUrl}/rounds/${nextRound.id}`
+      : `${appUrl}/games/${round.gameId}`;
+
+    const recipients = round.game.playerStates.filter(
+      (ps) =>
+        ps.leaguePlayer.userId !== commissionerUserId &&
+        !ps.leaguePlayer.isFake &&
+        ps.leaguePlayer.isActive
+    );
+
+    for (const ps of recipients) {
+      await createNotification({
+        userId: ps.leaguePlayer.userId,
+        leagueId,
+        gameId: round.gameId,
+        roundId,
+        type: "round_closed_by_commissioner",
+        title: `Commissioner closed round ${round.number}`,
+        message: `Commissioner closed round ${round.number}.${absentText} New question time!`,
+        destinationUrl,
+        phoneNumber: ps.leaguePlayer.user.phoneNumber ?? undefined,
+      });
+    }
+  } catch (err) {
+    console.error("[Notifications] notifyRoundClosedByCommissioner failed:", err);
   }
 }
