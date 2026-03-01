@@ -127,6 +127,12 @@ export default function CommissionerPage() {
     await fetchLeague();
   };
 
+  const forceCloseRound = async (roundId: string) => {
+    if (!confirm("Force close this round? Players who haven't answered will be marked absent and penalized.")) return;
+    await fetch(`/api/rounds/${roundId}/force-close`, { method: "POST" });
+    await fetchLeague();
+  };
+
   const pauseSeason = async (seasonId: string) => {
     await fetch(`/api/leagues/${leagueId}/settings`, {
       method: "PUT",
@@ -378,14 +384,13 @@ export default function CommissionerPage() {
                       </button>
                     </>
                   )}
-                  {activeRound.status !== "closed" &&
-                    activeRound.status !== "graded" &&
-                    activeRound.status !== "pending" && (
+                  {(activeRound.status === "question_submitted" ||
+                    activeRound.status === "category_revealed") && (
                       <button
-                        onClick={() => closeRound(activeRound.id)}
+                        onClick={() => forceCloseRound(activeRound.id)}
                         className="btn-danger text-sm"
                       >
-                        Close Round & Score
+                        Force Close Round
                       </button>
                     )}
                 </div>

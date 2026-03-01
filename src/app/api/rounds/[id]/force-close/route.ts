@@ -56,9 +56,10 @@ export async function POST(
     return NextResponse.json({ error: "Not authorized" }, { status: 403 });
   }
 
-  if (round.status !== "category_revealed") {
+  const forceCloseable = ["question_submitted", "category_revealed"];
+  if (!forceCloseable.includes(round.status)) {
     return NextResponse.json(
-      { error: "Round must be in category_revealed status to force close" },
+      { error: "Round must be in question_submitted or category_revealed status to force close" },
       { status: 400 }
     );
   }
