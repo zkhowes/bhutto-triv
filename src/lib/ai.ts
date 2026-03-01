@@ -88,48 +88,156 @@ function fallbackGrading(
 }
 
 /**
- * AI-assisted question workshop
+ * Workshop question variation returned by AI
+ */
+export interface WorkshopVariation {
+  category: string;
+  questionText: string;
+  answerFormat: "multiple_choice" | "free_text" | "price_is_right";
+  optionA?: string;
+  optionB?: string;
+  optionC?: string;
+  optionD?: string;
+  correctOption?: string;
+  correctAnswer?: string;
+  acceptableAnswers?: string[];
+  difficulty: "easy" | "medium" | "hard";
+  hook: string;
+}
+
+export interface WorkshopResponse {
+  type: "questions" | "conversation";
+  variations?: WorkshopVariation[];
+  text?: string;
+}
+
+const WORKSHOP_SYSTEM_PROMPT = `You are a trivia question workshop for "Bhutto Wisdom", a competitive trivia game.
+
+When the user asks you to create a question or gives you a topic, return EXACTLY a JSON object with 3 creative question variations. Each variation should explore a DIFFERENT angle, difficulty level, and answer format. Be creative — don't just reformat the same question 3 times.
+
+Answer formats:
+- "multiple_choice": 4 options (optionA-D), one correctOption (A/B/C/D)
+- "free_text": correctAnswer string + acceptableAnswers array of alternate phrasings
+- "price_is_right": numeric correctAnswer (as string), no acceptableAnswers needed
+
+Categories: Geography, Sports, Politics, Science, History, Entertainment, Arts & Literature, Food & Drink, Technology, General Knowledge
+
+Return this exact JSON structure:
+{
+  "type": "questions",
+  "variations": [
+    {
+      "category": "History",
+      "questionText": "...",
+      "answerFormat": "multiple_choice",
+      "optionA": "...", "optionB": "...", "optionC": "...", "optionD": "...",
+      "correctOption": "A",
+      "difficulty": "medium",
+      "hook": "A tricky one about..."
+    },
+    {
+      "category": "Science",
+      "questionText": "...",
+      "answerFormat": "free_text",
+      "correctAnswer": "...",
+      "acceptableAnswers": ["alt1", "alt2"],
+      "difficulty": "hard",
+      "hook": "Test your knowledge of..."
+    },
+    {
+      "category": "Geography",
+      "questionText": "...",
+      "answerFormat": "price_is_right",
+      "correctAnswer": "42",
+      "difficulty": "easy",
+      "hook": "How well do you know..."
+    }
+  ]
+}
+
+Rules:
+- "hook" is a short 5-8 word teaser for each card
+- Mix up the answer formats across the 3 variations
+- Each variation should feel genuinely different, not a rewrite
+- Return ONLY valid JSON, no markdown fences, no extra text
+- If the user is having a conversation (not asking for a question), return: {"type": "conversation", "text": "your response here"}`;
+
+/**
+ * AI-assisted question workshop — returns structured JSON with 3 variations
  */
 export async function workshopQuestion(
-  messages: { role: "user" | "assistant"; content: string }[]
-): Promise<string> {
+  prompt: string
+): Promise<WorkshopResponse> {
   if (!process.env.ANTHROPIC_API_KEY) {
-    return "AI assistance is not available. Please configure your ANTHROPIC_API_KEY to use the question workshop.";
+    return { type: "conversation", text: "AI assistance is not available. Please configure your ANTHROPIC_API_KEY to use the question workshop." };
   }
 
   try {
     const anthropic = getClient();
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-20250514",
-      max_tokens: 1000,
-      system: `You are a trivia question workshop assistant for "Bhutto Wisdom", a competitive trivia game. Help players create engaging, clear, and fair trivia questions.
-
-Your role:
-- Help brainstorm question ideas
-- Suggest whether a question works better as multiple choice, free text, or Price is Right
-- Generate multiple choice options when requested
-- Validate question difficulty and clarity
-- Ensure questions have clear, unambiguous correct answers
-
-Answer formats:
-- Multiple Choice: 4 options, one correct answer
-- Free Text: Player types in their answer, AI grades for spelling variations
-- Price is Right: Numeric answer — player guesses a number, closest without going over wins (e.g. "How many bones are in the human body?" answer: 206)
-
-Categories: Geography, Sports, Politics, Science, History, Entertainment, Arts & Literature, Food & Drink, Technology, General Knowledge
-
-Be concise, helpful, and enthusiastic about trivia. When suggesting questions, format them clearly.`,
-      messages: messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-      })),
+      max_tokens: 1500,
+      system: WORKSHOP_SYSTEM_PROMPT,
+      messages: [{ role: "user", content: prompt }],
     });
 
-    return response.content[0].type === "text"
-      ? response.content[0].text
-      : "I couldn't generate a response. Please try again.";
+    const text = response.content[0].type === "text" ? response.content[0].text : "";
+    return parseWorkshopResponse(text);
   } catch {
-    return "AI workshop is temporarily unavailable. Please try again later.";
+    return { type: "conversation", text: "AI workshop is temporarily unavailable. Please try again later." };
+  }
+}
+
+/**
+ * Edit a workshop question — takes a selected question + instruction, returns 3 new variations
+ */
+export async function editWorkshopQuestion(
+  currentQuestion: WorkshopVariation,
+  instruction: string
+): Promise<WorkshopResponse> {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return { type: "conversation", text: "AI assistance is not available." };
+  }
+
+  try {
+    const anthropic = getClient();
+    const response = await anthropic.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 1500,
+      system: WORKSHOP_SYSTEM_PROMPT,
+      messages: [{
+        role: "user",
+        content: `Here is an existing trivia question I want to modify:
+
+${JSON.stringify(currentQuestion, null, 2)}
+
+Modification request: ${instruction}
+
+Return 3 new variations. The first should be the edited version incorporating my feedback. The other two should be creative alternatives inspired by the modification.`,
+      }],
+    });
+
+    const text = response.content[0].type === "text" ? response.content[0].text : "";
+    return parseWorkshopResponse(text);
+  } catch {
+    return { type: "conversation", text: "AI workshop is temporarily unavailable. Please try again later." };
+  }
+}
+
+function parseWorkshopResponse(text: string): WorkshopResponse {
+  try {
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return { type: "conversation", text };
+    const parsed = JSON.parse(jsonMatch[0]);
+    if (parsed.type === "questions" && Array.isArray(parsed.variations)) {
+      return parsed as WorkshopResponse;
+    }
+    if (parsed.type === "conversation" && parsed.text) {
+      return parsed as WorkshopResponse;
+    }
+    return { type: "conversation", text };
+  } catch {
+    return { type: "conversation", text };
   }
 }
 
@@ -376,6 +484,62 @@ Respond with a single letter only: A, B, C, or D (must NOT be ${correctOption}).
       (o) => o !== correctOption
     );
     return wrong || "A";
+  }
+}
+
+/**
+ * Assess question difficulty based on the question content and league historical stats
+ */
+export async function assessQuestionDifficulty(
+  question: string,
+  leagueStats: {
+    overallCorrectRate: number;
+    categoryCorrectRates: Record<string, number>;
+    category: string;
+  }
+): Promise<{ difficulty: "easy" | "medium" | "hard"; reasoning: string }> {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return { difficulty: "medium", reasoning: "AI not configured" };
+  }
+
+  try {
+    const anthropic = getClient();
+    const categoryRate = leagueStats.categoryCorrectRates[leagueStats.category];
+    const response = await anthropic.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 300,
+      messages: [
+        {
+          role: "user",
+          content: `You are assessing the difficulty of a trivia question for a competitive trivia game.
+
+Question: ${question}
+Category: ${leagueStats.category}
+
+League stats:
+- Overall correct answer rate: ${Math.round(leagueStats.overallCorrectRate * 100)}%
+${categoryRate !== undefined ? `- Correct rate for ${leagueStats.category}: ${Math.round(categoryRate * 100)}%` : "- No history for this category yet"}
+
+Assess whether this question is easy, medium, or hard relative to typical trivia questions. Consider:
+- How obscure or specialized the knowledge is
+- Whether there are common misconceptions that might trip people up
+- The league's historical performance in this category
+
+Respond with JSON only:
+{"difficulty": "easy"|"medium"|"hard", "reasoning": "1-2 sentence explanation"}`,
+        },
+      ],
+    });
+
+    const text =
+      response.content[0].type === "text" ? response.content[0].text : "";
+    const parsed = JSON.parse(text);
+    return {
+      difficulty: parsed.difficulty,
+      reasoning: parsed.reasoning,
+    };
+  } catch {
+    return { difficulty: "medium", reasoning: "Could not assess difficulty" };
   }
 }
 

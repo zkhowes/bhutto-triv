@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { workshopQuestion } from "@/lib/ai";
+import { editWorkshopQuestion } from "@/lib/ai";
+import type { WorkshopVariation } from "@/lib/ai";
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -9,17 +10,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { prompt } = await req.json();
+  const { question, instruction } = await req.json();
 
-  if (!prompt || typeof prompt !== "string") {
+  if (!question || !instruction || typeof instruction !== "string") {
     return NextResponse.json(
-      { error: "Prompt string is required" },
+      { error: "Question and instruction are required" },
       { status: 400 }
     );
   }
 
   try {
-    const response = await workshopQuestion(prompt);
+    const response = await editWorkshopQuestion(
+      question as WorkshopVariation,
+      instruction
+    );
     return NextResponse.json(response);
   } catch {
     return NextResponse.json(

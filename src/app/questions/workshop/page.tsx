@@ -4,44 +4,17 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
 import NavBar from "@/components/layout/NavBar";
-import { CATEGORIES } from "@/lib/constants";
+import QuestionPreviewCard from "@/components/question/QuestionPreviewCard";
+import type { WorkshopVariation, WorkshopResponse } from "@/lib/ai";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface ParsedBoth {
-  category: string;
-  questionText: string;
-  multipleChoice: {
-    optionA: string;
-    optionB: string;
-    optionC: string;
-    optionD: string;
-    correctOption: string;
-  };
-  freeText: {
-    correctAnswer: string;
-    acceptableAnswers: string[];
-  };
-}
-
-interface ChatMessage {
-  role: "user" | "assistant";
-  content: string;
-  parsed?: ParsedBoth;
-}
-
-interface QuestionEdit {
-  format: "multiple_choice" | "free_text";
-  category: string;
-  questionText: string;
-  optionA: string;
-  optionB: string;
-  optionC: string;
-  optionD: string;
-  correctOption: string;
-  correctAnswer: string;
-  acceptableAnswers: string;
-}
+type WorkshopState =
+  | "idle"
+  | "loading"
+  | "viewing_cards"
+  | "selected"
+  | "editing";
 
 interface Draft {
   id: string;
@@ -59,409 +32,50 @@ interface Draft {
   updatedAt: string;
 }
 
-// ─── Parsed question card (shown in chat) ────────────────────────────────────
+const SUGGESTION_CHIPS = [
+  "Geography challenge",
+  "Obscure history",
+  "Sports stats",
+  "Science stumper",
+  "Pop culture",
+  "Food & Drink",
+];
 
-interface QuestionEditorProps {
-  edit: QuestionEdit;
-  onUpdate: (u: Partial<QuestionEdit>) => void;
-  onSave: () => void;
-  onAutoSubmit: () => void;
-  saving: boolean;
-  saved: boolean;
-}
+const EDIT_CHIPS = [
+  "Make Harder",
+  "Make Easier",
+  "Change to MC",
+  "Change to Free Text",
+  "Change to PiR",
+  "Different Angle",
+];
 
-function QuestionEditor({ edit, onUpdate, onSave, onAutoSubmit, saving, saved }: QuestionEditorProps) {
-  return (
-    <div className="max-w-[92%] rounded-xl bg-[#1e3a5f] border border-[#254a73] overflow-hidden">
-      <div className="p-4">
-        {/* Category */}
-        <div className="mb-2">
-          <select
-            value={edit.category}
-            onChange={(e) => onUpdate({ category: e.target.value })}
-            className="text-xs font-semibold text-[#fbbf24] bg-transparent border-none outline-none uppercase tracking-wider cursor-pointer"
-          >
-            <option value="">Select category...</option>
-            {CATEGORIES.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
-        </div>
+// ─── Helper: convert draft to WorkshopVariation ──────────────────────────────
 
-        {/* Question text */}
-        <textarea
-          value={edit.questionText}
-          onChange={(e) => onUpdate({ questionText: e.target.value })}
-          className="w-full bg-transparent text-white font-medium mb-3 resize-none outline-none border-b border-[#254a73] pb-2 text-sm leading-relaxed"
-          rows={2}
-          placeholder="Question text..."
-        />
-
-        {/* Format toggle */}
-        <div className="flex gap-2 mb-3">
-          <button
-            onClick={() => onUpdate({ format: "multiple_choice" })}
-            className={`text-xs px-3 py-1 rounded-full transition-all ${
-              edit.format === "multiple_choice"
-                ? "bg-[#e94560] text-white"
-                : "bg-[#0f0f23] text-[#a0a0b8] hover:text-white"
-            }`}
-          >
-            Multiple Choice
-          </button>
-          <button
-            onClick={() => onUpdate({ format: "free_text" })}
-            className={`text-xs px-3 py-1 rounded-full transition-all ${
-              edit.format === "free_text"
-                ? "bg-[#e94560] text-white"
-                : "bg-[#0f0f23] text-[#a0a0b8] hover:text-white"
-            }`}
-          >
-            Free Text
-          </button>
-        </div>
-
-        {/* Multiple choice options */}
-        {edit.format === "multiple_choice" && (
-          <div className="space-y-2 mb-3">
-            {(["A", "B", "C", "D"] as const).map((letter) => {
-              const key = `option${letter}` as "optionA" | "optionB" | "optionC" | "optionD";
-              return (
-                <div key={letter} className="flex items-center gap-2">
-                  <button
-                    onClick={() => onUpdate({ correctOption: letter })}
-                    className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 transition-all ${
-                      edit.correctOption === letter
-                        ? "bg-emerald-500 text-white"
-                        : "bg-[#0f0f23] text-[#a0a0b8] hover:bg-[#1e3a5f]"
-                    }`}
-                  >
-                    {letter}
-                  </button>
-                  <input
-                    type="text"
-                    value={edit[key]}
-                    onChange={(e) => onUpdate({ [key]: e.target.value })}
-                    className="flex-1 bg-[#0f0f23] text-sm text-[#e8e8e8] px-2 py-1 rounded outline-none border border-transparent focus:border-[#254a73]"
-                    placeholder={`Option ${letter}`}
-                  />
-                </div>
-              );
-            })}
-            <p className="text-[10px] text-[#666680]">Click a letter to mark it as correct</p>
-          </div>
-        )}
-
-        {/* Free text answer */}
-        {edit.format === "free_text" && (
-          <div className="space-y-2 mb-3">
-            <input
-              type="text"
-              value={edit.correctAnswer}
-              onChange={(e) => onUpdate({ correctAnswer: e.target.value })}
-              className="w-full bg-emerald-500/20 text-emerald-400 text-sm px-2 py-1.5 rounded outline-none placeholder:text-emerald-400/50"
-              placeholder="Correct answer"
-            />
-            <input
-              type="text"
-              value={edit.acceptableAnswers}
-              onChange={(e) => onUpdate({ acceptableAnswers: e.target.value })}
-              className="w-full bg-[#0f0f23] text-sm text-[#a0a0b8] px-2 py-1.5 rounded outline-none"
-              placeholder="Also acceptable (comma-separated)"
-            />
-          </div>
-        )}
-      </div>
-
-      {/* Actions */}
-      <div className="flex gap-2 px-4 pb-4">
-        <button
-          onClick={onSave}
-          disabled={saving || saved}
-          className="btn-primary text-xs flex-1"
-        >
-          {saved ? "Saved!" : saving ? "Saving..." : "Save to Bank"}
-        </button>
-        <button
-          onClick={onAutoSubmit}
-          disabled={saving || saved}
-          className="text-xs px-3 py-1.5 rounded bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 flex-1"
-        >
-          {saved ? "Saved!" : saving ? "..." : "Auto-submit"}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ─── Draft card (shown in bank) ───────────────────────────────────────────────
-
-interface DraftCardProps {
-  draft: Draft;
-  expanded: boolean;
-  editState: QuestionEdit | undefined;
-  aiEditInput: string;
-  aiEditing: boolean;
-  saving: boolean;
-  deleting: boolean;
-  onExpand: () => void;
-  onCollapse: () => void;
-  onUpdateEdit: (u: Partial<QuestionEdit>) => void;
-  onSave: () => void;
-  onToggleAutoSubmit: () => void;
-  onDelete: () => void;
-  onAiEditInputChange: (v: string) => void;
-  onAiEdit: () => void;
-}
-
-function DraftCard({
-  draft, expanded, editState, aiEditInput, aiEditing, saving, deleting,
-  onExpand, onCollapse, onUpdateEdit, onSave, onToggleAutoSubmit, onDelete,
-  onAiEditInputChange, onAiEdit,
-}: DraftCardProps) {
-  const isStructured = !!(draft.category && draft.answerFormat);
-
-  return (
-    <div className={`card transition-all ${expanded ? "ring-1 ring-[#e94560]/30" : ""}`}>
-      {/* Header (always visible) */}
-      <div className="p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
-              {draft.category && (
-                <span className="badge bg-[#1e3a5f] text-[#a0a0b8] text-xs">{draft.category}</span>
-              )}
-              {isStructured && (
-                <span className="badge bg-emerald-500/20 text-emerald-400 text-[10px]">Formatted</span>
-              )}
-              {draft.useOnNextRound && (
-                <span className="badge bg-[#e94560]/20 text-[#e94560] text-[10px]">Auto-submit ON</span>
-              )}
-              <span className="text-[10px] text-[#666680]">
-                {draft.answerFormat === "multiple_choice"
-                  ? "Multiple Choice"
-                  : draft.answerFormat === "free_text"
-                  ? "Free Text"
-                  : "Format not set"}
-              </span>
-            </div>
-            <p className="text-white text-sm leading-snug">
-              {draft.questionText || "Untitled draft"}
-            </p>
-          </div>
-
-          <div className="flex items-center gap-1.5 flex-shrink-0">
-            <button
-              onClick={onToggleAutoSubmit}
-              className={`text-xs px-2 py-1 rounded transition-all ${
-                draft.useOnNextRound
-                  ? "bg-[#e94560]/20 text-[#e94560]"
-                  : "bg-[#1e3a5f] text-[#a0a0b8] hover:text-white"
-              }`}
-            >
-              {draft.useOnNextRound ? "Auto ON" : "Auto"}
-            </button>
-            <button
-              onClick={expanded ? onCollapse : onExpand}
-              className="text-xs px-2 py-1 rounded bg-[#1e3a5f] text-[#a0a0b8] hover:text-white"
-            >
-              {expanded ? "Done" : "Edit"}
-            </button>
-            <button
-              onClick={onDelete}
-              disabled={deleting}
-              className="text-xs text-red-400 hover:text-red-300"
-            >
-              {deleting ? "..." : "Delete"}
-            </button>
-          </div>
-        </div>
-
-        {/* Collapsed preview */}
-        {!expanded && draft.answerFormat === "multiple_choice" && draft.optionA && (
-          <div className="mt-2 text-xs text-[#a0a0b8] space-y-0.5 pl-1">
-            {[
-              { key: "A", val: draft.optionA },
-              { key: "B", val: draft.optionB },
-              { key: "C", val: draft.optionC },
-              { key: "D", val: draft.optionD },
-            ].map(
-              (opt) =>
-                opt.val && (
-                  <p key={opt.key}>
-                    <span className={draft.correctOption === opt.key ? "text-emerald-400 font-bold" : ""}>
-                      {opt.key}.
-                    </span>{" "}
-                    {opt.val}
-                  </p>
-                )
-            )}
-          </div>
-        )}
-        {!expanded && draft.answerFormat === "free_text" && draft.correctAnswer && (
-          <p className="mt-1 text-xs text-emerald-400 pl-1">Answer: {draft.correctAnswer}</p>
-        )}
-      </div>
-
-      {/* Expanded edit form */}
-      {expanded && editState && (
-        <div className="border-t border-[#1e3a5f] px-4 pb-4 pt-4 space-y-4">
-          {/* Category */}
-          <div>
-            <label className="text-xs text-[#666680] mb-1.5 block">Category</label>
-            <div className="grid grid-cols-3 gap-1.5">
-              {CATEGORIES.map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => onUpdateEdit({ category: cat })}
-                  className={`text-xs py-1.5 px-2 rounded border text-left transition-all ${
-                    editState.category === cat
-                      ? "border-[#e94560] bg-[#e94560]/10 text-white"
-                      : "border-[#1e3a5f] text-[#a0a0b8] hover:border-[#2a5a8f]"
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Question text */}
-          <div>
-            <label className="text-xs text-[#666680] mb-1.5 block">Question</label>
-            <textarea
-              value={editState.questionText}
-              onChange={(e) => onUpdateEdit({ questionText: e.target.value })}
-              className="input-field text-sm min-h-[70px]"
-              placeholder="Question text..."
-            />
-          </div>
-
-          {/* Format toggle */}
-          <div>
-            <label className="text-xs text-[#666680] mb-1.5 block">Format</label>
-            <div className="flex gap-2">
-              <button
-                onClick={() => onUpdateEdit({ format: "multiple_choice" })}
-                className={`text-xs px-3 py-1.5 rounded border flex-1 transition-all ${
-                  editState.format === "multiple_choice"
-                    ? "border-[#e94560] bg-[#e94560]/10 text-white"
-                    : "border-[#1e3a5f] text-[#a0a0b8]"
-                }`}
-              >
-                Multiple Choice
-              </button>
-              <button
-                onClick={() => onUpdateEdit({ format: "free_text" })}
-                className={`text-xs px-3 py-1.5 rounded border flex-1 transition-all ${
-                  editState.format === "free_text"
-                    ? "border-[#e94560] bg-[#e94560]/10 text-white"
-                    : "border-[#1e3a5f] text-[#a0a0b8]"
-                }`}
-              >
-                Free Text
-              </button>
-            </div>
-          </div>
-
-          {/* MC options */}
-          {editState.format === "multiple_choice" && (
-            <div className="space-y-2">
-              {(["A", "B", "C", "D"] as const).map((letter) => {
-                const key = `option${letter}` as "optionA" | "optionB" | "optionC" | "optionD";
-                return (
-                  <div key={letter} className="flex items-center gap-2">
-                    <button
-                      onClick={() => onUpdateEdit({ correctOption: letter })}
-                      className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 transition-all ${
-                        editState.correctOption === letter
-                          ? "bg-emerald-500 text-white"
-                          : "bg-[#1e3a5f] text-[#a0a0b8]"
-                      }`}
-                    >
-                      {letter}
-                    </button>
-                    <input
-                      type="text"
-                      value={editState[key]}
-                      onChange={(e) => onUpdateEdit({ [key]: e.target.value })}
-                      className="input-field flex-1 text-sm"
-                      placeholder={`Option ${letter}`}
-                    />
-                  </div>
-                );
-              })}
-              <p className="text-[10px] text-[#666680]">Click a letter to mark it as correct (green = correct)</p>
-            </div>
-          )}
-
-          {/* Free text */}
-          {editState.format === "free_text" && (
-            <div className="space-y-2">
-              <div>
-                <label className="text-xs text-[#666680] mb-1 block">Correct Answer</label>
-                <input
-                  type="text"
-                  value={editState.correctAnswer}
-                  onChange={(e) => onUpdateEdit({ correctAnswer: e.target.value })}
-                  className="input-field text-sm"
-                  placeholder="The exact correct answer"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-[#666680] mb-1 block">Also Acceptable (comma-separated)</label>
-                <input
-                  type="text"
-                  value={editState.acceptableAnswers}
-                  onChange={(e) => onUpdateEdit({ acceptableAnswers: e.target.value })}
-                  className="input-field text-sm"
-                  placeholder="alt answer 1, alt answer 2"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* AI edit */}
-          <div>
-            <label className="text-xs text-[#666680] mb-1.5 block">Ask AI to Modify</label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={aiEditInput}
-                onChange={(e) => onAiEditInputChange(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !aiEditing && aiEditInput.trim()) onAiEdit();
-                }}
-                className="input-field flex-1 text-sm"
-                placeholder='e.g. "Make this multiple choice" or "Change category to Sports"'
-              />
-              <button
-                onClick={onAiEdit}
-                disabled={aiEditing || !aiEditInput.trim()}
-                className="btn-secondary text-sm"
-              >
-                {aiEditing ? "..." : "Ask AI"}
-              </button>
-            </div>
-          </div>
-
-          {/* Action buttons */}
-          <div className="flex gap-2">
-            <button
-              onClick={onSave}
-              disabled={saving}
-              className="btn-primary text-sm flex-1"
-            >
-              {saving ? "Saving..." : "Save Changes"}
-            </button>
-            <button onClick={onCollapse} className="btn-secondary text-sm">
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+function draftToVariation(draft: Draft): WorkshopVariation {
+  let acceptableAnswers: string[] = [];
+  if (draft.acceptableAnswers) {
+    try {
+      const arr = JSON.parse(draft.acceptableAnswers);
+      if (Array.isArray(arr)) acceptableAnswers = arr;
+    } catch {
+      // ignore
+    }
+  }
+  return {
+    category: draft.category || "General Knowledge",
+    questionText: draft.questionText || "",
+    answerFormat: (draft.answerFormat as WorkshopVariation["answerFormat"]) || "multiple_choice",
+    optionA: draft.optionA || undefined,
+    optionB: draft.optionB || undefined,
+    optionC: draft.optionC || undefined,
+    optionD: draft.optionD || undefined,
+    correctOption: draft.correctOption || undefined,
+    correctAnswer: draft.correctAnswer || undefined,
+    acceptableAnswers,
+    difficulty: "medium",
+    hook: "",
+  };
 }
 
 // ─── Main page ────────────────────────────────────────────────────────────────
@@ -470,23 +84,29 @@ export default function WorkshopPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
 
-  // Chat state
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  // Workshop state machine
+  const [workshopState, setWorkshopState] = useState<WorkshopState>("idle");
   const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [messageEdits, setMessageEdits] = useState<Record<number, QuestionEdit>>({});
-  const [savingMsgIdx, setSavingMsgIdx] = useState<number | null>(null);
-  const [savedMsgIdx, setSavedMsgIdx] = useState<number | null>(null);
+  const [lastPrompt, setLastPrompt] = useState("");
+  const [variations, setVariations] = useState<WorkshopVariation[]>([]);
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
+  const [conversationText, setConversationText] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [savedFeedback, setSavedFeedback] = useState(false);
+
+  // Edit state
+  const [editInput, setEditInput] = useState("");
 
   // Bank state
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [draftsLoading, setDraftsLoading] = useState(true);
-  const [expandedDraftId, setExpandedDraftId] = useState<string | null>(null);
-  const [draftEdits, setDraftEdits] = useState<Record<string, QuestionEdit>>({});
-  const [savingDraftId, setSavingDraftId] = useState<string | null>(null);
+  const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
+  const [draftEditInput, setDraftEditInput] = useState("");
+  const [draftEditLoading, setDraftEditLoading] = useState(false);
+  const [draftVariations, setDraftVariations] = useState<WorkshopVariation[]>([]);
+  const [draftSelectedIdx, setDraftSelectedIdx] = useState<number | null>(null);
+  const [draftSaving, setDraftSaving] = useState(false);
   const [deletingDraftId, setDeletingDraftId] = useState<string | null>(null);
-  const [aiEditInputs, setAiEditInputs] = useState<Record<string, string>>({});
-  const [aiEditing, setAiEditing] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/");
@@ -506,174 +126,127 @@ export default function WorkshopPage() {
     if (session?.user) loadDrafts();
   }, [session, loadDrafts]);
 
-  // ── Chat ──────────────────────────────────────────────────────────────────
+  // ── Workshop actions ───────────────────────────────────────────────────────
 
-  const sendMessage = async () => {
-    if (!input.trim() || loading) return;
-    const newMessages: ChatMessage[] = [...messages, { role: "user", content: input }];
-    setMessages(newMessages);
+  const handlePrompt = async (prompt: string) => {
+    if (!prompt.trim()) return;
+    setWorkshopState("loading");
+    setLastPrompt(prompt);
     setInput("");
-    setLoading(true);
+    setSelectedIdx(null);
+    setConversationText(null);
+    setVariations([]);
 
     try {
       const res = await fetch("/api/questions/workshop", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: newMessages }),
+        body: JSON.stringify({ prompt }),
       });
-      const data = await res.json();
-      const assistantContent: string = data.response || "No response";
+      const data: WorkshopResponse = await res.json();
 
-      let parsed: ParsedBoth | undefined;
-      try {
-        const parseRes = await fetch("/api/questions/parse", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: assistantContent }),
-        });
-        if (parseRes.ok) parsed = await parseRes.json();
-      } catch {
-        // Parsing failed — show plain text
+      if (data.type === "questions" && data.variations?.length) {
+        setVariations(data.variations);
+        setWorkshopState("viewing_cards");
+      } else {
+        setConversationText(data.text || "No response from AI.");
+        setWorkshopState("idle");
       }
-
-      const assistantMsgIndex = newMessages.length;
-      if (parsed) {
-        setMessageEdits((prev) => ({
-          ...prev,
-          [assistantMsgIndex]: {
-            format: "multiple_choice",
-            category: parsed!.category,
-            questionText: parsed!.questionText,
-            optionA: parsed!.multipleChoice?.optionA || "",
-            optionB: parsed!.multipleChoice?.optionB || "",
-            optionC: parsed!.multipleChoice?.optionC || "",
-            optionD: parsed!.multipleChoice?.optionD || "",
-            correctOption: parsed!.multipleChoice?.correctOption || "",
-            correctAnswer: parsed!.freeText?.correctAnswer || "",
-            acceptableAnswers: (parsed!.freeText?.acceptableAnswers || []).join(", "),
-          },
-        }));
-      }
-
-      setMessages([...newMessages, { role: "assistant", content: assistantContent, parsed }]);
     } catch {
-      setMessages([...newMessages, { role: "assistant", content: "Something went wrong. Try again." }]);
-    } finally {
-      setLoading(false);
+      setConversationText("Something went wrong. Try again.");
+      setWorkshopState("idle");
     }
   };
 
-  const updateMessageEdit = (idx: number, updates: Partial<QuestionEdit>) => {
-    setMessageEdits((prev) => ({ ...prev, [idx]: { ...prev[idx], ...updates } }));
+  const handleSelectCard = (idx: number) => {
+    setSelectedIdx(idx);
+    setWorkshopState("selected");
   };
 
-  const saveFromChat = async (idx: number, autoSubmit: boolean) => {
-    const edit = messageEdits[idx];
-    if (!edit) return;
-    setSavingMsgIdx(idx);
+  const handleEditFurther = () => {
+    setEditInput("");
+    setWorkshopState("editing");
+  };
+
+  const handleEditSubmit = async (instruction: string) => {
+    if (!instruction.trim() || selectedIdx === null) return;
+    const question = variations[selectedIdx];
+    setWorkshopState("loading");
+    setSelectedIdx(null);
+
+    try {
+      const res = await fetch("/api/questions/workshop/edit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question, instruction }),
+      });
+      const data: WorkshopResponse = await res.json();
+
+      if (data.type === "questions" && data.variations?.length) {
+        setVariations(data.variations);
+        setWorkshopState("viewing_cards");
+      } else {
+        setConversationText(data.text || "No response from AI.");
+        setWorkshopState("idle");
+      }
+    } catch {
+      setConversationText("Something went wrong. Try again.");
+      setWorkshopState("idle");
+    }
+  };
+
+  const handleSaveToBank = async (autoSubmit: boolean = false) => {
+    if (selectedIdx === null) return;
+    const v = variations[selectedIdx];
+    setSaving(true);
+
     try {
       const body: Record<string, unknown> = {
-        category: edit.category,
-        questionText: edit.questionText,
-        answerFormat: edit.format,
+        category: v.category,
+        questionText: v.questionText,
+        answerFormat: v.answerFormat,
         useOnNextRound: autoSubmit,
       };
-      if (edit.format === "multiple_choice") {
-        body.optionA = edit.optionA;
-        body.optionB = edit.optionB;
-        body.optionC = edit.optionC;
-        body.optionD = edit.optionD;
-        body.correctOption = edit.correctOption;
+      if (v.answerFormat === "multiple_choice") {
+        body.optionA = v.optionA;
+        body.optionB = v.optionB;
+        body.optionC = v.optionC;
+        body.optionD = v.optionD;
+        body.correctOption = v.correctOption;
       } else {
-        body.correctAnswer = edit.correctAnswer;
-        body.acceptableAnswers = edit.acceptableAnswers
-          .split(",")
-          .map((a) => a.trim())
-          .filter(Boolean);
+        body.correctAnswer = v.correctAnswer;
+        if (v.acceptableAnswers?.length) {
+          body.acceptableAnswers = v.acceptableAnswers;
+        }
       }
+
       await fetch("/api/questions/drafts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      setSavedMsgIdx(idx);
+
+      setSavedFeedback(true);
       await loadDrafts();
-      setTimeout(() => setSavedMsgIdx((prev) => (prev === idx ? null : prev)), 2000);
+      setTimeout(() => {
+        setSavedFeedback(false);
+        setWorkshopState("idle");
+        setVariations([]);
+        setSelectedIdx(null);
+      }, 1500);
     } finally {
-      setSavingMsgIdx(null);
+      setSaving(false);
     }
   };
 
-  // ── Bank ──────────────────────────────────────────────────────────────────
-
-  const parsedAcceptableAnswers = (json: string | null): string => {
-    if (!json) return "";
-    try {
-      const arr = JSON.parse(json);
-      return Array.isArray(arr) ? arr.join(", ") : "";
-    } catch {
-      return "";
-    }
+  const handleStartOver = () => {
+    setWorkshopState("idle");
+    setVariations([]);
+    setSelectedIdx(null);
+    setConversationText(null);
   };
 
-  const expandDraft = (draft: Draft) => {
-    setDraftEdits((prev) => ({
-      ...prev,
-      [draft.id]: {
-        format: (draft.answerFormat as "multiple_choice" | "free_text") || "multiple_choice",
-        category: draft.category || "",
-        questionText: draft.questionText || "",
-        optionA: draft.optionA || "",
-        optionB: draft.optionB || "",
-        optionC: draft.optionC || "",
-        optionD: draft.optionD || "",
-        correctOption: draft.correctOption || "",
-        correctAnswer: draft.correctAnswer || "",
-        acceptableAnswers: parsedAcceptableAnswers(draft.acceptableAnswers),
-      },
-    }));
-    setExpandedDraftId(draft.id);
-  };
-
-  const updateDraftEdit = (id: string, updates: Partial<QuestionEdit>) => {
-    setDraftEdits((prev) => ({ ...prev, [id]: { ...prev[id], ...updates } }));
-  };
-
-  const saveDraftEdit = async (id: string) => {
-    const edit = draftEdits[id];
-    if (!edit) return;
-    setSavingDraftId(id);
-    try {
-      const body: Record<string, unknown> = {
-        id,
-        category: edit.category,
-        questionText: edit.questionText,
-        answerFormat: edit.format,
-      };
-      if (edit.format === "multiple_choice") {
-        body.optionA = edit.optionA;
-        body.optionB = edit.optionB;
-        body.optionC = edit.optionC;
-        body.optionD = edit.optionD;
-        body.correctOption = edit.correctOption;
-      } else {
-        body.correctAnswer = edit.correctAnswer;
-        body.acceptableAnswers = edit.acceptableAnswers
-          .split(",")
-          .map((a) => a.trim())
-          .filter(Boolean);
-      }
-      await fetch("/api/questions/drafts", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      await loadDrafts();
-      setExpandedDraftId(null);
-    } finally {
-      setSavingDraftId(null);
-    }
-  };
+  // ── Bank actions ───────────────────────────────────────────────────────────
 
   const toggleAutoSubmit = async (id: string, current: boolean) => {
     await fetch("/api/questions/drafts", {
@@ -681,150 +254,331 @@ export default function WorkshopPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, useOnNextRound: !current }),
     });
-    setDrafts((prev) => prev.map((d) => (d.id === id ? { ...d, useOnNextRound: !current } : d)));
+    setDrafts((prev) =>
+      prev.map((d) => (d.id === id ? { ...d, useOnNextRound: !current } : d))
+    );
   };
 
   const deleteDraft = async (id: string) => {
     setDeletingDraftId(id);
     await fetch(`/api/questions/drafts?id=${id}`, { method: "DELETE" });
     setDrafts((prev) => prev.filter((d) => d.id !== id));
-    if (expandedDraftId === id) setExpandedDraftId(null);
+    if (editingDraftId === id) {
+      setEditingDraftId(null);
+      setDraftVariations([]);
+    }
     setDeletingDraftId(null);
   };
 
-  const aiEditDraft = async (id: string) => {
-    const prompt = aiEditInputs[id];
-    const draft = drafts.find((d) => d.id === id);
-    if (!prompt?.trim() || !draft) return;
+  const startDraftEdit = (draft: Draft) => {
+    setEditingDraftId(draft.id);
+    setDraftEditInput("");
+    setDraftVariations([]);
+    setDraftSelectedIdx(null);
+  };
 
-    setAiEditing((prev) => ({ ...prev, [id]: true }));
+  const handleDraftEditSubmit = async (draftId: string, instruction: string) => {
+    if (!instruction.trim()) return;
+    const draft = drafts.find((d) => d.id === draftId);
+    if (!draft) return;
+
+    setDraftEditLoading(true);
+    setDraftSelectedIdx(null);
+
     try {
-      const contextMsg = `I have an existing trivia question:\n\nCategory: ${draft.category || "unknown"}\nQuestion: ${draft.questionText}\nFormat: ${draft.answerFormat || "unknown"}\n\nRequest: ${prompt}`;
-      const res = await fetch("/api/questions/workshop", {
+      const question = draftToVariation(draft);
+      const res = await fetch("/api/questions/workshop/edit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: [{ role: "user", content: contextMsg }] }),
+        body: JSON.stringify({ question, instruction }),
       });
-      const data = await res.json();
-      const parseRes = await fetch("/api/questions/parse", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: data.response }),
-      });
-      if (parseRes.ok) {
-        const parsed: ParsedBoth = await parseRes.json();
-        const currentFormat = draftEdits[id]?.format || "multiple_choice";
-        setDraftEdits((prev) => ({
-          ...prev,
-          [id]: {
-            category: parsed.category,
-            questionText: parsed.questionText,
-            format: currentFormat,
-            optionA: parsed.multipleChoice?.optionA || "",
-            optionB: parsed.multipleChoice?.optionB || "",
-            optionC: parsed.multipleChoice?.optionC || "",
-            optionD: parsed.multipleChoice?.optionD || "",
-            correctOption: parsed.multipleChoice?.correctOption || "",
-            correctAnswer: parsed.freeText?.correctAnswer || "",
-            acceptableAnswers: (parsed.freeText?.acceptableAnswers || []).join(", "),
-          },
-        }));
+      const data: WorkshopResponse = await res.json();
+
+      if (data.type === "questions" && data.variations?.length) {
+        setDraftVariations(data.variations);
       }
-      setAiEditInputs((prev) => ({ ...prev, [id]: "" }));
     } finally {
-      setAiEditing((prev) => ({ ...prev, [id]: false }));
+      setDraftEditLoading(false);
     }
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  const saveDraftVariation = async (draftId: string) => {
+    if (draftSelectedIdx === null) return;
+    const v = draftVariations[draftSelectedIdx];
+    setDraftSaving(true);
+
+    try {
+      const body: Record<string, unknown> = {
+        id: draftId,
+        category: v.category,
+        questionText: v.questionText,
+        answerFormat: v.answerFormat,
+      };
+      if (v.answerFormat === "multiple_choice") {
+        body.optionA = v.optionA;
+        body.optionB = v.optionB;
+        body.optionC = v.optionC;
+        body.optionD = v.optionD;
+        body.correctOption = v.correctOption;
+      } else {
+        body.correctAnswer = v.correctAnswer;
+        if (v.acceptableAnswers?.length) {
+          body.acceptableAnswers = v.acceptableAnswers;
+        }
+      }
+
+      await fetch("/api/questions/drafts", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      await loadDrafts();
+      setEditingDraftId(null);
+      setDraftVariations([]);
+      setDraftSelectedIdx(null);
+    } finally {
+      setDraftSaving(false);
+    }
+  };
+
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <div className="min-h-screen">
       <NavBar />
       <div className="max-w-3xl mx-auto px-4 py-6 space-y-10">
-
-        {/* ── Workshop Chat ── */}
+        {/* ── Workshop ── */}
         <section>
-          <h1 className="text-xl font-bold text-white mb-1">Question Workshop</h1>
+          <h1 className="text-xl font-bold text-white mb-1">
+            Question Workshop
+          </h1>
           <p className="text-sm text-[#a0a0b8] mb-4">
-            Chat with AI to brainstorm and refine trivia questions
+            Tell the AI what kind of question you want and pick from 3 creative
+            variations
           </p>
 
-          <div className="card p-4 mb-4 overflow-y-auto max-h-[60vh] min-h-[180px]">
-            {messages.length === 0 && (
-              <div className="text-center py-10 text-[#666680]">
-                <p className="text-lg mb-2">&#128161;</p>
-                <p className="text-sm mb-4">
-                  Ask me to help create trivia questions! I&apos;ll generate both multiple choice
-                  and free text versions so you can pick the format you want.
-                </p>
-                <div className="space-y-2">
-                  {[
-                    "Help me create a geography question about world capitals",
-                    "Suggest an Olympics history question",
-                    "Make a tricky science question",
-                  ].map((prompt) => (
-                    <button
-                      key={prompt}
-                      onClick={() => setInput(prompt)}
-                      className="block mx-auto text-xs bg-[#1e3a5f] text-[#a0a0b8] px-3 py-1.5 rounded-full hover:text-white"
-                    >
-                      &quot;{prompt}&quot;
-                    </button>
-                  ))}
+          {/* IDLE state */}
+          {workshopState === "idle" && (
+            <div className="space-y-4">
+              {conversationText && (
+                <div className="card p-4 text-sm text-[#e8e8e8]">
+                  <p className="whitespace-pre-wrap">{conversationText}</p>
                 </div>
-              </div>
-            )}
+              )}
 
-            <div className="space-y-3">
-              {messages.map((msg, i) => (
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handlePrompt(input);
+                  }}
+                  className="input-field flex-1"
+                  placeholder="What kind of question do you want?"
+                />
+                <button
+                  onClick={() => handlePrompt(input)}
+                  disabled={!input.trim()}
+                  className="btn-primary"
+                >
+                  Go
+                </button>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {SUGGESTION_CHIPS.map((chip) => (
+                  <button
+                    key={chip}
+                    onClick={() => handlePrompt(chip)}
+                    className="text-xs px-3 py-1.5 rounded-full bg-[#1e3a5f] text-[#a0a0b8] hover:text-white hover:bg-[#254a73] transition-all"
+                  >
+                    {chip}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* LOADING state */}
+          {workshopState === "loading" && (
+            <div className="flex gap-3 overflow-x-auto pb-2">
+              {[0, 1, 2].map((i) => (
                 <div
                   key={i}
-                  className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                  className="rounded-xl border border-[#1e3a5f] bg-[#16162a] p-4 min-w-[85vw] sm:min-w-[280px] flex-shrink-0 animate-pulse"
                 >
-                  {msg.role === "user" ? (
-                    <div className="max-w-[80%] p-3 rounded-xl text-sm bg-[#e94560]/20 text-white">
-                      <p className="whitespace-pre-wrap">{msg.content}</p>
-                    </div>
-                  ) : msg.parsed && messageEdits[i] ? (
-                    <QuestionEditor
-                      edit={messageEdits[i]}
-                      onUpdate={(u) => updateMessageEdit(i, u)}
-                      onSave={() => saveFromChat(i, false)}
-                      onAutoSubmit={() => saveFromChat(i, true)}
-                      saving={savingMsgIdx === i}
-                      saved={savedMsgIdx === i}
-                    />
-                  ) : (
-                    <div className="max-w-[80%] p-3 rounded-xl text-sm bg-[#1e3a5f] text-[#e8e8e8]">
-                      <p className="whitespace-pre-wrap">{msg.content}</p>
-                    </div>
-                  )}
+                  <div className="h-3 w-16 bg-[#1e3a5f] rounded mb-3" />
+                  <div className="h-4 w-3/4 bg-[#1e3a5f] rounded mb-2" />
+                  <div className="h-4 w-1/2 bg-[#1e3a5f] rounded mb-4" />
+                  <div className="space-y-2">
+                    <div className="h-8 bg-[#0f0f23] rounded" />
+                    <div className="h-8 bg-[#0f0f23] rounded" />
+                    <div className="h-8 bg-[#0f0f23] rounded" />
+                    <div className="h-8 bg-[#0f0f23] rounded" />
+                  </div>
                 </div>
               ))}
-              {loading && (
-                <div className="text-sm text-[#666680] animate-pulse pl-2">Thinking...</div>
+            </div>
+          )}
+
+          {/* VIEWING_CARDS state */}
+          {workshopState === "viewing_cards" && (
+            <div className="space-y-4">
+              <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 -mx-4 px-4">
+                {variations.map((v, i) => (
+                  <div
+                    key={i}
+                    className="snap-center min-w-[85vw] sm:min-w-[280px] flex-shrink-0"
+                  >
+                    <QuestionPreviewCard
+                      category={v.category}
+                      questionText={v.questionText}
+                      answerFormat={v.answerFormat}
+                      optionA={v.optionA}
+                      optionB={v.optionB}
+                      optionC={v.optionC}
+                      optionD={v.optionD}
+                      correctOption={v.correctOption}
+                      correctAnswer={v.correctAnswer}
+                      difficulty={v.difficulty}
+                      hook={v.hook}
+                      onSelect={() => handleSelectCard(i)}
+                    />
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handlePrompt(lastPrompt)}
+                  className="btn-secondary text-sm flex-1"
+                >
+                  Try Again
+                </button>
+                <button
+                  onClick={handleStartOver}
+                  className="text-sm px-3 py-1.5 rounded text-[#a0a0b8] hover:text-white"
+                >
+                  Start Over
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* SELECTED state */}
+          {workshopState === "selected" && selectedIdx !== null && (
+            <div className="space-y-4">
+              <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 -mx-4 px-4">
+                {variations.map((v, i) => (
+                  <div
+                    key={i}
+                    className={`snap-center min-w-[85vw] sm:min-w-[280px] flex-shrink-0 transition-opacity ${
+                      i !== selectedIdx ? "opacity-40" : ""
+                    }`}
+                  >
+                    <QuestionPreviewCard
+                      category={v.category}
+                      questionText={v.questionText}
+                      answerFormat={v.answerFormat}
+                      optionA={v.optionA}
+                      optionB={v.optionB}
+                      optionC={v.optionC}
+                      optionD={v.optionD}
+                      correctOption={v.correctOption}
+                      correctAnswer={v.correctAnswer}
+                      difficulty={v.difficulty}
+                      hook={v.hook}
+                      selected={i === selectedIdx}
+                      onSelect={() => handleSelectCard(i)}
+                    />
+                  </div>
+                ))}
+              </div>
+
+              {savedFeedback ? (
+                <div className="text-center text-emerald-400 font-semibold py-3">
+                  Saved to Bank!
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleSaveToBank(false)}
+                    disabled={saving}
+                    className="btn-primary flex-1"
+                  >
+                    {saving ? "Saving..." : "Add to Bank"}
+                  </button>
+                  <button
+                    onClick={() => handleSaveToBank(true)}
+                    disabled={saving}
+                    className="text-sm px-3 py-1.5 rounded bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-all"
+                  >
+                    Auto-submit
+                  </button>
+                  <button
+                    onClick={handleEditFurther}
+                    className="btn-secondary flex-1"
+                  >
+                    Edit Further
+                  </button>
+                </div>
               )}
             </div>
-          </div>
+          )}
 
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") sendMessage(); }}
-              className="input-field flex-1"
-              placeholder="Ask about question ideas..."
-            />
-            <button
-              onClick={sendMessage}
-              disabled={loading || !input.trim()}
-              className="btn-primary"
-            >
-              Send
-            </button>
-          </div>
+          {/* EDITING state */}
+          {workshopState === "editing" && selectedIdx !== null && (
+            <div className="space-y-4">
+              <div className="max-w-md mx-auto">
+                <QuestionPreviewCard
+                  {...variations[selectedIdx]}
+                  selected
+                  compact
+                />
+              </div>
+
+              <div className="flex flex-wrap gap-2 justify-center">
+                {EDIT_CHIPS.map((chip) => (
+                  <button
+                    key={chip}
+                    onClick={() => handleEditSubmit(chip)}
+                    className="text-xs px-3 py-1.5 rounded-full bg-[#1e3a5f] text-[#a0a0b8] hover:text-white hover:bg-[#254a73] transition-all"
+                  >
+                    {chip}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={editInput}
+                  onChange={(e) => setEditInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && editInput.trim())
+                      handleEditSubmit(editInput);
+                  }}
+                  className="input-field flex-1"
+                  placeholder="Or type a custom request..."
+                />
+                <button
+                  onClick={() => handleEditSubmit(editInput)}
+                  disabled={!editInput.trim()}
+                  className="btn-primary"
+                >
+                  Go
+                </button>
+              </div>
+
+              <button
+                onClick={() => setWorkshopState("selected")}
+                className="text-sm text-[#a0a0b8] hover:text-white w-full text-center"
+              >
+                Back to selection
+              </button>
+            </div>
+          )}
         </section>
 
         {/* ── Question Bank ── */}
@@ -833,7 +587,7 @@ export default function WorkshopPage() {
             <div>
               <h2 className="text-lg font-bold text-white">Question Bank</h2>
               <p className="text-sm text-[#a0a0b8]">
-                Edit, refine, or queue saved questions for auto-submit
+                Saved questions ready for game day
               </p>
             </div>
             {!draftsLoading && drafts.length > 0 && (
@@ -844,35 +598,191 @@ export default function WorkshopPage() {
           </div>
 
           {draftsLoading ? (
-            <div className="card p-8 text-center animate-pulse text-[#e94560]">Loading...</div>
+            <div className="card p-8 text-center animate-pulse text-[#e94560]">
+              Loading...
+            </div>
           ) : drafts.length === 0 ? (
             <div className="card p-8 text-center text-[#666680]">
-              <p>No saved questions yet. Chat with the workshop above to create some!</p>
+              <p>No saved questions yet. Use the workshop above to create some!</p>
             </div>
           ) : (
             <div className="space-y-3">
-              {drafts.map((draft) => (
-                <DraftCard
-                  key={draft.id}
-                  draft={draft}
-                  expanded={expandedDraftId === draft.id}
-                  editState={draftEdits[draft.id]}
-                  aiEditInput={aiEditInputs[draft.id] || ""}
-                  aiEditing={aiEditing[draft.id] || false}
-                  saving={savingDraftId === draft.id}
-                  deleting={deletingDraftId === draft.id}
-                  onExpand={() => expandDraft(draft)}
-                  onCollapse={() => setExpandedDraftId(null)}
-                  onUpdateEdit={(u) => updateDraftEdit(draft.id, u)}
-                  onSave={() => saveDraftEdit(draft.id)}
-                  onToggleAutoSubmit={() => toggleAutoSubmit(draft.id, draft.useOnNextRound)}
-                  onDelete={() => deleteDraft(draft.id)}
-                  onAiEditInputChange={(v) =>
-                    setAiEditInputs((prev) => ({ ...prev, [draft.id]: v }))
-                  }
-                  onAiEdit={() => aiEditDraft(draft.id)}
-                />
-              ))}
+              {drafts.map((draft) => {
+                const isEditing = editingDraftId === draft.id;
+
+                return (
+                  <div key={draft.id} className="space-y-3">
+                    {/* Card preview */}
+                    <div className="relative">
+                      <QuestionPreviewCard
+                        category={draft.category || "General Knowledge"}
+                        questionText={draft.questionText || "Untitled draft"}
+                        answerFormat={
+                          (draft.answerFormat as WorkshopVariation["answerFormat"]) ||
+                          "multiple_choice"
+                        }
+                        optionA={draft.optionA || undefined}
+                        optionB={draft.optionB || undefined}
+                        optionC={draft.optionC || undefined}
+                        optionD={draft.optionD || undefined}
+                        correctOption={draft.correctOption || undefined}
+                        correctAnswer={draft.correctAnswer || undefined}
+                        difficulty="medium"
+                        hook=""
+                        compact
+                      />
+
+                      {/* Overlay badges and actions */}
+                      <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                        {draft.useOnNextRound && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#e94560]/20 text-[#e94560]">
+                            Auto ON
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Action buttons */}
+                    <div className="flex gap-2 px-1">
+                      <button
+                        onClick={() => toggleAutoSubmit(draft.id, draft.useOnNextRound)}
+                        className={`text-xs px-2 py-1 rounded transition-all ${
+                          draft.useOnNextRound
+                            ? "bg-[#e94560]/20 text-[#e94560]"
+                            : "bg-[#1e3a5f] text-[#a0a0b8] hover:text-white"
+                        }`}
+                      >
+                        {draft.useOnNextRound ? "Auto ON" : "Auto"}
+                      </button>
+                      <button
+                        onClick={() =>
+                          isEditing
+                            ? setEditingDraftId(null)
+                            : startDraftEdit(draft)
+                        }
+                        className="text-xs px-2 py-1 rounded bg-[#1e3a5f] text-[#a0a0b8] hover:text-white"
+                      >
+                        {isEditing ? "Done" : "Edit"}
+                      </button>
+                      <button
+                        onClick={() => deleteDraft(draft.id)}
+                        disabled={deletingDraftId === draft.id}
+                        className="text-xs text-red-400 hover:text-red-300"
+                      >
+                        {deletingDraftId === draft.id ? "..." : "Delete"}
+                      </button>
+                    </div>
+
+                    {/* Edit panel */}
+                    {isEditing && (
+                      <div className="card p-4 space-y-3">
+                        {/* Quick action chips */}
+                        <div className="flex flex-wrap gap-2">
+                          {EDIT_CHIPS.map((chip) => (
+                            <button
+                              key={chip}
+                              onClick={() => {
+                                setDraftEditInput(chip);
+                                handleDraftEditSubmit(draft.id, chip);
+                              }}
+                              disabled={draftEditLoading}
+                              className="text-xs px-3 py-1.5 rounded-full bg-[#1e3a5f] text-[#a0a0b8] hover:text-white hover:bg-[#254a73] transition-all disabled:opacity-50"
+                            >
+                              {chip}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Custom edit input */}
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={draftEditInput}
+                            onChange={(e) => setDraftEditInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (
+                                e.key === "Enter" &&
+                                draftEditInput.trim() &&
+                                !draftEditLoading
+                              )
+                                handleDraftEditSubmit(draft.id, draftEditInput);
+                            }}
+                            className="input-field flex-1 text-sm"
+                            placeholder="Or type a custom request..."
+                          />
+                          <button
+                            onClick={() =>
+                              handleDraftEditSubmit(draft.id, draftEditInput)
+                            }
+                            disabled={
+                              draftEditLoading || !draftEditInput.trim()
+                            }
+                            className="btn-primary text-sm"
+                          >
+                            {draftEditLoading ? "..." : "Go"}
+                          </button>
+                        </div>
+
+                        {/* AI edit results */}
+                        {draftEditLoading && (
+                          <div className="text-sm text-[#666680] animate-pulse text-center py-4">
+                            Generating variations...
+                          </div>
+                        )}
+
+                        {draftVariations.length > 0 && (
+                          <div className="space-y-3">
+                            <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 -mx-4 px-4">
+                              {draftVariations.map((v, i) => (
+                                <div
+                                  key={i}
+                                  className={`snap-center min-w-[85vw] sm:min-w-[260px] flex-shrink-0 transition-opacity ${
+                                    draftSelectedIdx !== null &&
+                                    i !== draftSelectedIdx
+                                      ? "opacity-40"
+                                      : ""
+                                  }`}
+                                >
+                                  <QuestionPreviewCard
+                                    category={v.category}
+                                    questionText={v.questionText}
+                                    answerFormat={v.answerFormat}
+                                    optionA={v.optionA}
+                                    optionB={v.optionB}
+                                    optionC={v.optionC}
+                                    optionD={v.optionD}
+                                    correctOption={v.correctOption}
+                                    correctAnswer={v.correctAnswer}
+                                    difficulty={v.difficulty}
+                                    hook={v.hook}
+                                    selected={draftSelectedIdx === i}
+                                    compact
+                                    onSelect={() => setDraftSelectedIdx(i)}
+                                  />
+                                </div>
+                              ))}
+                            </div>
+
+                            {draftSelectedIdx !== null && (
+                              <button
+                                onClick={() =>
+                                  saveDraftVariation(draft.id)
+                                }
+                                disabled={draftSaving}
+                                className="btn-primary w-full text-sm"
+                              >
+                                {draftSaving
+                                  ? "Saving..."
+                                  : "Replace Draft with Selection"}
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </section>

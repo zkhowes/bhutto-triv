@@ -6,6 +6,7 @@ import { CATEGORIES } from "@/lib/constants";
 interface QuestionSubmitFormProps {
   roundId: string;
   leaguePlayerId: string;
+  leagueId?: string;
   onSubmitted: () => void;
 }
 
@@ -25,6 +26,7 @@ interface Draft {
 export default function QuestionSubmitForm({
   roundId,
   leaguePlayerId,
+  leagueId,
   onSubmitted,
 }: QuestionSubmitFormProps) {
   const [category, setCategory] = useState("");
@@ -40,6 +42,7 @@ export default function QuestionSubmitForm({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [draftLoaded, setDraftLoaded] = useState(false);
+  const [autoSubmitDraftId, setAutoSubmitDraftId] = useState<string | null>(null);
 
   // AI Workshop
   const [showWorkshop, setShowWorkshop] = useState(false);
@@ -48,6 +51,13 @@ export default function QuestionSubmitForm({
   >([]);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
+
+  // Difficulty check
+  const [difficultyResult, setDifficultyResult] = useState<{
+    difficulty: "easy" | "medium" | "hard";
+    reasoning: string;
+  } | null>(null);
+  const [difficultyLoading, setDifficultyLoading] = useState(false);
 
   // Load auto-submit draft
   useEffect(() => {
@@ -60,6 +70,7 @@ export default function QuestionSubmitForm({
           (d: Draft) => (d as Draft & { useOnNextRound: boolean }).useOnNextRound
         );
         if (autoSubmitDraft && autoSubmitDraft.category && autoSubmitDraft.answerFormat) {
+          setAutoSubmitDraftId(autoSubmitDraft.id);
           setCategory(autoSubmitDraft.category);
           setQuestionText(autoSubmitDraft.questionText || "");
           setAnswerFormat(autoSubmitDraft.answerFormat);
@@ -148,6 +159,15 @@ export default function QuestionSubmitForm({
         throw new Error(data.error || "Failed to submit question");
       }
 
+      // Clear auto-submit flag on the draft that was used
+      if (autoSubmitDraftId) {
+        fetch("/api/questions/drafts", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: autoSubmitDraftId, useOnNextRound: false }),
+        }).catch(() => {});
+      }
+
       onSubmitted();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to submit");
@@ -189,6 +209,30 @@ export default function QuestionSubmitForm({
       setChatLoading(false);
     }
   };
+
+  const checkDifficulty = async () => {
+    setDifficultyLoading(true);
+    setDifficultyResult(null);
+    try {
+      const res = await fetch("/api/questions/difficulty", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          category,
+          questionText: questionText.trim(),
+          leagueId,
+        }),
+      });
+      const data = await res.json();
+      setDifficultyResult(data);
+    } catch {
+      setDifficultyResult(null);
+    } finally {
+      setDifficultyLoading(false);
+    }
+  };
+
+  const canCheckDifficulty = category && questionText.trim().length > 10;
 
   return (
     <div className="space-y-4">
@@ -424,6 +468,38 @@ export default function QuestionSubmitForm({
             <p className="text-xs text-[#666680]">
               Players guess a number — closest without going over wins. If everyone goes over, nobody wins.
             </p>
+          </div>
+        )}
+
+        {/* Difficulty Check */}
+        {canCheckDifficulty && (
+          <div className="mb-4">
+            <button
+              type="button"
+              onClick={checkDifficulty}
+              disabled={difficultyLoading}
+              className="btn-secondary text-sm w-full"
+            >
+              {difficultyLoading ? "Checking..." : "Check Difficulty"}
+            </button>
+            {difficultyResult && (
+              <div
+                className={`mt-2 p-3 rounded-lg border text-sm ${
+                  difficultyResult.difficulty === "easy"
+                    ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                    : difficultyResult.difficulty === "hard"
+                      ? "bg-red-500/10 border-red-500/30 text-red-400"
+                      : "bg-amber-500/10 border-amber-500/30 text-amber-400"
+                }`}
+              >
+                <span className="font-bold uppercase">
+                  {difficultyResult.difficulty}
+                </span>
+                <span className="text-[#a0a0b8] ml-2">
+                  {difficultyResult.reasoning}
+                </span>
+              </div>
+            )}
           </div>
         )}
 
