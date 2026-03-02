@@ -403,20 +403,20 @@ export default function WorkshopPage() {
 
           {/* LOADING state */}
           {workshopState === "loading" && (
-            <div className="flex gap-3 overflow-x-auto pb-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {[0, 1, 2].map((i) => (
                 <div
                   key={i}
-                  className="rounded-xl border border-[#1e3a5f] bg-[#16162a] p-4 min-w-[85vw] sm:min-w-[280px] flex-shrink-0 animate-pulse"
+                  className="rounded-xl border border-[#1e3a5f] bg-[#16162a] p-3 animate-pulse"
                 >
                   <div className="h-3 w-16 bg-[#1e3a5f] rounded mb-3" />
                   <div className="h-4 w-3/4 bg-[#1e3a5f] rounded mb-2" />
                   <div className="h-4 w-1/2 bg-[#1e3a5f] rounded mb-4" />
                   <div className="space-y-2">
-                    <div className="h-8 bg-[#0f0f23] rounded" />
-                    <div className="h-8 bg-[#0f0f23] rounded" />
-                    <div className="h-8 bg-[#0f0f23] rounded" />
-                    <div className="h-8 bg-[#0f0f23] rounded" />
+                    <div className="h-7 bg-[#0f0f23] rounded" />
+                    <div className="h-7 bg-[#0f0f23] rounded" />
+                    <div className="h-7 bg-[#0f0f23] rounded" />
+                    <div className="h-7 bg-[#0f0f23] rounded" />
                   </div>
                 </div>
               ))}
@@ -426,39 +426,38 @@ export default function WorkshopPage() {
           {/* VIEWING_CARDS state */}
           {workshopState === "viewing_cards" && (
             <div className="space-y-4">
-              <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 -mx-4 px-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {variations.map((v, i) => (
-                  <div
+                  <QuestionPreviewCard
                     key={i}
-                    className="snap-center min-w-[85vw] sm:min-w-[280px] flex-shrink-0"
-                  >
-                    <QuestionPreviewCard
-                      category={v.category}
-                      questionText={v.questionText}
-                      answerFormat={v.answerFormat}
-                      optionA={v.optionA}
-                      optionB={v.optionB}
-                      optionC={v.optionC}
-                      optionD={v.optionD}
-                      correctOption={v.correctOption}
-                      correctAnswer={v.correctAnswer}
-                      difficulty={v.difficulty}
-                      hook={v.hook}
-                      onSelect={() => handleSelectCard(i)}
-                    />
-                  </div>
+                    category={v.category}
+                    questionText={v.questionText}
+                    answerFormat={v.answerFormat}
+                    optionA={v.optionA}
+                    optionB={v.optionB}
+                    optionC={v.optionC}
+                    optionD={v.optionD}
+                    correctOption={v.correctOption}
+                    correctAnswer={v.correctAnswer}
+                    difficulty={v.difficulty}
+                    hook={v.hook}
+                    compact
+                    onSelect={() => handleSelectCard(i)}
+                  />
                 ))}
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 justify-center">
                 <button
                   onClick={() => handlePrompt(lastPrompt)}
-                  className="btn-secondary text-sm flex-1"
+                  className="text-sm px-3 py-1.5 rounded-full bg-[#1e3a5f] text-[#a0a0b8] hover:text-white hover:bg-[#254a73] transition-all flex items-center gap-1.5"
+                  title="Regenerate"
                 >
-                  Try Again
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                  New set
                 </button>
                 <button
                   onClick={handleStartOver}
-                  className="text-sm px-3 py-1.5 rounded text-[#a0a0b8] hover:text-white"
+                  className="text-sm px-3 py-1.5 rounded-full text-[#666680] hover:text-[#a0a0b8] transition-all"
                 >
                   Start Over
                 </button>
@@ -469,11 +468,11 @@ export default function WorkshopPage() {
           {/* SELECTED state */}
           {workshopState === "selected" && selectedIdx !== null && (
             <div className="space-y-4">
-              <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 -mx-4 px-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {variations.map((v, i) => (
                   <div
                     key={i}
-                    className={`snap-center min-w-[85vw] sm:min-w-[280px] flex-shrink-0 transition-opacity ${
+                    className={`transition-opacity ${
                       i !== selectedIdx ? "opacity-40" : ""
                     }`}
                   >
@@ -490,6 +489,7 @@ export default function WorkshopPage() {
                       difficulty={v.difficulty}
                       hook={v.hook}
                       selected={i === selectedIdx}
+                      compact
                       onSelect={() => handleSelectCard(i)}
                     />
                   </div>
@@ -501,24 +501,25 @@ export default function WorkshopPage() {
                   Saved to Bank!
                 </div>
               ) : (
-                <div className="flex gap-2">
+                <div className="flex gap-2 justify-center">
+                  <button
+                    onClick={() => handlePrompt(lastPrompt)}
+                    className="text-sm px-3 py-1.5 rounded-full bg-[#1e3a5f] text-[#a0a0b8] hover:text-white hover:bg-[#254a73] transition-all flex items-center gap-1.5"
+                    title="Regenerate all"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                    New set
+                  </button>
                   <button
                     onClick={() => handleSaveToBank(false)}
                     disabled={saving}
-                    className="btn-primary flex-1"
+                    className="btn-primary text-sm"
                   >
                     {saving ? "Saving..." : "Add to Bank"}
                   </button>
                   <button
-                    onClick={() => handleSaveToBank(true)}
-                    disabled={saving}
-                    className="text-sm px-3 py-1.5 rounded bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-all"
-                  >
-                    Auto-submit
-                  </button>
-                  <button
                     onClick={handleEditFurther}
-                    className="btn-secondary flex-1"
+                    className="btn-secondary text-sm"
                   >
                     Edit Further
                   </button>
@@ -732,11 +733,11 @@ export default function WorkshopPage() {
 
                         {draftVariations.length > 0 && (
                           <div className="space-y-3">
-                            <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 -mx-4 px-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                               {draftVariations.map((v, i) => (
                                 <div
                                   key={i}
-                                  className={`snap-center min-w-[85vw] sm:min-w-[260px] flex-shrink-0 transition-opacity ${
+                                  className={`transition-opacity ${
                                     draftSelectedIdx !== null &&
                                     i !== draftSelectedIdx
                                       ? "opacity-40"
