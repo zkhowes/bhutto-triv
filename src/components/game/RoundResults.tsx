@@ -1,12 +1,15 @@
 "use client";
 
+import { useState, useCallback } from "react";
 import Avatar from "@/components/ui/Avatar";
+import StarRating from "@/components/ui/StarRating";
 
 interface RoundResultsProps {
   round: {
     id: string;
     number: number;
     funFact?: string | null;
+    atBatPlayerId?: string | null;
     question: {
       category: string;
       questionText: string;
@@ -33,6 +36,7 @@ interface RoundResultsProps {
       isAbsent: boolean;
       powerUpType: string | null;
       powerUpCost: number;
+      questionRating: number | null;
       leaguePlayer: {
         id: string;
         fakeNickname: string | null;
@@ -48,9 +52,34 @@ interface RoundResultsProps {
     };
   };
   myPlayerId: string | null;
+  actAsPlayerId?: string | null;
 }
 
-export default function RoundResults({ round, myPlayerId }: RoundResultsProps) {
+export default function RoundResults({ round, myPlayerId, actAsPlayerId }: RoundResultsProps) {
+  const [myRating, setMyRating] = useState<number>(
+    () => round.answers.find((a) => a.leaguePlayerId === myPlayerId)?.questionRating || 0
+  );
+  const [ratingSubmitting, setRatingSubmitting] = useState(false);
+
+  const submitRating = useCallback(async (rating: number) => {
+    setMyRating(rating);
+    setRatingSubmitting(true);
+    try {
+      const actAsParam = actAsPlayerId ? `?actAs=${actAsPlayerId}` : "";
+      await fetch(`/api/rounds/${round.id}/rate${actAsParam}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rating }),
+      });
+    } catch {
+      // silently fail — rating is non-critical
+    } finally {
+      setRatingSubmitting(false);
+    }
+  }, [round.id, actAsPlayerId]);
+
+  const isAtBat = myPlayerId === round.atBatPlayerId;
+
   const sortedAnswers = [...round.answers].sort(
     (a, b) => (a.placement || 999) - (b.placement || 999)
   );
@@ -167,6 +196,24 @@ export default function RoundResults({ round, myPlayerId }: RoundResultsProps) {
             Did You Know?
           </p>
           <p className="text-sm text-[#e8e8e8]">{round.funFact}</p>
+        </div>
+      )}
+
+      {/* Rate this question */}
+      {!isAtBat && myPlayerId && (
+        <div className="card p-4 text-center">
+          <p className="text-xs text-[#a0a0b8] uppercase tracking-wider mb-2">
+            Rate this question
+          </p>
+          <StarRating
+            value={myRating}
+            onChange={ratingSubmitting ? undefined : submitRating}
+          />
+          {myRating > 0 && (
+            <p className="text-xs text-[#666680] mt-1">
+              You rated this {myRating}/5
+            </p>
+          )}
         </div>
       )}
 

@@ -326,6 +326,12 @@ model RoundAnswer {
   powerUpCost    Int      @default(0)
   powerUpData    String?  // JSON: { hint?, eliminatedOption?, probeValue?, direction? }
 
+  // Cheat Seeker (client-side signals collected during answering)
+  cheatSeekerData String?  // JSON: { tabSwitches, timeAway, pasteDetected, blurCount }
+
+  // Question quality rating (1-5 stars)
+  questionRating Int?
+
   // Absentee
   isAbsent       Boolean  @default(false)
 

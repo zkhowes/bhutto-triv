@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import CountdownTimer from "./CountdownTimer";
+import StarRating from "@/components/ui/StarRating";
 
 interface BettingInterfaceProps {
   roundId: string;
@@ -10,6 +11,7 @@ interface BettingInterfaceProps {
   category: string;
   answerFormat?: string | null;
   answerDeadline?: string | null;
+  atBatAvgRating?: number | null;
   onBetPlaced: () => void;
 }
 
@@ -26,6 +28,7 @@ export default function BettingInterface({
   category,
   answerFormat,
   answerDeadline,
+  atBatAvgRating,
   onBetPlaced,
 }: BettingInterfaceProps) {
   const [betAmount, setBetAmount] = useState(1);
@@ -68,6 +71,12 @@ export default function BettingInterface({
           <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium bg-[#1e3a5f] text-[#a0a0b8]">
             {FORMAT_LABELS[answerFormat] ?? answerFormat}
           </span>
+        )}
+        {atBatAvgRating != null && (
+          <div className="mt-2">
+            <p className="text-xs text-[#666680] mb-0.5">question quality</p>
+            <StarRating value={atBatAvgRating} size="sm" showLabel />
+          </div>
         )}
         {answerDeadline && (
           <div className="mt-2">

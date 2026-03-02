@@ -128,9 +128,14 @@ export default function CommissionerPage() {
   };
 
   const forceCloseRound = async (roundId: string) => {
-    if (!confirm("Force close this round? Players who haven't answered will be marked absent and penalized.")) return;
-    await fetch(`/api/rounds/${roundId}/force-close`, { method: "POST" });
-    await fetchLeague();
+    if (!confirm("Force close this round? Players who haven't answered will be marked absent. You'll review grades before scoring.")) return;
+    const res = await fetch(`/api/rounds/${roundId}/force-close`, { method: "POST" });
+    if (res.ok) {
+      const data = await res.json();
+      router.push(`/rounds/${data.roundId}`);
+    } else {
+      await fetchLeague();
+    }
   };
 
   const pauseSeason = async (seasonId: string) => {

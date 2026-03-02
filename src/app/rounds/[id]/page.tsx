@@ -21,6 +21,8 @@ interface RoundData {
   atBatPlayerId: string | null;
   onDeckPlayerId: string | null;
   inTheHolePlayerId: string | null;
+  atBatAvgRating?: number | null;
+  atBatRatingCount?: number;
   question: {
     id: string;
     category: string;
@@ -52,6 +54,8 @@ interface RoundData {
     powerUpType: string | null;
     powerUpCost: number;
     powerUpData: string | null;
+    cheatSeekerData: string | null;
+    questionRating: number | null;
     leaguePlayer: {
       id: string;
       fakeNickname: string | null;
@@ -454,6 +458,7 @@ export default function RoundPage() {
             <QuestionSubmitForm
               roundId={round.id}
               leaguePlayerId={myPlayerId}
+              leagueId={league.id}
               onSubmitted={fetchRound}
             />
           )}
@@ -491,6 +496,7 @@ export default function RoundPage() {
                 category={round.question.category}
                 answerFormat={round.question.answerFormat}
                 answerDeadline={answerDeadline}
+                atBatAvgRating={round.atBatAvgRating}
                 onBetPlaced={fetchRound}
               />
             )}
@@ -582,6 +588,7 @@ export default function RoundPage() {
               <RoundResults
                 round={round}
                 myPlayerId={myPlayerId || null}
+                actAsPlayerId={actAsPlayerId}
               />
 
               {/* Game complete or next round link */}
@@ -709,6 +716,7 @@ export default function RoundPage() {
             <RoundResults
               round={previousRound}
               myPlayerId={myPlayerId || null}
+              actAsPlayerId={actAsPlayerId}
             />
           </div>
         )}

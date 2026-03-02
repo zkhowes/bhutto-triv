@@ -14,7 +14,7 @@ export async function POST(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { leaguePlayerId, selectedOption, freeTextAnswer } = await req.json();
+  const { leaguePlayerId, selectedOption, freeTextAnswer, cheatSeekerData } = await req.json();
   const roundId = params.id;
 
   // Verify player belongs to user (or commissioner acting as test player)
@@ -37,6 +37,7 @@ export async function POST(
     const result = await submitAnswer(roundId, leaguePlayerId, {
       selectedOption,
       freeTextAnswer,
+      cheatSeekerData: cheatSeekerData ? JSON.stringify(cheatSeekerData) : undefined,
     });
     return NextResponse.json(result);
   } catch (error) {

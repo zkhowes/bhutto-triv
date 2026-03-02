@@ -16,6 +16,8 @@ interface PlayerSeasonStats {
   isFirstSeason: boolean;
   prevSeasonAvgPlacement: number | null;
   prevSeasonTotalPoints: number | null;
+  avgQuestionRating: number;
+  totalQuestionsRated: number;
 }
 
 export async function generateSeasonAwards(seasonId: string): Promise<void> {
@@ -70,6 +72,8 @@ export async function generateSeasonAwards(seasonId: string): Promise<void> {
       isFirstSeason: !prevSeason,
       prevSeasonAvgPlacement: null,
       prevSeasonTotalPoints: null,
+      avgQuestionRating: 0,
+      totalQuestionsRated: 0,
     };
 
     let placementSum = 0;
@@ -156,6 +160,22 @@ export async function generateSeasonAwards(seasonId: string): Promise<void> {
         stats.isFirstSeason = true;
       }
     }
+
+    // Compute question quality rating for rounds where this player was at-bat
+    const ratingAgg = await prisma.roundAnswer.aggregate({
+      where: {
+        questionRating: { not: null },
+        round: {
+          atBatPlayerId: player.id,
+          status: "graded",
+          game: { seasonId },
+        },
+      },
+      _avg: { questionRating: true },
+      _count: { questionRating: true },
+    });
+    stats.totalQuestionsRated = ratingAgg._count.questionRating;
+    stats.avgQuestionRating = ratingAgg._avg.questionRating || 0;
 
     playerStats.set(player.id, stats);
   }
@@ -310,6 +330,22 @@ export async function generateSeasonAwards(seasonId: string): Promise<void> {
       playerId: rookie.leaguePlayerId,
       stat: `${rookie.totalF1Points} points in first season`,
       value: rookie.totalF1Points,
+    });
+  }
+
+  // Question Master - Highest avg question rating (min 3 rated questions)
+  const questionMasterCandidates = allStats.filter(
+    (s) => s.totalQuestionsRated >= 3
+  );
+  if (questionMasterCandidates.length > 0) {
+    const qm = questionMasterCandidates.reduce((best, s) =>
+      s.avgQuestionRating > best.avgQuestionRating ? s : best
+    );
+    awards.push({
+      awardType: "question_master",
+      playerId: qm.leaguePlayerId,
+      stat: `${qm.avgQuestionRating.toFixed(1)} avg rating (${qm.totalQuestionsRated} ratings)`,
+      value: qm.avgQuestionRating,
     });
   }
 

@@ -137,6 +137,8 @@ export async function GET(
       powerUpType: null,
       powerUpCost: 0,
       powerUpData: null,
+      cheatSeekerData: null,
+      questionRating: null,
       leaguePlayer: answer.leaguePlayer,
     };
   });
@@ -171,9 +173,32 @@ export async function GET(
     }
   }
 
+  // Compute at-bat player's historical avg question rating
+  let atBatAvgRating: number | null = null;
+  let atBatRatingCount = 0;
+  if (round.atBatPlayerId) {
+    const ratingAgg = await prisma.roundAnswer.aggregate({
+      where: {
+        questionRating: { not: null },
+        round: {
+          atBatPlayerId: round.atBatPlayerId,
+          status: "graded",
+        },
+      },
+      _avg: { questionRating: true },
+      _count: { questionRating: true },
+    });
+    atBatRatingCount = ratingAgg._count.questionRating;
+    if (atBatRatingCount >= 3) {
+      atBatAvgRating = ratingAgg._avg.questionRating;
+    }
+  }
+
   return NextResponse.json({
     ...round,
     question: questionData,
     answers: processedAnswers,
+    atBatAvgRating,
+    atBatRatingCount,
   });
 }

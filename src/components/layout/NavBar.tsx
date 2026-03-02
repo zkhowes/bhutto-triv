@@ -45,8 +45,16 @@ export default function NavBar() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [shortSha, setShortSha] = useState<string | null>(null);
   const notifRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    fetch("/api/version")
+      .then((r) => r.json())
+      .then((d) => setShortSha(d.shortSha ?? null))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!session?.user) return;
@@ -149,6 +157,14 @@ export default function NavBar() {
               </span>
             )}
           </Link>
+          {shortSha && (
+            <Link
+              href="/version"
+              className="text-[10px] font-mono text-[#606080] hover:text-[#a0a0b8] transition-colors ml-1"
+            >
+              {shortSha}
+            </Link>
+          )}
 
           {/* Desktop Nav */}
           <div className="hidden md:flex items-center gap-6">

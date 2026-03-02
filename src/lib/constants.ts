@@ -20,6 +20,8 @@ export const STARTING_POINTS = 20;
 
 export const SKIP_PENALTY_PERCENTAGE = 0.5;
 
+export const QUESTION_QUALITY_BONUS = 3;
+
 export const DEFAULT_SETTINGS = {
   gamesPerSeason: 3,
   maxPlayers: 10,
@@ -107,6 +109,11 @@ export const AWARD_TYPES = [
     key: "most_improved",
     label: "Most Improved",
     description: "Biggest placement improvement",
+  },
+  {
+    key: "question_master",
+    label: "Question Master",
+    description: "Highest question quality rating",
   },
 ] as const;
 

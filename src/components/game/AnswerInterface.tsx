@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import CountdownTimer from "./CountdownTimer";
 import { computePowerUpCost } from "@/lib/scoring";
 
@@ -66,6 +66,47 @@ export default function AnswerInterface({
   const canAffordPowerUp = availableAfterBet >= powerUpCost;
   const isAnswerPhase = roundStatus === "category_revealed";
 
+  // Cheat Seeker tracking
+  const tabSwitches = useRef(0);
+  const blurCount = useRef(0);
+  const timeAway = useRef(0);
+  const hiddenAt = useRef<number | null>(null);
+  const pasteDetected = useRef(false);
+
+  useEffect(() => {
+    if (!isAnswerPhase) return;
+
+    const onVisChange = () => {
+      if (document.hidden) {
+        tabSwitches.current++;
+        hiddenAt.current = Date.now();
+      } else if (hiddenAt.current) {
+        timeAway.current += Date.now() - hiddenAt.current;
+        hiddenAt.current = null;
+      }
+    };
+    const onBlur = () => { blurCount.current++; };
+    const onPaste = () => { pasteDetected.current = true; };
+
+    document.addEventListener("visibilitychange", onVisChange);
+    window.addEventListener("blur", onBlur);
+    document.addEventListener("paste", onPaste);
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisChange);
+      window.removeEventListener("blur", onBlur);
+      document.removeEventListener("paste", onPaste);
+    };
+  }, [isAnswerPhase]);
+
+  // Debug: help diagnose power-up visibility (visible in browser DevTools console)
+  console.log("[PowerUp]", {
+    visible: !powerUpUsed && isAnswerPhase && canAffordPowerUp,
+    powerUpUsed, isAnswerPhase, canAffordPowerUp,
+    playerPoints, betAmount, availableAfterBet, powerUpCost,
+    allActivePoints, roundStatus, answerFormat: question.answerFormat,
+  });
+
   const handleSubmit = async () => {
     if (isMultipleChoice && !selectedOption) {
       setError("Please select an answer");
@@ -98,6 +139,12 @@ export default function AnswerInterface({
             : isPriceIsRight
               ? priceAnswer.trim()
               : undefined,
+          cheatSeekerData: {
+            tabSwitches: tabSwitches.current,
+            timeAway: timeAway.current,
+            pasteDetected: pasteDetected.current,
+            blurCount: blurCount.current,
+          },
         }),
       });
 

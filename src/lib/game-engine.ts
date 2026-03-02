@@ -5,6 +5,7 @@ import {
   GAME_STATUS,
   SEASON_STATUS,
   SKIP_PENALTY_PERCENTAGE,
+  QUESTION_QUALITY_BONUS,
 } from "./constants";
 import { scoreRound, calculateAbsenteePenalty, getF1PointsForPlacement } from "./scoring";
 import {
@@ -271,6 +272,7 @@ export async function submitAnswer(
   answer: {
     selectedOption?: string;
     freeTextAnswer?: string;
+    cheatSeekerData?: string;
   }
 ): Promise<{ isCorrect: boolean | null; gradedBy: string | null }> {
   const roundAnswer = await prisma.roundAnswer.findUnique({
@@ -322,6 +324,7 @@ export async function submitAnswer(
       isCorrect,
       gradedBy,
       aiGradeCorrect: gradedBy === "ai" ? isCorrect : null,
+      cheatSeekerData: answer.cheatSeekerData || null,
     },
   });
 
@@ -618,15 +621,17 @@ export async function closeRound(roundId: string): Promise<void> {
       });
     }
 
+    // Award question quality bonus before finalizing
+    await awardQuestionQualityBonus(game.id);
+
     await prisma.game.update({
       where: { id: game.id },
       data: { status: GAME_STATUS.COMPLETED, completedAt: new Date() },
     });
 
-    // Mark all unread notifications for this game as read
-    await prisma.notification.updateMany({
-      where: { gameId: game.id, isRead: false },
-      data: { isRead: true },
+    // Delete all notifications for this completed game
+    await prisma.notification.deleteMany({
+      where: { gameId: game.id },
     });
 
     // Check if season should end
@@ -656,10 +661,9 @@ export async function closeRound(roundId: string): Promise<void> {
       (r) => r.number > round.number && !r.isCancelled && r.status === ROUND_STATUS.PENDING
     );
     if (nextRound) {
-      // Mark all unread notifications from the completed round as read
-      await prisma.notification.updateMany({
-        where: { roundId: round.id, isRead: false },
-        data: { isRead: true },
+      // Delete all notifications from the completed round
+      await prisma.notification.deleteMany({
+        where: { roundId: round.id },
       });
 
       await prisma.round.update({
@@ -838,6 +842,7 @@ export async function skipPlayerTurn(
           data: { totalF1Points: f1Points },
         });
       }
+      await awardQuestionQualityBonus(game.id);
       await prisma.game.update({
         where: { id: game.id },
         data: { status: GAME_STATUS.COMPLETED, completedAt: new Date() },
@@ -859,4 +864,53 @@ export async function skipPlayerTurn(
 
     return { cancelled: true };
   }
+}
+
+/**
+ * Award bonus F1 points to the player with the highest average question rating in a game.
+ * Called when a game completes.
+ */
+async function awardQuestionQualityBonus(gameId: string): Promise<void> {
+  // Get all graded rounds in this game with their at-bat players and ratings
+  const rounds = await prisma.round.findMany({
+    where: { gameId, status: ROUND_STATUS.GRADED, isCancelled: false },
+    select: {
+      atBatPlayerId: true,
+      answers: {
+        where: { questionRating: { not: null } },
+        select: { questionRating: true },
+      },
+    },
+  });
+
+  // Aggregate ratings by at-bat player
+  const playerRatings: Map<string, number[]> = new Map();
+  for (const round of rounds) {
+    if (!round.atBatPlayerId) continue;
+    const ratings = round.answers
+      .map((a) => a.questionRating)
+      .filter((r): r is number => r !== null);
+    if (ratings.length === 0) continue;
+    const existing = playerRatings.get(round.atBatPlayerId) || [];
+    playerRatings.set(round.atBatPlayerId, [...existing, ...ratings]);
+  }
+
+  // Find player with highest avg (min 1 rated round)
+  let bestPlayerId: string | null = null;
+  let bestAvg = 0;
+  playerRatings.forEach((ratings, playerId) => {
+    const avg = ratings.reduce((a, b) => a + b, 0) / ratings.length;
+    if (avg > bestAvg) {
+      bestAvg = avg;
+      bestPlayerId = playerId;
+    }
+  });
+
+  if (!bestPlayerId) return;
+
+  // Award bonus points
+  await prisma.gamePlayerState.updateMany({
+    where: { gameId, leaguePlayerId: bestPlayerId },
+    data: { totalF1Points: { increment: QUESTION_QUALITY_BONUS } },
+  });
 }
