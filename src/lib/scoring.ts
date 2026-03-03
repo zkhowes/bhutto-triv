@@ -170,6 +170,38 @@ export function computePowerUpCost(
 }
 
 /**
+ * Determine Price is Right winners.
+ * Rules:
+ *   1. All exact matches win.
+ *   2. If no exact match, all tied for closest-without-going-over win.
+ *   3. If every guess goes over, nobody wins.
+ * Returns the Set of winner IDs.
+ */
+export function determinePirWinners(
+  target: number,
+  guesses: Array<{ id: string; value: number }>
+): Set<string> {
+  const winnerIds = new Set<string>();
+  if (isNaN(target) || guesses.length === 0) return winnerIds;
+
+  const underOrEqual = guesses.filter((g) => g.value <= target);
+  if (underOrEqual.length === 0) return winnerIds;
+
+  const exactMatches = underOrEqual.filter((g) => g.value === target);
+  if (exactMatches.length > 0) {
+    exactMatches.forEach((g) => winnerIds.add(g.id));
+  } else {
+    const sorted = [...underOrEqual].sort((a, b) => b.value - a.value);
+    const closestValue = sorted[0].value;
+    sorted
+      .filter((g) => g.value === closestValue)
+      .forEach((g) => winnerIds.add(g.id));
+  }
+
+  return winnerIds;
+}
+
+/**
  * Calculate absentee penalty for missing a bet/answer
  */
 export function calculateAbsenteePenalty(

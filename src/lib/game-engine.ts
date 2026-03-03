@@ -7,7 +7,7 @@ import {
   SKIP_PENALTY_PERCENTAGE,
   QUESTION_QUALITY_BONUS,
 } from "./constants";
-import { scoreRound, calculateAbsenteePenalty, getF1PointsForPlacement } from "./scoring";
+import { scoreRound, calculateAbsenteePenalty, getF1PointsForPlacement, determinePirWinners } from "./scoring";
 import {
   notifyAtBat,
   notifyNewQuestion,
@@ -470,12 +470,11 @@ export async function closeRound(roundId: string): Promise<void> {
     },
   });
 
-  // Price is Right: determine winner (closest without going over) before scoring
+  // Price is Right: determine winners (closest without going over) before scoring
   if (round.question?.answerFormat === "price_is_right") {
     const target = parseFloat(round.question.correctAnswer ?? "NaN");
     if (!isNaN(target)) {
-      interface GuessEntry { id: string; value: number }
-      const guesses: GuessEntry[] = allAnswers
+      const guesses = allAnswers
         .filter((a) => !a.isAbsent)
         .map((a) => ({
           id: a.id,
@@ -483,19 +482,16 @@ export async function closeRound(roundId: string): Promise<void> {
         }))
         .filter((g) => !isNaN(g.value));
 
-      // Find exact match or closest without going over
-      const underOrEqual = guesses.filter((g) => g.value <= target);
-      const winnerId =
-        underOrEqual.length === 0
-          ? null
-          : underOrEqual.sort((a, b) => b.value - a.value)[0].id;
+      const winnerIds = determinePirWinners(target, guesses);
 
       for (const answer of allAnswers) {
         if (answer.isAbsent) continue;
+        // Respect manual overrides (gradedBy already set by creator/commissioner)
+        if (answer.gradedBy && answer.gradedBy !== "auto") continue;
         await prisma.roundAnswer.update({
           where: { id: answer.id },
           data: {
-            isCorrect: answer.id === winnerId,
+            isCorrect: winnerIds.has(answer.id),
             gradedBy: "auto",
           },
         });
