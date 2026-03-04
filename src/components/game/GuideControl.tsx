@@ -105,7 +105,7 @@ export default function GuideControl(props: GuideControlProps) {
     if (canStartNextGame && onStartNextGame) {
       return (
         <div className="card p-5 mb-6 text-center">
-          <p className="text-lg font-bold text-white mb-2">
+          <p className="text-lg font-bold text-[#e94560] mb-2">
             Game Complete
           </p>
           <button
@@ -122,7 +122,7 @@ export default function GuideControl(props: GuideControlProps) {
     if (gameStatus === "active" || gameStatus === "in_progress") {
       return (
         <div className="card p-5 mb-6 text-center">
-          <p className="text-lg font-bold text-white mb-2">
+          <p className="text-lg font-bold text-[#e94560] mb-2">
             Game is in progress
           </p>
           {gameId && (
@@ -222,7 +222,7 @@ export default function GuideControl(props: GuideControlProps) {
 
     return (
       <div className="card p-5 mb-6 text-center">
-        <p className="text-lg font-bold text-white mb-1">
+        <p className="text-lg font-bold text-[#e94560] mb-1">
           Round {round.number} Complete
         </p>
         <p className="text-sm text-[#a0a0b8]">
@@ -366,7 +366,7 @@ export default function GuideControl(props: GuideControlProps) {
   if (!isGraded && !isClosed && !isAtBat && hasAnswered) {
     return (
       <div className="card p-5 mb-6 text-center">
-        <p className="text-lg font-bold text-white mb-2">
+        <p className="text-lg font-bold text-[#e94560] mb-2">
           Answer Submitted!
         </p>
         <p className="text-[#a0a0b8]">

@@ -4,8 +4,9 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
 import NavBar from "@/components/layout/NavBar";
-import Link from "next/link";
 import QuestionPreviewCard from "@/components/question/QuestionPreviewCard";
+import Avatar from "@/components/ui/Avatar";
+import StarRating from "@/components/ui/StarRating";
 import type { WorkshopVariation, WorkshopResponse } from "@/lib/ai";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -32,6 +33,50 @@ interface Draft {
   useOnNextRound: boolean;
   updatedAt: string;
 }
+
+interface PastPlayerResult {
+  name: string;
+  avatarUrl: string | null;
+  isCorrect: boolean | null;
+  isAbsent: boolean;
+  pointsWon: number;
+  selectedOption: string | null;
+  freeTextAnswer: string | null;
+  betAmount: number | null;
+  placement: number | null;
+  fastestLap: boolean;
+  gradedBy: string | null;
+  powerUpType: string | null;
+  powerUpCost: number;
+  cheatSeekerData: string | null;
+  questionRating: number | null;
+}
+
+interface PastQuestion {
+  roundId: string;
+  roundNumber: number;
+  gameNumber: number;
+  seasonNumber: number;
+  leagueName: string;
+  leagueId: string;
+  question: {
+    category: string;
+    questionText: string;
+    answerFormat: string;
+    correctOption: string | null;
+    correctAnswer: string | null;
+    optionA: string | null;
+    optionB: string | null;
+    optionC: string | null;
+    optionD: string | null;
+  };
+  avgRating: number | null;
+  successRate: number | null;
+  createdAt: string;
+  playerResults: PastPlayerResult[];
+}
+
+type BankFilter = "all" | "drafts" | "past";
 
 const SUGGESTION_CHIPS = [
   "Geography challenge",
@@ -109,6 +154,15 @@ export default function WorkshopPage() {
   const [draftSaving, setDraftSaving] = useState(false);
   const [deletingDraftId, setDeletingDraftId] = useState<string | null>(null);
 
+  // Past questions state
+  const [pastQuestions, setPastQuestions] = useState<PastQuestion[]>([]);
+  const [pastLoading, setPastLoading] = useState(true);
+  const [expandedPastId, setExpandedPastId] = useState<string | null>(null);
+  const [savingPastId, setSavingPastId] = useState<string | null>(null);
+
+  // Filter state
+  const [bankFilter, setBankFilter] = useState<BankFilter>("all");
+
   useEffect(() => {
     if (status === "unauthenticated") router.push("/");
   }, [status, router]);
@@ -123,9 +177,22 @@ export default function WorkshopPage() {
     }
   }, []);
 
+  const loadPastQuestions = useCallback(async () => {
+    try {
+      const r = await fetch("/api/questions/history");
+      const data = await r.json();
+      setPastQuestions(Array.isArray(data.history) ? data.history : []);
+    } finally {
+      setPastLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    if (session?.user) loadDrafts();
-  }, [session, loadDrafts]);
+    if (session?.user) {
+      loadDrafts();
+      loadPastQuestions();
+    }
+  }, [session, loadDrafts, loadPastQuestions]);
 
   // ── Workshop actions ───────────────────────────────────────────────────────
 
@@ -343,7 +410,52 @@ export default function WorkshopPage() {
     }
   };
 
+  // ── Past question actions ──────────────────────────────────────────────────
+
+  const savePastToBank = async (pq: PastQuestion) => {
+    setSavingPastId(pq.roundId);
+    try {
+      const body: Record<string, unknown> = {
+        category: pq.question.category,
+        questionText: pq.question.questionText,
+        answerFormat: pq.question.answerFormat,
+      };
+      if (pq.question.answerFormat === "multiple_choice") {
+        body.optionA = pq.question.optionA;
+        body.optionB = pq.question.optionB;
+        body.optionC = pq.question.optionC;
+        body.optionD = pq.question.optionD;
+        body.correctOption = pq.question.correctOption;
+      } else {
+        body.correctAnswer = pq.question.correctAnswer;
+      }
+
+      await fetch("/api/questions/drafts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      await loadDrafts();
+    } finally {
+      setSavingPastId(null);
+    }
+  };
+
+  const getOptionText = (q: PastQuestion["question"], key: string | null): string => {
+    if (!key) return "";
+    const map: Record<string, string | null> = {
+      A: q.optionA,
+      B: q.optionB,
+      C: q.optionC,
+      D: q.optionD,
+    };
+    return map[key] || key;
+  };
+
   // ── Render ─────────────────────────────────────────────────────────────────
+
+  const bankLoading = draftsLoading || pastLoading;
+  const totalCount = drafts.length + pastQuestions.length;
 
   return (
     <div className="min-h-screen">
@@ -351,13 +463,10 @@ export default function WorkshopPage() {
       <div className="max-w-3xl mx-auto px-4 py-6 space-y-10">
         {/* ── Workshop ── */}
         <section>
-          <div className="flex items-center justify-between mb-1">
+          <div className="mb-1">
             <h1 className="text-xl font-bold text-white">
               Question Workshop
             </h1>
-            <Link href="/questions/history" className="btn-secondary text-xs">
-              Past Questions
-            </Link>
           </div>
           <p className="text-sm text-[#a0a0b8] mb-4">
             Tell the AI what kind of question you want and pick from 3 creative
@@ -594,27 +703,47 @@ export default function WorkshopPage() {
             <div>
               <h2 className="text-lg font-bold text-white">Question Bank</h2>
               <p className="text-sm text-[#a0a0b8]">
-                Saved questions ready for game day
+                Saved questions and past rounds
               </p>
             </div>
-            {!draftsLoading && drafts.length > 0 && (
+            {!bankLoading && totalCount > 0 && (
               <span className="text-sm text-[#666680]">
-                {drafts.length} question{drafts.length !== 1 ? "s" : ""}
+                {totalCount} question{totalCount !== 1 ? "s" : ""}
               </span>
             )}
           </div>
 
-          {draftsLoading ? (
+          {/* Filter tabs */}
+          {!bankLoading && totalCount > 0 && (
+            <div className="flex gap-2 mb-4">
+              {(["all", "drafts", "past"] as BankFilter[]).map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setBankFilter(f)}
+                  className={`text-xs px-3 py-1.5 rounded-full transition-all ${
+                    bankFilter === f
+                      ? "bg-[#e94560]/20 text-[#e94560] font-bold"
+                      : "bg-[#1e3a5f] text-[#a0a0b8] hover:text-white"
+                  }`}
+                >
+                  {f === "all" ? "All" : f === "drafts" ? `Drafts (${drafts.length})` : `Past (${pastQuestions.length})`}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {bankLoading ? (
             <div className="card p-8 text-center animate-pulse text-[#e94560]">
               Loading...
             </div>
-          ) : drafts.length === 0 ? (
+          ) : totalCount === 0 ? (
             <div className="card p-8 text-center text-[#666680]">
               <p>No saved questions yet. Use the workshop above to create some!</p>
             </div>
           ) : (
             <div className="space-y-3">
-              {drafts.map((draft) => {
+              {/* Draft questions */}
+              {(bankFilter === "all" || bankFilter === "drafts") && drafts.map((draft) => {
                 const isEditing = editingDraftId === draft.id;
 
                 return (
@@ -787,6 +916,155 @@ export default function WorkshopPage() {
                         )}
                       </div>
                     )}
+                  </div>
+                );
+              })}
+
+              {/* Past questions */}
+              {(bankFilter === "all" || bankFilter === "past") && pastQuestions.map((pq) => {
+                const isExpanded = expandedPastId === pq.roundId;
+
+                return (
+                  <div key={pq.roundId} className="space-y-2">
+                    <div className="card p-4">
+                      {/* Header badges */}
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 font-bold uppercase">
+                          Past
+                        </span>
+                        <span className="text-[10px] text-[#666680]">
+                          {pq.leagueName} &middot; S{pq.seasonNumber}G{pq.gameNumber}R{pq.roundNumber}
+                        </span>
+                        {pq.avgRating != null && (
+                          <span className="ml-auto flex items-center gap-1">
+                            <StarRating value={pq.avgRating} size="sm" />
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Question content */}
+                      <p className="text-xs text-[#a0a0b8] uppercase tracking-wider mb-0.5">
+                        {pq.question.category}
+                      </p>
+                      <p className="text-white text-sm font-medium mb-2">
+                        {pq.question.questionText}
+                      </p>
+
+                      {/* MC options if applicable */}
+                      {pq.question.answerFormat === "multiple_choice" && (
+                        <div className="space-y-1 mb-2">
+                          {(["A", "B", "C", "D"] as const).map((opt) => {
+                            const text = pq.question[`option${opt}` as keyof typeof pq.question];
+                            if (!text) return null;
+                            const isCorrect = pq.question.correctOption === opt;
+                            return (
+                              <div
+                                key={opt}
+                                className={`text-xs px-2 py-1 rounded ${
+                                  isCorrect
+                                    ? "bg-emerald-500/10 text-emerald-400"
+                                    : "text-[#a0a0b8]"
+                                }`}
+                              >
+                                {opt}. {text} {isCorrect && "  ✓"}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* Correct answer for non-MC */}
+                      {pq.question.answerFormat !== "multiple_choice" && pq.question.correctAnswer && (
+                        <p className="text-xs text-emerald-400 mb-2">
+                          Answer: {pq.question.correctAnswer}
+                        </p>
+                      )}
+
+                      {/* Stats + actions row */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3 text-xs text-[#666680]">
+                          {pq.successRate != null && (
+                            <span>{Math.round(pq.successRate * 100)}% correct</span>
+                          )}
+                          <span>{pq.playerResults.length} players</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setExpandedPastId(isExpanded ? null : pq.roundId)}
+                            className="text-xs px-2 py-1 rounded bg-[#1e3a5f] text-[#a0a0b8] hover:text-white transition-colors"
+                          >
+                            {isExpanded ? "Hide Answers" : "Player Answers"}
+                          </button>
+                          <button
+                            onClick={() => savePastToBank(pq)}
+                            disabled={savingPastId === pq.roundId}
+                            className="text-xs px-2 py-1 rounded bg-[#1e3a5f] text-[#a0a0b8] hover:text-white transition-colors"
+                          >
+                            {savingPastId === pq.roundId ? "Saving..." : "Save to Bank"}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Expanded player answers */}
+                      {isExpanded && (
+                        <div className="mt-3 pt-3 border-t border-[#1e3a5f] space-y-2">
+                          {[...pq.playerResults]
+                            .sort((a, b) => (a.placement || 999) - (b.placement || 999))
+                            .map((pr, i) => (
+                              <div
+                                key={i}
+                                className={`rounded-lg p-2 border text-xs ${
+                                  pr.isAbsent
+                                    ? "border-gray-500/30 bg-gray-500/5"
+                                    : pr.isCorrect
+                                      ? "border-emerald-500/30 bg-emerald-500/5"
+                                      : "border-red-500/30 bg-red-500/5"
+                                }`}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <Avatar src={pr.avatarUrl} name={pr.name} size="sm" />
+                                    <span className="text-white font-medium">{pr.name}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span
+                                      className={`font-bold ${
+                                        pr.pointsWon > 0
+                                          ? "text-emerald-400"
+                                          : pr.pointsWon < 0
+                                            ? "text-red-400"
+                                            : "text-[#666680]"
+                                      }`}
+                                    >
+                                      {pr.pointsWon > 0 ? "+" : ""}{pr.pointsWon}
+                                    </span>
+                                    {pr.isAbsent ? (
+                                      <span className="text-gray-400">Absent</span>
+                                    ) : pr.isCorrect ? (
+                                      <span className="text-emerald-400">&#10003;</span>
+                                    ) : (
+                                      <span className="text-red-400">&#10007;</span>
+                                    )}
+                                  </div>
+                                </div>
+                                {!pr.isAbsent && (
+                                  <p className="text-[#a0a0b8] mt-1 truncate">
+                                    {pq.question.answerFormat === "multiple_choice" && pr.selectedOption
+                                      ? `${pr.selectedOption}. ${getOptionText(pq.question, pr.selectedOption)}`
+                                      : pr.freeTextAnswer || "(no answer)"}
+                                    {pr.betAmount != null && (
+                                      <span className="text-[#666680] ml-2">Bet: {pr.betAmount}</span>
+                                    )}
+                                    {pr.fastestLap && (
+                                      <span className="text-purple-400 ml-1">Fastest</span>
+                                    )}
+                                  </p>
+                                )}
+                              </div>
+                            ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 );
               })}

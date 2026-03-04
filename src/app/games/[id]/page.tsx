@@ -332,9 +332,7 @@ export default function GamePage() {
     return "Not bet";
   };
 
-  const sortedStandings = [...game.playerStates].sort((a, b) =>
-    game.status === "completed" ? b.totalF1Points - a.totalF1Points : b.points - a.points
-  );
+  const sortedStandings = [...game.playerStates].sort((a, b) => b.points - a.points);
 
   // Build game chart data: cumulative points per round
   const buildGameChartData = () => {
@@ -418,7 +416,8 @@ export default function GamePage() {
         <LeagueHeader
           leagueId={league.id}
           leagueName={league.name}
-          showCommissioner={isCommissioner}
+          shareType="game"
+          shareEntityId={game.id}
         />
 
         {/* Game Control */}
@@ -430,6 +429,7 @@ export default function GamePage() {
           rounds={game.rounds}
           totalRounds={game.totalRounds}
           mode="game"
+          leagueId={league.id}
           battingOrder={battingOrder}
           selectedRoundId={selectedRoundId}
           onRoundSelect={handleRoundSelect}
@@ -475,7 +475,7 @@ export default function GamePage() {
         {/* Score and Standings - Round Scorecard */}
         <div className="card p-5 mb-6">
           <h2 className="text-sm font-semibold text-[#a0a0b8] uppercase tracking-wider mb-4">
-            {game.status === "completed" ? "Final Standings" : "Round Scorecard"}
+            Game Scorecard
           </h2>
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -534,7 +534,7 @@ export default function GamePage() {
                     )}
                     <td className="py-3 text-right">
                       <span className="font-mono font-bold text-[#fbbf24]">
-                        {game.status === "completed" ? ps.totalF1Points : ps.points}
+                        {ps.points}
                       </span>
                     </td>
                   </tr>

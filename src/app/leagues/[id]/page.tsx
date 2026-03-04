@@ -59,6 +59,7 @@ interface LeagueData {
     avatarUrl: string | null;
     totalF1Points: number;
     gamesPlayed: number;
+    lastGameF1Points: number;
   }>;
   seasonChartData: Array<Record<string, number>>;
 }
@@ -191,13 +192,13 @@ export default function LeagueDetailPage() {
   // Build top 3 players for GameControl play control
   const topPlayers = currentGame?.playerStates
     ? [...currentGame.playerStates]
-        .sort((a, b) => (currentGame.status === "completed" ? b.totalF1Points - a.totalF1Points : b.points - a.points))
+        .sort((a, b) => b.points - a.points)
         .slice(0, 3)
         .map((ps) => ({
           leaguePlayerId: ps.leaguePlayerId,
           nickname: ps.leaguePlayer.fakeNickname || ps.leaguePlayer.user.nickname,
           avatarUrl: ps.leaguePlayer.user.avatarUrl || ps.leaguePlayer.user.image,
-          points: currentGame.status === "completed" ? ps.totalF1Points : ps.points,
+          points: ps.points,
         }))
     : [];
 
@@ -209,19 +210,7 @@ export default function LeagueDetailPage() {
         <LeagueHeader
           leagueId={leagueId}
           leagueName={league.name}
-          showCommissioner={isCommissioner}
         />
-
-        {/* Subtitle */}
-        <p className="text-[#a0a0b8] text-sm -mt-4 mb-6">
-          {league.players.length}/{league.maxPlayers} players
-          {currentSeason && ` \u00b7 Season ${currentSeason.number}`}
-          {league.type === "test" && (
-            <span className="ml-2 badge bg-purple-500/20 text-purple-400">
-              Test Mode
-            </span>
-          )}
-        </p>
 
         {/* Completed Season - Champion Display */}
         {currentSeason?.status === "completed" && league.seasonStandings.length > 0 && (
@@ -444,6 +433,7 @@ export default function LeagueDetailPage() {
             rounds={currentGame.rounds}
             totalRounds={currentGame.totalRounds}
             mode="league"
+            leagueId={leagueId}
             topPlayers={topPlayers}
             actAsParam={actAsParam}
           />
@@ -501,6 +491,11 @@ export default function LeagueDetailPage() {
                   <span className="text-sm font-mono text-[#fbbf24]">
                     {ps.totalF1Points} pts
                   </span>
+                  {ps.lastGameF1Points > 0 && (
+                    <span className="text-xs text-emerald-400 font-mono">
+                      (+{ps.lastGameF1Points})
+                    </span>
+                  )}
                   <span className="text-xs text-[#a0a0b8]">
                     {ps.gamesPlayed} games
                   </span>

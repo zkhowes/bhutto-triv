@@ -74,6 +74,7 @@ export async function GET(
     avatarUrl: string | null;
     totalF1Points: number;
     gamesPlayed: number;
+    lastGameF1Points: number;
   }> = [];
   let seasonChartData: Array<Record<string, number>> = [];
 
@@ -98,12 +99,14 @@ export async function GET(
 
     if (allSeasonGames.length > 0) {
       // Aggregate F1 points per player across all completed games
-      const playerTotals: Record<string, { nickname: string; avatarUrl: string | null; totalF1Points: number; gamesPlayed: number }> = {};
+      const playerTotals: Record<string, { nickname: string; avatarUrl: string | null; totalF1Points: number; gamesPlayed: number; lastGameF1Points: number }> = {};
       // Track cumulative points per game for chart
       const cumulativePoints: Record<string, number> = {};
+      const lastGame = allSeasonGames[allSeasonGames.length - 1];
 
       for (const game of allSeasonGames) {
         const chartPoint: Record<string, number> = { game: game.number };
+        const isLastGame = game.id === lastGame?.id;
 
         for (const ps of game.playerStates) {
           const pid = ps.leaguePlayerId;
@@ -111,11 +114,14 @@ export async function GET(
           const avatarUrl = ps.leaguePlayer.user.avatarUrl || ps.leaguePlayer.user.image;
 
           if (!playerTotals[pid]) {
-            playerTotals[pid] = { nickname, avatarUrl, totalF1Points: 0, gamesPlayed: 0 };
+            playerTotals[pid] = { nickname, avatarUrl, totalF1Points: 0, gamesPlayed: 0, lastGameF1Points: 0 };
             cumulativePoints[pid] = 0;
           }
           playerTotals[pid].totalF1Points += ps.totalF1Points;
           playerTotals[pid].gamesPlayed++;
+          if (isLastGame) {
+            playerTotals[pid].lastGameF1Points = ps.totalF1Points;
+          }
           cumulativePoints[pid] += ps.totalF1Points;
           chartPoint[nickname] = cumulativePoints[pid];
         }

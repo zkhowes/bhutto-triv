@@ -30,6 +30,10 @@ export async function GET() {
           answerFormat: true,
           correctOption: true,
           correctAnswer: true,
+          optionA: true,
+          optionB: true,
+          optionC: true,
+          optionD: true,
         },
       },
       answers: {
@@ -99,28 +103,19 @@ export async function GET() {
         isCorrect: a.isCorrect,
         isAbsent: a.isAbsent,
         pointsWon: a.pointsWon,
-        cheatSeekerHeat: a.cheatSeekerData ? getHeatLabel(a.cheatSeekerData) : null,
+        selectedOption: a.selectedOption,
+        freeTextAnswer: a.freeTextAnswer,
+        betAmount: a.betAmount,
+        placement: a.placement,
+        fastestLap: a.fastestLap,
+        gradedBy: a.gradedBy,
+        powerUpType: a.powerUpType,
+        powerUpCost: a.powerUpCost,
+        cheatSeekerData: a.cheatSeekerData,
         questionRating: a.questionRating,
       })),
     };
   });
 
   return NextResponse.json({ history });
-}
-
-function getHeatLabel(raw: string): string | null {
-  try {
-    const data = JSON.parse(raw);
-    const score =
-      (data.tabSwitches ?? 0) * 2 +
-      (data.blurCount ?? 0) * 1 +
-      (data.pasteDetected ? 3 : 0) +
-      ((data.timeAway ?? 0) > 10000 ? 1 : 0);
-    if (score === 0) return null;
-    if (score <= 2) return "Warm";
-    if (score <= 5) return "Hot";
-    return "On Fire";
-  } catch {
-    return null;
-  }
 }

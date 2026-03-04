@@ -28,6 +28,7 @@ interface GameControlProps {
   rounds: RoundInfo[];
   totalRounds: number;
   mode: "league" | "game";
+  leagueId?: string;
   // League mode: top 3 players
   topPlayers?: PlayerSnippet[];
   // Game mode: batting order
@@ -51,6 +52,7 @@ export default function GameControl({
   rounds,
   totalRounds,
   mode,
+  leagueId,
   topPlayers,
   battingOrder,
   selectedRoundId,
@@ -66,25 +68,44 @@ export default function GameControl({
     <div className="round-card p-5 mb-6">
       {/* Season X Game Y header */}
       <div className="text-center mb-4">
-        {mode === "league" ? (
-          <Link href={`/games/${gameId}${actAsParam}`} className="hover:opacity-80 transition-opacity">
-            <p className="text-xs text-[#a0a0b8] uppercase tracking-[0.3em]">
-              Season {seasonNumber} Game {gameNumber}
-            </p>
-          </Link>
-        ) : (
-          <p className="text-xs text-[#a0a0b8] uppercase tracking-[0.3em]">
-            Season {seasonNumber} Game {gameNumber}
-          </p>
-        )}
+        <p className="text-sm uppercase tracking-[0.3em]">
+          {mode === "league" ? (
+            <>
+              <span className="text-[#e94560] font-bold">Season </span>
+              <span className="text-white font-bold">{seasonNumber}</span>
+              <span className="text-[#a0a0b8] mx-2">&middot;</span>
+              <Link href={`/games/${gameId}${actAsParam}`} className="hover:opacity-80 transition-opacity">
+                <span className="text-[#e94560] font-bold">Game </span>
+                <span className="text-white font-bold">{gameNumber}</span>
+              </Link>
+            </>
+          ) : (
+            <>
+              {leagueId ? (
+                <Link href={`/leagues/${leagueId}`} className="hover:opacity-80 transition-opacity">
+                  <span className="text-[#e94560] font-bold">Season </span>
+                  <span className="text-white font-bold">{seasonNumber}</span>
+                </Link>
+              ) : (
+                <>
+                  <span className="text-[#e94560] font-bold">Season </span>
+                  <span className="text-white font-bold">{seasonNumber}</span>
+                </>
+              )}
+              <span className="text-[#a0a0b8] mx-2">&middot;</span>
+              <span className="text-[#e94560] font-bold">Game </span>
+              <span className="text-white font-bold">{gameNumber}</span>
+            </>
+          )}
+        </p>
       </div>
 
       {/* Round indicator circles */}
       <div className="mb-4">
-        <p className="text-[10px] text-[#e94560] uppercase tracking-wider font-bold mb-2">
+        <p className="text-[10px] text-[#e94560] uppercase tracking-wider font-bold mb-2 text-center">
           Rounds
         </p>
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-1.5 justify-center">
           {rounds.map((r) =>
             r.isCancelled ? (
               <div
@@ -135,7 +156,7 @@ export default function GameControl({
       {mode === "league" && topPlayers && topPlayers.length > 0 && (
         <div className="border-t border-[#1e3a5f] pt-3">
           <p className="text-[10px] text-[#e94560] uppercase tracking-wider font-bold mb-2">
-            Top {Math.min(topPlayers.length, 3)} in points and their scores
+            Top 3
           </p>
           <div className="space-y-1.5">
             {topPlayers.slice(0, 3).map((p, i) => (
