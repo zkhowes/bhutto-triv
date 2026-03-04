@@ -35,6 +35,7 @@ interface LeagueInfo {
   absenteePenaltyType: string;
   lightningMode: boolean;
   notificationMode: string;
+  inviteCode: string;
   myRole: string | null;
   players: Player[];
   seasons: Array<{
@@ -66,6 +67,7 @@ export default function CommissionerPage() {
     "players"
   );
   const [transferTo, setTransferTo] = useState("");
+  const [inviteCopied, setInviteCopied] = useState(false);
 
   const fetchLeague = useCallback(async () => {
     try {
@@ -269,6 +271,30 @@ export default function CommissionerPage() {
         {/* Players Tab */}
         {tab === "players" && (
           <div className="space-y-4">
+            {/* Invite Code */}
+            <div className="card p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-[#a0a0b8] uppercase tracking-wider">
+                    Invite Code
+                  </p>
+                  <p className="text-lg font-mono font-bold text-white mt-0.5">
+                    {league.inviteCode}
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(league.inviteCode);
+                    setInviteCopied(true);
+                    setTimeout(() => setInviteCopied(false), 2000);
+                  }}
+                  className="btn-secondary text-sm"
+                >
+                  {inviteCopied ? "Copied!" : "Copy"}
+                </button>
+              </div>
+            </div>
+
             <div className="card p-5">
               <h2 className="text-sm font-semibold text-[#a0a0b8] uppercase tracking-wider mb-3">
                 Current Roster

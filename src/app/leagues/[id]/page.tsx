@@ -226,26 +226,6 @@ export default function LeagueDetailPage() {
           )}
         </div>
 
-        {/* Invite Code */}
-        <div className="card p-4 mb-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-[#a0a0b8] uppercase tracking-wider">
-                Invite Code
-              </p>
-              <p className="text-lg font-mono font-bold text-white mt-0.5">
-                {league.inviteCode}
-              </p>
-            </div>
-            <button
-              onClick={copyInviteCode}
-              className="btn-secondary text-sm"
-            >
-              {copied ? "Copied!" : "Copy"}
-            </button>
-          </div>
-        </div>
-
         {/* Completed Season - Champion Display */}
         {currentSeason?.status === "completed" && league.seasonStandings.length > 0 && (
           <div className="card p-6 mb-6 text-center bg-gradient-to-br from-[#fbbf24]/10 to-[#1a1a2e]">

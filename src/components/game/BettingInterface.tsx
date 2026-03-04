@@ -73,8 +73,8 @@ export default function BettingInterface({
           </span>
         )}
         {atBatAvgRating != null && (
-          <div className="mt-2">
-            <p className="text-xs text-[#666680] mb-0.5">question quality</p>
+          <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#fbbf24]/10 border border-[#fbbf24]/20">
+            <span className="text-xs text-[#fbbf24] font-medium">Player Rating</span>
             <StarRating value={atBatAvgRating} size="sm" showLabel />
           </div>
         )}

@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useCallback } from "react";
 import Avatar from "@/components/ui/Avatar";
 import StarRating from "@/components/ui/StarRating";
 
@@ -10,6 +9,11 @@ interface RoundResultsProps {
     number: number;
     funFact?: string | null;
     atBatPlayerId?: string | null;
+    questionScore?: {
+      avgRating: number | null;
+      successRate: number | null;
+      composite: number | null;
+    } | null;
     question: {
       category: string;
       questionText: string;
@@ -55,29 +59,7 @@ interface RoundResultsProps {
   actAsPlayerId?: string | null;
 }
 
-export default function RoundResults({ round, myPlayerId, actAsPlayerId }: RoundResultsProps) {
-  const [myRating, setMyRating] = useState<number>(
-    () => round.answers.find((a) => a.leaguePlayerId === myPlayerId)?.questionRating || 0
-  );
-  const [ratingSubmitting, setRatingSubmitting] = useState(false);
-
-  const submitRating = useCallback(async (rating: number) => {
-    setMyRating(rating);
-    setRatingSubmitting(true);
-    try {
-      const actAsParam = actAsPlayerId ? `?actAs=${actAsPlayerId}` : "";
-      await fetch(`/api/rounds/${round.id}/rate${actAsParam}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rating }),
-      });
-    } catch {
-      // silently fail — rating is non-critical
-    } finally {
-      setRatingSubmitting(false);
-    }
-  }, [round.id, actAsPlayerId]);
-
+export default function RoundResults({ round, myPlayerId }: RoundResultsProps) {
   const isAtBat = myPlayerId === round.atBatPlayerId;
 
   const sortedAnswers = [...round.answers].sort(
@@ -199,21 +181,25 @@ export default function RoundResults({ round, myPlayerId, actAsPlayerId }: Round
         </div>
       )}
 
-      {/* Rate this question */}
-      {!isAtBat && myPlayerId && (
+      {/* Question Quality Score */}
+      {round.questionScore?.composite != null && (
         <div className="card p-4 text-center">
           <p className="text-xs text-[#a0a0b8] uppercase tracking-wider mb-2">
-            Rate this question
+            Question Score
           </p>
-          <StarRating
-            value={myRating}
-            onChange={ratingSubmitting ? undefined : submitRating}
-          />
-          {myRating > 0 && (
-            <p className="text-xs text-[#666680] mt-1">
-              You rated this {myRating}/5
-            </p>
-          )}
+          <div className="flex items-center justify-center gap-3">
+            <StarRating value={round.questionScore.composite} size="sm" showLabel />
+          </div>
+          <div className="flex items-center justify-center gap-4 mt-2 text-xs text-[#666680]">
+            {round.questionScore.avgRating != null && (
+              <span>Avg Rating: {round.questionScore.avgRating.toFixed(1)}/5</span>
+            )}
+            {round.questionScore.successRate != null && (
+              <span>
+                {Math.round(round.questionScore.successRate * 100)}% correct
+              </span>
+            )}
+          </div>
         </div>
       )}
 

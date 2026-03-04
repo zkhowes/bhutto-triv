@@ -3,7 +3,7 @@
 import { useSession, signOut } from "next-auth/react";
 import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import Avatar from "@/components/ui/Avatar";
 
 interface Notification {
@@ -41,12 +41,12 @@ function timeAgo(dateStr: string): string {
 export default function NavBar() {
   const { data: session } = useSession();
   const router = useRouter();
+  const pathname = usePathname();
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [notifOpen, setNotifOpen] = useState(false);
   const [shortSha, setShortSha] = useState<string | null>(null);
-  const notifRef = useRef<HTMLDivElement>(null);
+  const [commissionerLeagueId, setCommissionerLeagueId] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -93,12 +93,56 @@ export default function NavBar() {
     };
   }, [session]);
 
+  // Detect league context from pathname and check commissioner status
+  useEffect(() => {
+    if (!session?.user || !pathname) {
+      setCommissionerLeagueId(null);
+      return;
+    }
+
+    // Extract league ID from /leagues/[id], /games/[id], or /rounds/[id]
+    const leagueMatch = pathname.match(/^\/leagues\/([^/]+)/);
+    const gameMatch = pathname.match(/^\/games\/([^/]+)/);
+    const roundMatch = pathname.match(/^\/rounds\/([^/]+)/);
+
+    if (leagueMatch) {
+      const leagueId = leagueMatch[1];
+      fetch(`/api/leagues/${leagueId}`)
+        .then((r) => r.json())
+        .then((d) => setCommissionerLeagueId(d.myRole === "commissioner" ? leagueId : null))
+        .catch(() => setCommissionerLeagueId(null));
+    } else if (gameMatch) {
+      fetch(`/api/games/${gameMatch[1]}`)
+        .then((r) => r.json())
+        .then((d) => {
+          const leagueId = d.season?.league?.id;
+          if (!leagueId) { setCommissionerLeagueId(null); return; }
+          fetch(`/api/leagues/${leagueId}`)
+            .then((r) => r.json())
+            .then((ld) => setCommissionerLeagueId(ld.myRole === "commissioner" ? leagueId : null))
+            .catch(() => setCommissionerLeagueId(null));
+        })
+        .catch(() => setCommissionerLeagueId(null));
+    } else if (roundMatch) {
+      fetch(`/api/rounds/${roundMatch[1]}`)
+        .then((r) => r.json())
+        .then((d) => {
+          const leagueId = d.game?.season?.league?.id;
+          if (!leagueId) { setCommissionerLeagueId(null); return; }
+          fetch(`/api/leagues/${leagueId}`)
+            .then((r) => r.json())
+            .then((ld) => setCommissionerLeagueId(ld.myRole === "commissioner" ? leagueId : null))
+            .catch(() => setCommissionerLeagueId(null));
+        })
+        .catch(() => setCommissionerLeagueId(null));
+    } else {
+      setCommissionerLeagueId(null);
+    }
+  }, [session, pathname]);
+
   // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
-      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
-        setNotifOpen(false);
-      }
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setMenuOpen(false);
       }
@@ -107,8 +151,8 @@ export default function NavBar() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  const openNotifications = () => {
-    setNotifOpen((prev) => {
+  const openAvatarMenu = () => {
+    setMenuOpen((prev) => {
       if (!prev && unreadCount > 0) {
         fetch("/api/notifications", { method: "PUT", body: JSON.stringify({}) });
         setNotifications((n) => n.map((x) => ({ ...x, isRead: true })));
@@ -116,18 +160,14 @@ export default function NavBar() {
       }
       return !prev;
     });
-    setMenuOpen(false);
   };
 
   const handleNotificationClick = async (notif: Notification) => {
-    // Mark as read optimistically
     setNotifications((prev) =>
       prev.map((n) => (n.id === notif.id ? { ...n, isRead: true } : n))
     );
     setUnreadCount((prev) => Math.max(0, prev - (notif.isRead ? 0 : 1)));
-    setNotifOpen(false);
-
-    // Navigate via click-tracking URL (records the click server-side)
+    setMenuOpen(false);
     const clickUrl = `/api/notifications/click/${notif.id}`;
     router.push(clickUrl);
   };
@@ -198,38 +238,84 @@ export default function NavBar() {
 
           {/* Right side */}
           <div className="flex items-center gap-3">
-            {/* Notifications Bell */}
-            <div className="relative" ref={notifRef}>
-              <button
-                onClick={openNotifications}
-                className="relative p-2 text-[#a0a0b8] hover:text-white transition-colors"
-                aria-label="Notifications"
+            {/* Commissioner icon */}
+            {commissionerLeagueId && (
+              <Link
+                href={`/leagues/${commissionerLeagueId}/commissioner`}
+                className="flex items-center justify-center w-8 h-8 rounded-full bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 transition-colors font-bold text-sm"
+                title="Commissioner Tools"
               >
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
-                  />
-                </svg>
+                C
+              </Link>
+            )}
+
+            {/* Avatar with notification badge + dropdown */}
+            <div className="relative" ref={menuRef}>
+              <button
+                onClick={openAvatarMenu}
+                className="relative flex items-center gap-2"
+              >
+                <Avatar
+                  src={session.user.avatarUrl || session.user.image}
+                  name={session.user.nickname || session.user.name}
+                  size="sm"
+                />
                 {unreadCount > 0 && (
-                  <span className="notification-badge">{unreadCount > 99 ? "99+" : unreadCount}</span>
+                  <span className="notification-badge">
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </span>
                 )}
               </button>
 
-              {/* Notification Dropdown */}
-              {notifOpen && (
+              {menuOpen && (
                 <div className="absolute right-0 mt-2 w-80 card py-0 z-50 shadow-xl overflow-hidden">
-                  {/* Header */}
-                  <div className="flex items-center justify-between px-4 py-3 border-b border-[#1e3a5f]">
-                    <span className="text-sm font-semibold text-white">Notifications</span>
-                    {unreadCount > 0 && (
+                  {/* User info */}
+                  <div className="px-4 py-3 border-b border-[#1e3a5f]">
+                    <p className="text-sm font-medium text-white">
+                      {session.user.nickname || session.user.name}
+                    </p>
+                    <p className="text-xs text-[#a0a0b8]">
+                      {session.user.email}
+                    </p>
+                  </div>
+
+                  {/* Quick links */}
+                  <div className="border-b border-[#1e3a5f]">
+                    <Link
+                      href="/profile"
+                      className="block px-4 py-2 text-sm text-[#a0a0b8] hover:text-white hover:bg-[#1e3a5f]/50"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      Profile Settings
+                    </Link>
+                    <Link
+                      href="/questions/bank"
+                      className="block px-4 py-2 text-sm text-[#a0a0b8] hover:text-white hover:bg-[#1e3a5f]/50"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      Question Bank
+                    </Link>
+                    {/* Mobile-only nav links */}
+                    <Link
+                      href="/dashboard"
+                      className="block md:hidden px-4 py-2 text-sm text-[#a0a0b8] hover:text-white hover:bg-[#1e3a5f]/50"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      Dashboard
+                    </Link>
+                    <Link
+                      href="/questions/workshop"
+                      className="block md:hidden px-4 py-2 text-sm text-[#a0a0b8] hover:text-white hover:bg-[#1e3a5f]/50"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      Workshop
+                    </Link>
+                  </div>
+
+                  {/* Notifications section */}
+                  <div className="flex items-center justify-between px-4 py-2 border-b border-[#1e3a5f]">
+                    <span className="text-xs font-semibold text-[#a0a0b8] uppercase tracking-wider">Notifications</span>
+                    {notifications.some((n) => !n.isRead) && (
                       <button
                         onClick={markAllRead}
                         className="text-xs text-[#4fc3f7] hover:text-white transition-colors"
@@ -239,115 +325,61 @@ export default function NavBar() {
                     )}
                   </div>
 
-                  {/* List */}
-                  <div className="max-h-96 overflow-y-auto">
+                  <div className="max-h-64 overflow-y-auto">
                     {notifications.length === 0 ? (
-                      <div className="px-4 py-8 text-center text-[#a0a0b8] text-sm">
+                      <div className="px-4 py-6 text-center text-[#a0a0b8] text-xs">
                         No notifications yet
                       </div>
                     ) : (
-                      notifications.map((notif) => (
+                      notifications.slice(0, 5).map((notif) => (
                         <button
                           key={notif.id}
                           onClick={() => handleNotificationClick(notif)}
-                          className={`w-full text-left px-4 py-3 border-b border-[#1e3a5f]/50 hover:bg-[#1e3a5f]/30 transition-colors flex gap-3 ${
+                          className={`w-full text-left px-4 py-2.5 border-b border-[#1e3a5f]/50 hover:bg-[#1e3a5f]/30 transition-colors flex gap-2.5 ${
                             !notif.isRead ? "bg-[#1e3a5f]/20" : ""
                           }`}
                         >
-                          <span className="text-lg flex-shrink-0 mt-0.5">
-                            {TYPE_ICONS[notif.type] ?? "🔔"}
+                          <span className="text-sm flex-shrink-0 mt-0.5">
+                            {TYPE_ICONS[notif.type] ?? ""}
                           </span>
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-start justify-between gap-2">
-                              <p className={`text-sm font-medium leading-tight ${notif.isRead ? "text-[#a0a0b8]" : "text-white"}`}>
-                                {notif.title}
-                              </p>
-                              {!notif.isRead && (
-                                <span className="w-2 h-2 rounded-full bg-[#e94560] flex-shrink-0 mt-1" />
-                              )}
-                            </div>
-                            <p className="text-xs text-[#a0a0b8] mt-0.5 line-clamp-2">{notif.message}</p>
-                            <p className="text-xs text-[#606080] mt-1">{timeAgo(notif.createdAt)}</p>
+                            <p className={`text-xs font-medium leading-tight ${notif.isRead ? "text-[#a0a0b8]" : "text-white"}`}>
+                              {notif.title}
+                            </p>
+                            <p className="text-xs text-[#606080] mt-0.5">{timeAgo(notif.createdAt)}</p>
                           </div>
+                          {!notif.isRead && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#e94560] flex-shrink-0 mt-1.5" />
+                          )}
                         </button>
                       ))
                     )}
                   </div>
 
-                  {/* Footer */}
-                  <div className="border-t border-[#1e3a5f] px-4 py-2">
-                    <Link
-                      href="/notifications"
-                      onClick={() => setNotifOpen(false)}
-                      className="text-xs text-[#4fc3f7] hover:text-white transition-colors block text-center"
+                  {notifications.length > 5 && (
+                    <div className="border-t border-[#1e3a5f] px-4 py-2">
+                      <Link
+                        href="/notifications"
+                        onClick={() => setMenuOpen(false)}
+                        className="text-xs text-[#4fc3f7] hover:text-white transition-colors block text-center"
+                      >
+                        View all notifications
+                      </Link>
+                    </div>
+                  )}
+
+                  {/* Sign out */}
+                  <div className="border-t border-[#1e3a5f]">
+                    <button
+                      onClick={() => signOut({ callbackUrl: "/" })}
+                      className="block w-full text-left px-4 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-[#1e3a5f]/50"
                     >
-                      View all notifications →
-                    </Link>
+                      Sign Out
+                    </button>
                   </div>
                 </div>
               )}
             </div>
-
-            {/* Profile */}
-            <div className="relative" ref={menuRef}>
-              <button
-                onClick={() => { setMenuOpen(!menuOpen); setNotifOpen(false); }}
-                className="flex items-center gap-2"
-              >
-                <Avatar
-                  src={session.user.avatarUrl || session.user.image}
-                  name={session.user.nickname || session.user.name}
-                  size="sm"
-                />
-              </button>
-              {menuOpen && (
-                <div className="absolute right-0 mt-2 w-48 card py-2 z-50">
-                  <div className="px-4 py-2 border-b border-[#1e3a5f]">
-                    <p className="text-sm font-medium text-white">
-                      {session.user.nickname || session.user.name}
-                    </p>
-                    <p className="text-xs text-[#a0a0b8]">
-                      {session.user.email}
-                    </p>
-                  </div>
-                  <Link
-                    href="/profile"
-                    className="block px-4 py-2 text-sm text-[#a0a0b8] hover:text-white hover:bg-[#1e3a5f]/50"
-                    onClick={() => setMenuOpen(false)}
-                  >
-                    Profile Settings
-                  </Link>
-                  <Link
-                    href="/questions/bank"
-                    className="block px-4 py-2 text-sm text-[#a0a0b8] hover:text-white hover:bg-[#1e3a5f]/50"
-                    onClick={() => setMenuOpen(false)}
-                  >
-                    Question Bank
-                  </Link>
-                  <button
-                    onClick={() => signOut({ callbackUrl: "/" })}
-                    className="block w-full text-left px-4 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-[#1e3a5f]/50"
-                  >
-                    Sign Out
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Mobile menu button */}
-            <button
-              onClick={() => setMenuOpen(!menuOpen)}
-              className="md:hidden p-2 text-[#a0a0b8]"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 6h16M4 12h16M4 18h16"
-                />
-              </svg>
-            </button>
           </div>
         </div>
       </div>

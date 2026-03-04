@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { CATEGORIES } from "@/lib/constants";
+import WorkshopEmbed from "./WorkshopEmbed";
 
 interface QuestionSubmitFormProps {
   roundId: string;
@@ -46,11 +47,6 @@ export default function QuestionSubmitForm({
 
   // AI Workshop
   const [showWorkshop, setShowWorkshop] = useState(false);
-  const [chatMessages, setChatMessages] = useState<
-    Array<{ role: "user" | "assistant"; content: string }>
-  >([]);
-  const [chatInput, setChatInput] = useState("");
-  const [chatLoading, setChatLoading] = useState(false);
 
   // Difficulty check
   const [difficultyResult, setDifficultyResult] = useState<{
@@ -176,40 +172,6 @@ export default function QuestionSubmitForm({
     }
   };
 
-  const sendChatMessage = async () => {
-    if (!chatInput.trim()) return;
-    setChatLoading(true);
-    const newMessages = [
-      ...chatMessages,
-      { role: "user" as const, content: chatInput },
-    ];
-    setChatMessages(newMessages);
-    setChatInput("");
-
-    try {
-      const res = await fetch("/api/questions/workshop", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: newMessages }),
-      });
-      const data = await res.json();
-      setChatMessages([
-        ...newMessages,
-        { role: "assistant", content: data.response },
-      ]);
-    } catch {
-      setChatMessages([
-        ...newMessages,
-        {
-          role: "assistant",
-          content: "Sorry, I couldn't process that. Try again.",
-        },
-      ]);
-    } finally {
-      setChatLoading(false);
-    }
-  };
-
   const checkDifficulty = async () => {
     setDifficultyLoading(true);
     setDifficultyResult(null);
@@ -240,7 +202,7 @@ export default function QuestionSubmitForm({
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-lg font-bold text-[#e94560]">
-              You&apos;re At Bat!
+              You&apos;re Up!
             </h2>
             <p className="text-sm text-[#a0a0b8]">Submit today&apos;s question</p>
           </div>
@@ -254,54 +216,27 @@ export default function QuestionSubmitForm({
 
         {/* AI Workshop */}
         {showWorkshop && (
-          <div className="mb-6 card p-4 bg-[#0f0f23]">
-            <h3 className="text-sm font-semibold text-[#a0a0b8] mb-3">
-              AI Question Workshop
-            </h3>
-            <div className="max-h-60 overflow-y-auto space-y-3 mb-3">
-              {chatMessages.length === 0 && (
-                <p className="text-xs text-[#666680]">
-                  Ask the AI for help brainstorming questions, generating options,
-                  or refining ideas.
-                </p>
-              )}
-              {chatMessages.map((msg, i) => (
-                <div
-                  key={i}
-                  className={`text-sm p-3 rounded-lg ${
-                    msg.role === "user"
-                      ? "bg-[#e94560]/10 text-white ml-8"
-                      : "bg-[#1e3a5f] text-[#a0a0b8] mr-8"
-                  }`}
-                >
-                  {msg.content}
-                </div>
-              ))}
-              {chatLoading && (
-                <div className="text-xs text-[#666680] animate-pulse">
-                  Thinking...
-                </div>
-              )}
-            </div>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                className="input-field flex-1 text-sm"
-                placeholder="Ask for question ideas..."
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !chatLoading) sendChatMessage();
-                }}
-              />
-              <button
-                onClick={sendChatMessage}
-                disabled={chatLoading}
-                className="btn-primary text-sm"
-              >
-                Send
-              </button>
-            </div>
+          <div className="mb-6">
+            <WorkshopEmbed
+              onSelectQuestion={(q) => {
+                setCategory(q.category);
+                setQuestionText(q.questionText);
+                setAnswerFormat(q.answerFormat);
+                if (q.answerFormat === "multiple_choice") {
+                  setOptionA(q.optionA || "");
+                  setOptionB(q.optionB || "");
+                  setOptionC(q.optionC || "");
+                  setOptionD(q.optionD || "");
+                  setCorrectOption(q.correctOption || "");
+                } else {
+                  setCorrectAnswer(q.correctAnswer || "");
+                  if (q.acceptableAnswers?.length) {
+                    setAcceptableAnswers(q.acceptableAnswers.join(", "));
+                  }
+                }
+                setShowWorkshop(false);
+              }}
+            />
           </div>
         )}
 

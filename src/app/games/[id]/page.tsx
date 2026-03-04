@@ -241,7 +241,7 @@ export default function GamePage() {
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
                   <span className="text-[#e94560] font-bold text-xs w-16">
-                    AT BAT
+                    YOU'RE UP
                   </span>
                   <span className="text-white text-sm font-medium">
                     {getPlayerName(activeRound.atBatPlayerId)}
@@ -257,7 +257,7 @@ export default function GamePage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-blue-400 font-bold text-xs w-16">
-                    IN HOLE
+                    IN THE HOLE
                   </span>
                   <span className="text-[#a0a0b8] text-sm">
                     {getPlayerName(activeRound.inTheHolePlayerId)}

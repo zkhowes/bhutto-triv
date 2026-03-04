@@ -194,11 +194,39 @@ export async function GET(
     }
   }
 
+  // Compute question quality score for graded rounds
+  let questionScore: { avgRating: number | null; successRate: number | null; composite: number | null } | null = null;
+  if (round.status === "graded") {
+    const nonAtBatAnswers = round.answers.filter(
+      (a) => a.leaguePlayerId !== round.atBatPlayerId && !a.isAbsent
+    );
+    const ratings = nonAtBatAnswers
+      .map((a) => a.questionRating)
+      .filter((r): r is number => r !== null);
+    const avgRating = ratings.length > 0
+      ? ratings.reduce((s, r) => s + r, 0) / ratings.length
+      : null;
+    const correctCount = nonAtBatAnswers.filter((a) => a.isCorrect).length;
+    const successRate = nonAtBatAnswers.length > 0
+      ? correctCount / nonAtBatAnswers.length
+      : null;
+    // Composite: weighted blend of avg rating (0-5 scale) and success rate mapped to 0-5
+    // 70% rating, 30% difficulty balance (ideal ~50% success = 5, 0% or 100% = lower)
+    const difficultyScore = successRate !== null
+      ? 5 - Math.abs(successRate - 0.5) * 6
+      : null;
+    const composite = avgRating !== null && difficultyScore !== null
+      ? Math.round((avgRating * 0.7 + Math.max(0, difficultyScore) * 0.3) * 10) / 10
+      : avgRating;
+    questionScore = { avgRating, successRate, composite };
+  }
+
   return NextResponse.json({
     ...round,
     question: questionData,
     answers: processedAnswers,
     atBatAvgRating,
     atBatRatingCount,
+    questionScore,
   });
 }

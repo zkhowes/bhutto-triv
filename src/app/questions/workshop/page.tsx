@@ -4,6 +4,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
 import NavBar from "@/components/layout/NavBar";
+import Link from "next/link";
 import QuestionPreviewCard from "@/components/question/QuestionPreviewCard";
 import type { WorkshopVariation, WorkshopResponse } from "@/lib/ai";
 
@@ -350,9 +351,14 @@ export default function WorkshopPage() {
       <div className="max-w-3xl mx-auto px-4 py-6 space-y-10">
         {/* ── Workshop ── */}
         <section>
-          <h1 className="text-xl font-bold text-white mb-1">
-            Question Workshop
-          </h1>
+          <div className="flex items-center justify-between mb-1">
+            <h1 className="text-xl font-bold text-white">
+              Question Workshop
+            </h1>
+            <Link href="/questions/history" className="btn-secondary text-xs">
+              Past Questions
+            </Link>
+          </div>
           <p className="text-sm text-[#a0a0b8] mb-4">
             Tell the AI what kind of question you want and pick from 3 creative
             variations

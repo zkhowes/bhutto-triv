@@ -11,6 +11,7 @@ import AnswerInterface from "@/components/game/AnswerInterface";
 import RoundResults from "@/components/game/RoundResults";
 import GradingInterface from "@/components/game/GradingInterface";
 import Avatar from "@/components/ui/Avatar";
+import StarRating from "@/components/ui/StarRating";
 
 interface RoundData {
   id: string;
@@ -23,6 +24,11 @@ interface RoundData {
   inTheHolePlayerId: string | null;
   atBatAvgRating?: number | null;
   atBatRatingCount?: number;
+  questionScore?: {
+    avgRating: number | null;
+    successRate: number | null;
+    composite: number | null;
+  } | null;
   question: {
     id: string;
     category: string;
@@ -113,6 +119,8 @@ export default function RoundPage() {
   const [loading, setLoading] = useState(true);
   const [isCommissioner, setIsCommissioner] = useState(false);
   const [editingGrades, setEditingGrades] = useState(false);
+  const [postAnswerRating, setPostAnswerRating] = useState(0);
+  const [ratingSubmitted, setRatingSubmitted] = useState(false);
 
   const fetchRound = useCallback(async () => {
     try {
@@ -292,8 +300,8 @@ export default function RoundPage() {
   const getPlayerStatus = (answer: RoundData["answers"][0]) => {
     // At-bat player submitted the question, they don't bet/answer
     if (answer.leaguePlayerId === round.atBatPlayerId) {
-      if (isGraded) return { icon: "\u26BE", label: "At Bat", color: "text-[#e94560]" };
-      if (round.status === "awaiting_question") return { icon: "\u26BE", label: "At Bat", color: "text-[#e94560]" };
+      if (isGraded) return { icon: "\u26BE", label: "You're Up", color: "text-[#e94560]" };
+      if (round.status === "awaiting_question") return { icon: "\u26BE", label: "You're Up", color: "text-[#e94560]" };
       return { icon: "\u26BE", label: "Question Submitted", color: "text-[#e94560]" };
     }
     if (isGraded) {
@@ -407,7 +415,7 @@ export default function RoundPage() {
           {/* Batting order */}
           <div className="flex justify-center gap-6 mt-4 text-xs">
             <div>
-              <span className="text-[#e94560] font-bold">AT BAT: </span>
+              <span className="text-[#e94560] font-bold">YOU'RE UP: </span>
               <span className="text-white">
                 {getPlayerName(round.atBatPlayerId)}
               </span>
@@ -419,7 +427,7 @@ export default function RoundPage() {
               </span>
             </div>
             <div>
-              <span className="text-blue-400 font-bold">IN HOLE: </span>
+              <span className="text-blue-400 font-bold">IN THE HOLE: </span>
               <span className="text-[#a0a0b8]">
                 {getPlayerName(round.inTheHolePlayerId)}
               </span>
@@ -548,7 +556,7 @@ export default function RoundPage() {
           {!isGraded && !isAwaitingGrading && isAtBat && round.status !== "awaiting_question" && (
             <div className="card p-6 text-center">
               <p className="text-lg font-bold text-[#e94560] mb-2">
-                You&apos;re At Bat!
+                You&apos;re Up!
               </p>
               <p className="text-[#a0a0b8]">
                 You submitted the question for this round. Waiting for other players to bet and answer...
@@ -568,6 +576,33 @@ export default function RoundPage() {
               <p className="text-sm text-[#666680] mt-2">
                 Your bet: {myAnswer?.betAmount} points
               </p>
+
+              {/* Rate this question */}
+              {myPlayerId && (
+                <div className="mt-4 pt-4 border-t border-[#1e3a5f]">
+                  <p className="text-xs text-[#a0a0b8] uppercase tracking-wider mb-2">
+                    Rate this question
+                  </p>
+                  <StarRating
+                    value={postAnswerRating}
+                    onChange={ratingSubmitted ? undefined : async (rating) => {
+                      setPostAnswerRating(rating);
+                      setRatingSubmitted(true);
+                      const actAsParam = actAsPlayerId ? `?actAs=${actAsPlayerId}` : "";
+                      await fetch(`/api/rounds/${roundId}/rate${actAsParam}`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ rating }),
+                      }).catch(() => {});
+                    }}
+                  />
+                  {postAnswerRating > 0 && (
+                    <p className="text-xs text-[#666680] mt-1">
+                      You rated this {postAnswerRating}/5
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -656,7 +691,7 @@ export default function RoundPage() {
               );
               const playerStatus = ps.leaguePlayerId === round.atBatPlayerId
                 ? (round.status === "awaiting_question"
-                    ? { icon: "\u26BE", label: "At Bat", color: "text-[#e94560]" }
+                    ? { icon: "\u26BE", label: "You're Up", color: "text-[#e94560]" }
                     : { icon: "\u26BE", label: "Question Submitted", color: "text-[#e94560]" })
                 : ps.points === 0
                   ? { icon: "\uD83D\uDCA5", label: "Busted", color: "text-red-500" }
@@ -690,6 +725,14 @@ export default function RoundPage() {
                   <span className={`text-sm font-medium ${playerStatus.color}`}>
                     {playerStatus.icon} {playerStatus.label}
                   </span>
+                  {answer?.powerUpType && (
+                    <span
+                      className="text-xs text-amber-400"
+                      title={`Used: ${answer.powerUpType} (${answer.powerUpCost}pt)`}
+                    >
+                      {answer.powerUpType === "hint" ? "\uD83D\uDCA1" : answer.powerUpType === "elimination" ? "\u2702\uFE0F" : "\u2195\uFE0F"}
+                    </span>
+                  )}
                   {isGraded && answer?.fastestLap && (
                     <span className="text-xs text-purple-400">
                       &#9889; Fastest
