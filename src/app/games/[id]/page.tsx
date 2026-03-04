@@ -2,24 +2,38 @@
 
 import { useSession } from "next-auth/react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import NavBar from "@/components/layout/NavBar";
 import Link from "next/link";
 import Avatar from "@/components/ui/Avatar";
+import dynamic from "next/dynamic";
+import LeagueHeader from "@/components/game/LeagueHeader";
+import GameControl from "@/components/game/GameControl";
+import GuideControl from "@/components/game/GuideControl";
+import RoundControl from "@/components/game/RoundControl";
+import BoxScoreControl from "@/components/game/BoxScoreControl";
+
+const GameChart = dynamic(() => import("@/components/game/GameChart"), {
+  ssr: false,
+});
 
 interface GameData {
   id: string;
   number: number;
   status: string;
   totalRounds: number;
+  myRole: string | null;
+  myPlayerId: string | null;
   season: {
     id: string;
     number: number;
     league: {
       id: string;
       name: string;
+      type: string;
       dailyDeadline: string;
       deadlineTimezone: string;
+      answerTimerSeconds: number;
     };
   };
   rounds: Array<{
@@ -53,6 +67,99 @@ interface GameData {
   }>;
 }
 
+interface RoundData {
+  id: string;
+  number: number;
+  status: string;
+  funFact: string | null;
+  categoryRevealAt: string | null;
+  atBatPlayerId: string | null;
+  onDeckPlayerId: string | null;
+  inTheHolePlayerId: string | null;
+  atBatAvgRating?: number | null;
+  atBatRatingCount?: number;
+  questionScore?: {
+    avgRating: number | null;
+    successRate: number | null;
+    composite: number | null;
+  } | null;
+  question: {
+    id: string;
+    category: string;
+    questionText: string;
+    answerFormat: string;
+    optionA: string | null;
+    optionB: string | null;
+    optionC: string | null;
+    optionD: string | null;
+    correctOption: string | null;
+    correctAnswer: string | null;
+  } | null;
+  answers: Array<{
+    id: string;
+    leaguePlayerId: string;
+    userId: string;
+    betAmount: number | null;
+    betPlacedAt: string | null;
+    answeredAt: string | null;
+    selectedOption: string | null;
+    freeTextAnswer: string | null;
+    isCorrect: boolean | null;
+    gradedBy: string | null;
+    pointsWon: number;
+    f1Points: number;
+    placement: number | null;
+    fastestLap: boolean;
+    isAbsent: boolean;
+    powerUpType: string | null;
+    powerUpCost: number;
+    powerUpData: string | null;
+    cheatSeekerData: string | null;
+    questionRating: number | null;
+    leaguePlayer: {
+      id: string;
+      fakeNickname: string | null;
+      user: { id: string; nickname: string; avatarUrl: string | null; image: string | null };
+    };
+  }>;
+  game: {
+    id: string;
+    number: number;
+    status: string;
+    totalRounds: number;
+    season: {
+      id: string;
+      number: number;
+      league: {
+        id: string;
+        name: string;
+        type: string;
+        dailyDeadline: string;
+        deadlineTimezone: string;
+        answerTimerSeconds: number;
+      };
+    };
+    playerStates: Array<{
+      leaguePlayerId: string;
+      points: number;
+      totalF1Points: number;
+      leaguePlayer: {
+        id: string;
+        fakeNickname: string | null;
+        user: { id: string; nickname: string; avatarUrl: string | null; image: string | null };
+      };
+    }>;
+    battingOrder: Array<{
+      position: number;
+      leaguePlayer: {
+        id: string;
+        fakeNickname: string | null;
+        user: { id: string; nickname: string; avatarUrl: string | null; image: string | null };
+      };
+    }>;
+  };
+}
+
 export default function GamePage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -60,37 +167,89 @@ export default function GamePage() {
   const searchParams = useSearchParams();
   const gameId = params.id as string;
   const actAsPlayerId = searchParams.get("actAs");
+  const initialRoundId = searchParams.get("round");
   const actAsParam = actAsPlayerId ? `?actAs=${actAsPlayerId}` : "";
+
   const [game, setGame] = useState<GameData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isCommissioner, setIsCommissioner] = useState(false);
+  const [selectedRoundId, setSelectedRoundId] = useState<string | null>(initialRoundId);
+  const [roundDataCache, setRoundDataCache] = useState<Map<string, RoundData>>(new Map());
+  const prevActiveRoundIdRef = useRef<string | null>(null);
+
+  // Determine active round from game data
+  const getActiveRound = useCallback((gameData: GameData) => {
+    const nonCancelled = gameData.rounds.filter((r) => !r.isCancelled);
+    return (
+      nonCancelled.find((r) => r.status !== "pending" && r.status !== "graded") ||
+      nonCancelled[nonCancelled.length - 1] ||
+      gameData.rounds[gameData.rounds.length - 1]
+    );
+  }, []);
+
+  const fetchRoundData = useCallback(
+    async (roundId: string): Promise<RoundData | null> => {
+      try {
+        const roundActAs = actAsPlayerId ? `?actAs=${actAsPlayerId}` : "";
+        const res = await fetch(`/api/rounds/${roundId}${roundActAs}`);
+        if (!res.ok) return null;
+        const data = await res.json();
+        setRoundDataCache((prev) => new Map(prev).set(roundId, data));
+        return data;
+      } catch {
+        return null;
+      }
+    },
+    [actAsPlayerId]
+  );
 
   const fetchGame = useCallback(async () => {
     try {
       const res = await fetch(`/api/games/${gameId}`);
       if (!res.ok) throw new Error();
-      setGame(await res.json());
+      const gameData: GameData = await res.json();
+      setGame(gameData);
+
+      // Determine which round to fetch
+      const activeRound = getActiveRound(gameData);
+      const roundToFetch = selectedRoundId || activeRound?.id;
+
+      // Auto-progress: if active round changed from previous poll
+      if (activeRound && prevActiveRoundIdRef.current && prevActiveRoundIdRef.current !== activeRound.id) {
+        // Active round moved forward, auto-select it
+        setSelectedRoundId(activeRound.id);
+      }
+      prevActiveRoundIdRef.current = activeRound?.id || null;
+
+      // Default to active round if no selection
+      if (!selectedRoundId && activeRound) {
+        setSelectedRoundId(activeRound.id);
+      }
+
+      // Fetch round data
+      if (roundToFetch) {
+        await fetchRoundData(roundToFetch);
+      }
     } catch {
       router.push("/dashboard");
     } finally {
       setLoading(false);
     }
-  }, [gameId, router]);
+  }, [gameId, router, selectedRoundId, getActiveRound, fetchRoundData]);
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/");
     if (session?.user) fetchGame();
   }, [status, session, router, fetchGame]);
 
-  // Poll for updates every 90 seconds; stop for completed games; pause when tab hidden
+  // Poll every 45 seconds
   useEffect(() => {
     if (!session?.user || !game) return;
-    if (game.status === "completed") return; // terminal state, no more updates
+    if (game.status === "completed") return;
 
     let interval: ReturnType<typeof setInterval>;
 
     const startPolling = () => {
-      interval = setInterval(fetchGame, 90000);
+      interval = setInterval(fetchGame, 45000);
     };
 
     const handleVisibilityChange = () => {
@@ -110,17 +269,16 @@ export default function GamePage() {
     };
   }, [session, game, fetchGame]);
 
-  // Check if user is commissioner
-  useEffect(() => {
-    if (!game) return;
-    const leagueId = game.season.league.id;
-    fetch(`/api/leagues/${leagueId}`)
-      .then((res) => res.json())
-      .then((data) => {
-        setIsCommissioner(data.myRole === "commissioner");
-      })
-      .catch(() => setIsCommissioner(false));
-  }, [game?.season.league.id]);
+  // Handle round selection changes -- fetch data if not cached
+  const handleRoundSelect = useCallback(
+    async (roundId: string) => {
+      setSelectedRoundId(roundId);
+      if (!roundDataCache.has(roundId)) {
+        await fetchRoundData(roundId);
+      }
+    },
+    [roundDataCache, fetchRoundData]
+  );
 
   if (status === "loading" || loading || !game) {
     return (
@@ -133,179 +291,191 @@ export default function GamePage() {
     );
   }
 
-  const activeRound = game.rounds.find(
-    (r) =>
-      !r.isCancelled && r.status !== "pending" && r.status !== "graded"
-  ) || game.rounds.filter((r) => !r.isCancelled).pop() || game.rounds[game.rounds.length - 1];
+  const league = game.season.league;
+  const isCommissioner = game.myRole === "commissioner";
+  const activeRound = getActiveRound(game);
+  const currentRoundData = selectedRoundId ? roundDataCache.get(selectedRoundId) : null;
+
+  // Determine myPlayerId (from game API or actAs)
+  const myPlayerId = actAsPlayerId
+    ? (game.playerStates.find((ps) => ps.leaguePlayerId === actAsPlayerId)?.leaguePlayerId || null)
+    : game.myPlayerId;
+
+  const myPlayerState = game.playerStates.find((ps) => ps.leaguePlayerId === myPlayerId);
 
   const getPlayerName = (playerId: string | null) => {
     if (!playerId) return "TBD";
-    const bo = game.battingOrder.find(
-      (b) => b.leaguePlayer.id === playerId
-    );
-    return (
-      bo?.leaguePlayer.fakeNickname ||
-      bo?.leaguePlayer.user.nickname ||
-      "Unknown"
-    );
+    const bo = game.battingOrder.find((b) => b.leaguePlayer.id === playerId);
+    return bo?.leaguePlayer.fakeNickname || bo?.leaguePlayer.user.nickname || "Unknown";
+  };
+
+  // Build batting order for GameControl
+  const battingOrder = activeRound
+    ? {
+        youreUp: getPlayerName(activeRound.atBatPlayerId),
+        onDeck: getPlayerName(activeRound.onDeckPlayerId),
+        inTheHole: getPlayerName(activeRound.inTheHolePlayerId),
+      }
+    : undefined;
+
+  // Build scorecard data
+  const getPlayerRoundStatus = (leaguePlayerId: string): string => {
+    if (!currentRoundData) return "";
+    if (leaguePlayerId === currentRoundData.atBatPlayerId) {
+      return currentRoundData.status === "awaiting_question" ? "You're Up" : "Question Submitted";
+    }
+    const answer = currentRoundData.answers.find((a) => a.leaguePlayerId === leaguePlayerId);
+    if (!answer) return "Not bet";
+    if (answer.isAbsent) return "Missed";
+    if (answer.answeredAt) return "Answered";
+    if (answer.betPlacedAt) return `Bet: ${answer.betAmount}`;
+    return "Not bet";
   };
 
   const sortedStandings = [...game.playerStates].sort((a, b) =>
-    game.status === "completed"
-      ? b.totalF1Points - a.totalF1Points
-      : b.points - a.points
+    game.status === "completed" ? b.totalF1Points - a.totalF1Points : b.points - a.points
   );
+
+  // Build game chart data: cumulative points per round
+  const buildGameChartData = () => {
+    const gradedRounds = game.rounds
+      .filter((r) => !r.isCancelled && r.status === "graded")
+      .sort((a, b) => a.number - b.number);
+
+    if (gradedRounds.length < 2) return { data: [], playerNames: [] };
+
+    const playerNames = game.playerStates.map(
+      (ps) => ps.leaguePlayer.fakeNickname || ps.leaguePlayer.user.nickname
+    );
+
+    // We need round answer data from the cache
+    const data: Array<Record<string, number>> = [];
+    const cumulative: Record<string, number> = {};
+    playerNames.forEach((n) => (cumulative[n] = 0));
+
+    for (const r of gradedRounds) {
+      const rd = roundDataCache.get(r.id);
+      if (!rd) continue;
+      const point: Record<string, number> = { round: r.number };
+      for (const ps of game.playerStates) {
+        const name = ps.leaguePlayer.fakeNickname || ps.leaguePlayer.user.nickname;
+        const answer = rd.answers.find((a) => a.leaguePlayerId === ps.leaguePlayerId);
+        cumulative[name] = (cumulative[name] || 0) + (answer?.pointsWon || 0);
+        point[name] = cumulative[name];
+      }
+      data.push(point);
+    }
+
+    return { data, playerNames };
+  };
+
+  const chartInfo = buildGameChartData();
+
+  // Determine if we should show round results (RoundControl + BoxScoreControl)
+  const showRoundResults = currentRoundData && currentRoundData.status === "graded" && currentRoundData.question;
+
+  // Determine which round data to use for the guide (always the active round, not selected)
+  const activeRoundData = activeRound ? roundDataCache.get(activeRound.id) : null;
+  // Use active round for guide unless game is completed
+  const guideRoundData = game.status === "completed" ? currentRoundData : activeRoundData;
 
   return (
     <div className="min-h-screen">
       <NavBar />
       <div className="max-w-4xl mx-auto px-4 py-6">
-        {/* Breadcrumb */}
-        <div className="text-sm text-[#a0a0b8] mb-4">
-          <Link
-            href={`/leagues/${game.season.league.id}`}
-            className="hover:text-white"
-          >
-            {game.season.league.name}
-          </Link>
-          <span className="mx-2">&gt;</span>
-          <span className="text-white">
-            Season {game.season.number} &middot; Game {game.number}
-          </span>
-        </div>
-
-        {/* Round Card - Boxing style */}
-        <div className="round-card p-6 mb-6">
-          <div className="text-center">
-            <p className="text-xs text-[#a0a0b8] uppercase tracking-[0.3em] mb-1">
-              {game.status === "completed" ? "GAME COMPLETE" : "ROUND"}
-            </p>
-            {activeRound && game.status !== "completed" ? (
-              <>
-                <div className="flex items-center justify-center gap-4">
-                  <span className="round-card-number">
-                    {activeRound.number}
-                  </span>
-                  <span className="text-2xl text-[#a0a0b8]">of</span>
-                  <span className="text-4xl font-bold text-[#a0a0b8]">
-                    {game.totalRounds || game.rounds.filter((r) => !r.isCancelled).length}
-                  </span>
-                </div>
-                <div className="mt-3">
-                  <span
-                    className={`badge text-sm px-3 py-1 ${
-                      activeRound.status === "category_revealed"
-                        ? "bg-emerald-500/20 text-emerald-400"
-                        : activeRound.status === "awaiting_question"
-                          ? "bg-amber-500/20 text-amber-400"
-                          : "bg-blue-500/20 text-blue-400"
-                    }`}
-                  >
-                    {activeRound.status.replace(/_/g, " ").toUpperCase()}
-                  </span>
-                </div>
-                <Link
-                  href={`/rounds/${activeRound.id}${actAsParam}`}
-                  className="inline-block mt-3 btn-primary text-sm"
-                >
-                  Go to Round
-                </Link>
-              </>
-            ) : (
-              <p className="text-2xl font-bold text-[#fbbf24] mt-2">
-                Final Results
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* Commissioner Tools link */}
-        {isCommissioner && (
-          <div className="mb-4">
-            <Link
-              href={`/leagues/${game.season.league.id}/commissioner`}
-              className="btn-secondary text-sm w-full text-center block"
+        {/* Test mode banner */}
+        {league.type === "test" && (
+          <div className="card p-3 mb-4 border-purple-500/30 flex items-center justify-between gap-3">
+            <span className="text-xs text-purple-400 font-semibold flex-shrink-0">TEST MODE</span>
+            <select
+              value={actAsPlayerId || ""}
+              onChange={(e) => {
+                const newActAs = e.target.value;
+                const url = newActAs
+                  ? `/games/${gameId}?actAs=${newActAs}`
+                  : `/games/${gameId}`;
+                router.push(url);
+              }}
+              className="input-field text-sm flex-1 min-w-0"
             >
-              Commissioner Tools
+              <option value="">Commissioner (you)</option>
+              {game.playerStates.map((ps) => (
+                <option key={ps.leaguePlayerId} value={ps.leaguePlayerId}>
+                  {ps.leaguePlayer.fakeNickname || ps.leaguePlayer.user.nickname}
+                </option>
+              ))}
+            </select>
+            <Link
+              href={`/leagues/${league.id}`}
+              className="text-xs text-purple-400 hover:text-purple-300 flex-shrink-0"
+            >
+              &larr; League
             </Link>
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          {/* Batting Order */}
-          <div className="card p-4">
-            <h3 className="text-xs font-semibold text-[#a0a0b8] uppercase tracking-wider mb-3">
-              Batting Order
-            </h3>
-            {activeRound && (
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-[#e94560] font-bold text-xs w-16">
-                    YOU'RE UP
-                  </span>
-                  <span className="text-white text-sm font-medium">
-                    {getPlayerName(activeRound.atBatPlayerId)}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-amber-400 font-bold text-xs w-16">
-                    ON DECK
-                  </span>
-                  <span className="text-[#a0a0b8] text-sm">
-                    {getPlayerName(activeRound.onDeckPlayerId)}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-blue-400 font-bold text-xs w-16">
-                    IN THE HOLE
-                  </span>
-                  <span className="text-[#a0a0b8] text-sm">
-                    {getPlayerName(activeRound.inTheHolePlayerId)}
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
+        {/* League Header */}
+        <LeagueHeader
+          leagueId={league.id}
+          leagueName={league.name}
+          showCommissioner={isCommissioner}
+        />
 
-          {/* Game Stats */}
-          <div className="card p-4 col-span-2">
-            <h3 className="text-xs font-semibold text-[#a0a0b8] uppercase tracking-wider mb-3">
-              Rounds
-            </h3>
-            <div className="flex flex-wrap gap-2">
-              {game.rounds.map((r) =>
-                r.isCancelled ? (
-                  <div
-                    key={r.id}
-                    className="w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold bg-gray-800/50 text-gray-600 line-through cursor-not-allowed"
-                    title="Cancelled"
-                  >
-                    {r.number}
-                  </div>
-                ) : (
-                  <Link
-                    key={r.id}
-                    href={`/rounds/${r.id}${actAsParam}`}
-                    className={`w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold transition-colors ${
-                      r.status === "graded"
-                        ? "bg-emerald-500/20 text-emerald-400"
-                        : r.status === "pending"
-                          ? "bg-[#0f0f23] text-[#666680]"
-                          : "bg-[#e94560]/20 text-[#e94560] animate-pulse-slow"
-                    }`}
-                  >
-                    {r.number}
-                  </Link>
-                )
-              )}
-            </div>
-          </div>
-        </div>
+        {/* Game Control */}
+        <GameControl
+          seasonNumber={game.season.number}
+          gameNumber={game.number}
+          gameId={game.id}
+          gameStatus={game.status}
+          rounds={game.rounds}
+          totalRounds={game.totalRounds}
+          mode="game"
+          battingOrder={battingOrder}
+          selectedRoundId={selectedRoundId}
+          onRoundSelect={handleRoundSelect}
+          actAsParam={actAsParam}
+        />
 
-        {/* Leaderboard */}
-        <div className="card p-5">
+        {/* Guide Control */}
+        <GuideControl
+          mode="game"
+          round={guideRoundData || null}
+          myPlayerId={myPlayerId}
+          myPlayerState={myPlayerState ? { leaguePlayerId: myPlayerState.leaguePlayerId, points: myPlayerState.points, isEliminated: myPlayerState.isEliminated } : null}
+          allPlayerStates={game.playerStates.map((ps) => ({ leaguePlayerId: ps.leaguePlayerId, points: ps.points, isEliminated: ps.isEliminated }))}
+          isCommissioner={isCommissioner}
+          leagueId={league.id}
+          leagueType={league.type}
+          answerTimerSeconds={league.answerTimerSeconds}
+          actAsPlayerId={actAsPlayerId}
+          onRefresh={fetchGame}
+        />
+
+        {/* Round Control (graded round content) */}
+        {showRoundResults && currentRoundData && (
+          <div className="mb-6">
+            <RoundControl
+              round={currentRoundData}
+              myPlayerId={myPlayerId}
+            />
+          </div>
+        )}
+
+        {/* Box Score Control (collapsible) */}
+        {showRoundResults && currentRoundData && currentRoundData.question && (
+          <div className="mb-6">
+            <BoxScoreControl
+              answers={currentRoundData.answers}
+              question={currentRoundData.question}
+              myPlayerId={myPlayerId}
+            />
+          </div>
+        )}
+
+        {/* Score and Standings - Round Scorecard */}
+        <div className="card p-5 mb-6">
           <h2 className="text-sm font-semibold text-[#a0a0b8] uppercase tracking-wider mb-4">
-            Game Leaderboard
+            {game.status === "completed" ? "Final Standings" : "Round Scorecard"}
           </h2>
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -313,20 +483,18 @@ export default function GamePage() {
                 <tr className="text-left">
                   <th className="table-header pb-3 w-10">#</th>
                   <th className="table-header pb-3">Player</th>
-                  {game.status === "completed" && (
-                    <th className="table-header pb-3 text-right">
-                      Season Points
-                    </th>
+                  {game.status !== "completed" && currentRoundData && (
+                    <th className="table-header pb-3 text-right">Status</th>
                   )}
-                  <th className="table-header pb-3 text-right">
-                    Game Points
-                  </th>
-                  <th className="table-header pb-3 text-right">Status</th>
+                  <th className="table-header pb-3 text-right">Total</th>
                 </tr>
               </thead>
               <tbody>
                 {sortedStandings.map((ps, i) => (
-                  <tr key={ps.leaguePlayerId} className="table-row">
+                  <tr
+                    key={ps.leaguePlayerId}
+                    className={`table-row ${ps.leaguePlayerId === myPlayerId ? "bg-[#e94560]/5" : ""}`}
+                  >
                     <td className="py-3">
                       <span
                         className={`font-bold ${
@@ -350,29 +518,24 @@ export default function GamePage() {
                           size="sm"
                         />
                         <span className="text-white text-sm font-medium">
-                          {ps.leaguePlayer.fakeNickname ||
-                            ps.leaguePlayer.user.nickname}
+                          {ps.leaguePlayer.fakeNickname || ps.leaguePlayer.user.nickname}
+                          {ps.leaguePlayerId === myPlayerId && (
+                            <span className="text-xs text-[#e94560] ml-1">(you)</span>
+                          )}
                         </span>
                       </div>
                     </td>
-                    {game.status === "completed" && (
+                    {game.status !== "completed" && currentRoundData && (
                       <td className="py-3 text-right">
-                        <span className="font-mono font-bold text-[#fbbf24]">
-                          {ps.totalF1Points}
+                        <span className="text-xs text-[#a0a0b8]">
+                          {getPlayerRoundStatus(ps.leaguePlayerId)}
                         </span>
                       </td>
                     )}
                     <td className="py-3 text-right">
-                      <span className="font-mono text-[#a0a0b8]">
-                        {ps.points}
+                      <span className="font-mono font-bold text-[#fbbf24]">
+                        {game.status === "completed" ? ps.totalF1Points : ps.points}
                       </span>
-                    </td>
-                    <td className="py-3 text-right">
-                      {ps.isEliminated ? (
-                        <span className="badge-incorrect">Out</span>
-                      ) : (
-                        <span className="badge-correct">Active</span>
-                      )}
                     </td>
                   </tr>
                 ))}
@@ -380,6 +543,13 @@ export default function GamePage() {
             </table>
           </div>
         </div>
+
+        {/* Game Chart */}
+        {chartInfo.data.length >= 2 && (
+          <div className="mb-6">
+            <GameChart data={chartInfo.data} playerNames={chartInfo.playerNames} />
+          </div>
+        )}
       </div>
     </div>
   );

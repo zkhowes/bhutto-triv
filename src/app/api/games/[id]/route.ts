@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const session = await getServerSession(authOptions);
+
   const game = await prisma.game.findUnique({
     where: { id: params.id },
     include: {
@@ -14,8 +18,10 @@ export async function GET(
             select: {
               id: true,
               name: true,
+              type: true,
               dailyDeadline: true,
               deadlineTimezone: true,
+              answerTimerSeconds: true,
             },
           },
         },
@@ -69,5 +75,23 @@ export async function GET(
     return NextResponse.json({ error: "Game not found" }, { status: 404 });
   }
 
-  return NextResponse.json(game);
+  // Look up current user's role and player ID (avoids separate /api/leagues call)
+  let myRole: string | null = null;
+  let myPlayerId: string | null = null;
+  if (session?.user?.id) {
+    const leaguePlayer = await prisma.leaguePlayer.findFirst({
+      where: {
+        leagueId: game.season.league.id,
+        userId: session.user.id,
+        isActive: true,
+      },
+      select: { id: true, role: true },
+    });
+    if (leaguePlayer) {
+      myRole = leaguePlayer.role;
+      myPlayerId = leaguePlayer.id;
+    }
+  }
+
+  return NextResponse.json({ ...game, myRole, myPlayerId });
 }
