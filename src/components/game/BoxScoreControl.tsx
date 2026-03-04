@@ -94,7 +94,11 @@ export default function BoxScoreControl({
     try {
       const data: CheatSeekerData = JSON.parse(raw);
       const heat = getHeatLevel(data);
-      if (heat.score === 0) return null;
+      if (heat.score === 0) {
+        return (
+          <span className="text-xs text-blue-400/60">Clean</span>
+        );
+      }
       const signals: string[] = [];
       if (data.tabSwitches > 0) signals.push(`${data.tabSwitches} tab switch${data.tabSwitches > 1 ? "es" : ""}`);
       if (data.blurCount > 0) signals.push(`${data.blurCount} blur${data.blurCount > 1 ? "s" : ""}`);
@@ -110,8 +114,9 @@ export default function BoxScoreControl({
     }
   };
 
-  // Count cheat seekers with score > 0
-  const cheatSeekerCount = sortedAnswers.filter((a) => {
+  // Count players with cheat seeker data, and those flagged (score > 0)
+  const hasCheatSeekerData = sortedAnswers.some((a) => !!a.cheatSeekerData);
+  const cheatSeekerFlaggedCount = sortedAnswers.filter((a) => {
     if (!a.cheatSeekerData) return false;
     try {
       const data: CheatSeekerData = JSON.parse(a.cheatSeekerData);
@@ -134,15 +139,17 @@ export default function BoxScoreControl({
           <h3 className="text-sm font-semibold text-[#a0a0b8] uppercase tracking-wider">
             Box Scores
           </h3>
-          {cheatSeekerCount > 0 && (
+          {hasCheatSeekerData && (
             <span className="flex items-center gap-1">
-              <svg className="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className={`w-4 h-4 ${cheatSeekerFlaggedCount > 0 ? "text-amber-400" : "text-blue-400/60"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
               </svg>
-              <span className="text-xs font-bold text-amber-400 bg-amber-400/15 rounded-full px-1.5 py-0.5 min-w-[1.25rem] text-center">
-                {cheatSeekerCount}
-              </span>
+              {cheatSeekerFlaggedCount > 0 && (
+                <span className="text-xs font-bold text-amber-400 bg-amber-400/15 rounded-full px-1.5 py-0.5 min-w-[1.25rem] text-center">
+                  {cheatSeekerFlaggedCount}
+                </span>
+              )}
             </span>
           )}
         </div>

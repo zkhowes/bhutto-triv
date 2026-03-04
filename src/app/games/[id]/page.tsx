@@ -225,10 +225,18 @@ export default function GamePage() {
         setSelectedRoundId(activeRound.id);
       }
 
-      // Fetch round data
+      // Fetch round data for selected/active round
       if (roundToFetch) {
         await fetchRoundData(roundToFetch);
       }
+
+      // Fetch all graded rounds for the chart (in parallel)
+      const gradedRoundIds = gameData.rounds
+        .filter((r) => !r.isCancelled && r.status === "graded")
+        .map((r) => r.id);
+      await Promise.all(
+        gradedRoundIds.map((id) => fetchRoundData(id))
+      );
     } catch {
       router.push("/dashboard");
     } finally {
