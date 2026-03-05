@@ -6,6 +6,7 @@ import {
   SEASON_STATUS,
   SKIP_PENALTY_PERCENTAGE,
   QUESTION_QUALITY_BONUS,
+  isDefaultCategory,
 } from "./constants";
 import { scoreRound, calculateAbsenteePenalty, getF1PointsForPlacement, determinePirWinners } from "./scoring";
 import {
@@ -153,11 +154,20 @@ export async function submitQuestion(
 ): Promise<string> {
   const round = await prisma.round.findUnique({
     where: { id: roundId },
-    include: { question: true },
+    include: {
+      question: true,
+      game: { include: { season: true } },
+    },
   });
 
   if (!round) throw new Error("Round not found");
   if (round.question) throw new Error("Question already submitted for this round");
+
+  // Validate custom category
+  const trimmedCategory = questionData.category.trim();
+  if (!trimmedCategory || trimmedCategory.length > 50) {
+    throw new Error("Category must be 1-50 characters");
+  }
 
   const question = await prisma.question.create({
     data: {
@@ -178,6 +188,22 @@ export async function submitQuestion(
         : null,
     },
   });
+
+  // Upsert custom category if not a default
+  if (!isDefaultCategory(trimmedCategory)) {
+    const leagueId = round.game.season.leagueId;
+    await prisma.leagueCategory.upsert({
+      where: {
+        leagueId_name: { leagueId, name: trimmedCategory },
+      },
+      update: { usageCount: { increment: 1 } },
+      create: {
+        leagueId,
+        name: trimmedCategory,
+        createdById: questionData.leaguePlayerId,
+      },
+    });
+  }
 
   // Update round status
   await prisma.round.update({

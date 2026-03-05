@@ -120,7 +120,9 @@ Answer formats:
 - "free_text": correctAnswer string + acceptableAnswers array of alternate phrasings
 - "price_is_right": numeric correctAnswer (as string), no acceptableAnswers needed
 
-Categories: Geography, Sports, Politics, Science, History, Entertainment, Arts & Literature, Food & Drink, Technology, General Knowledge
+Default categories: Geography, Sports, Politics, Science, History, Entertainment, Arts & Literature, Food & Drink, Technology, General Knowledge
+
+Players can also create custom categories (e.g., "Historical Bad Asses", "Every Man Should Know"). Feel free to suggest custom categories when they fit the topic better than a default.
 
 Return this exact JSON structure:
 {
@@ -349,7 +351,8 @@ export async function parseQuestionFromText(text: string): Promise<{
           role: "user",
           content: `Parse this text into a structured trivia question and provide BOTH multiple choice and free text formats.
 
-Categories: Geography, Sports, Politics, Science, History, Entertainment, Arts & Literature, Food & Drink, Technology, General Knowledge
+Default categories: Geography, Sports, Politics, Science, History, Entertainment, Arts & Literature, Food & Drink, Technology, General Knowledge
+Custom categories are also allowed — use one if it fits the question better than a default.
 
 Text to parse:
 ${text}

@@ -108,6 +108,7 @@ model League {
   players        LeaguePlayer[]
   seasons        Season[]
   shareableLinks ShareableLink[]
+  customCategories LeagueCategory[]
 }
 
 model LeaguePlayer {
@@ -416,6 +417,21 @@ model AdminSession {
   userId    String   @unique
   expiresAt DateTime
   createdAt DateTime @default(now())
+}
+
+// ─── League Categories ──────────────────────────────────────────────────
+
+model LeagueCategory {
+  id          String   @id @default(cuid())
+  leagueId    String
+  name        String
+  createdById String   // LeaguePlayer id who first used it
+  usageCount  Int      @default(1)
+  createdAt   DateTime @default(now())
+
+  league      League   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+
+  @@unique([leagueId, name])
 }
 
 // ─── Admin Audit Log ────────────────────────────────────────────────────

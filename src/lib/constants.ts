@@ -13,6 +13,12 @@ export const CATEGORIES = [
 
 export type Category = (typeof CATEGORIES)[number];
 
+export function isDefaultCategory(name: string): boolean {
+  return CATEGORIES.some(
+    (c) => c.toLowerCase() === name.trim().toLowerCase()
+  );
+}
+
 // F1-style scoring for 10 players (standard scale)
 export const F1_POINTS_SCALE = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
 

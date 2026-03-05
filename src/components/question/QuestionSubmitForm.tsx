@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { CATEGORIES } from "@/lib/constants";
+import { CATEGORIES, isDefaultCategory } from "@/lib/constants";
 import WorkshopEmbed from "./WorkshopEmbed";
 
 interface QuestionSubmitFormProps {
@@ -24,6 +24,12 @@ interface Draft {
   correctAnswer: string | null;
 }
 
+interface CustomCategory {
+  id: string;
+  name: string;
+  usageCount: number;
+}
+
 export default function QuestionSubmitForm({
   roundId,
   leaguePlayerId,
@@ -31,6 +37,9 @@ export default function QuestionSubmitForm({
   onSubmitted,
 }: QuestionSubmitFormProps) {
   const [category, setCategory] = useState("");
+  const [customCategories, setCustomCategories] = useState<CustomCategory[]>([]);
+  const [newCategoryInput, setNewCategoryInput] = useState("");
+  const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
   const [questionText, setQuestionText] = useState("");
   const [answerFormat, setAnswerFormat] = useState("multiple_choice");
   const [optionA, setOptionA] = useState("");
@@ -85,6 +94,41 @@ export default function QuestionSubmitForm({
       })
       .catch(() => setDraftLoaded(true));
   }, [draftLoaded]);
+
+  // Load custom categories for this league
+  useEffect(() => {
+    if (!leagueId) return;
+    fetch(`/api/leagues/${leagueId}/categories`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.custom) setCustomCategories(data.custom);
+      })
+      .catch(() => {});
+  }, [leagueId]);
+
+  const handleNewCategorySubmit = () => {
+    const trimmed = newCategoryInput.trim();
+    if (!trimmed) return;
+    if (trimmed.length > 50) {
+      setError("Category name must be 50 characters or less");
+      return;
+    }
+    if (isDefaultCategory(trimmed)) {
+      setError(`"${trimmed}" matches a default category. Select it above.`);
+      return;
+    }
+    // Check if it matches an existing custom category (case-insensitive)
+    const existing = customCategories.find(
+      (c) => c.name.toLowerCase() === trimmed.toLowerCase()
+    );
+    if (existing) {
+      setCategory(existing.name);
+    } else {
+      setCategory(trimmed);
+    }
+    setNewCategoryInput("");
+    setShowNewCategoryInput(false);
+  };
 
   const handleSubmit = async () => {
     if (!category) {
@@ -261,6 +305,75 @@ export default function QuestionSubmitForm({
               </button>
             ))}
           </div>
+
+          {/* Custom Categories */}
+          {(customCategories.length > 0 || showNewCategoryInput || (category && !isDefaultCategory(category))) && (
+            <div className="mt-3 pt-3 border-t border-[#1e3a5f]">
+              <p className="text-xs text-[#666680] mb-2">Custom Categories</p>
+              <div className="flex flex-wrap gap-2">
+                {customCategories.map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setCategory(cat.name)}
+                    className={`text-sm py-1.5 px-3 rounded-lg border border-dashed transition-all ${
+                      category === cat.name
+                        ? "border-[#e94560] bg-[#e94560]/10 text-white"
+                        : "border-[#2a5a8f] text-[#a0a0b8] hover:border-[#4a7abf]"
+                    }`}
+                  >
+                    {cat.name}
+                  </button>
+                ))}
+                {/* Show selected custom category that isn't in the list yet */}
+                {category && !isDefaultCategory(category) && !customCategories.some((c) => c.name === category) && (
+                  <span className="text-sm py-1.5 px-3 rounded-lg border border-dashed border-[#e94560] bg-[#e94560]/10 text-white">
+                    {category}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* New custom category input */}
+          {!showNewCategoryInput ? (
+            <button
+              type="button"
+              onClick={() => setShowNewCategoryInput(true)}
+              className="mt-2 text-xs text-[#666680] hover:text-[#a0a0b8] transition-colors"
+            >
+              + Create new category...
+            </button>
+          ) : (
+            <div className="mt-2 flex gap-2">
+              <input
+                type="text"
+                value={newCategoryInput}
+                onChange={(e) => setNewCategoryInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleNewCategorySubmit();
+                  }
+                  if (e.key === "Escape") {
+                    setShowNewCategoryInput(false);
+                    setNewCategoryInput("");
+                  }
+                }}
+                className="input-field flex-1 text-sm"
+                placeholder="Category name (max 50 chars)"
+                maxLength={50}
+                autoFocus
+              />
+              <button
+                type="button"
+                onClick={handleNewCategorySubmit}
+                className="btn-secondary text-sm px-3"
+              >
+                Add
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Question Text */}
