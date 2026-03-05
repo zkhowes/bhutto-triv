@@ -476,6 +476,7 @@ export default function GamePage() {
               answers={currentRoundData.answers}
               question={currentRoundData.question}
               myPlayerId={myPlayerId}
+              categoryRevealAt={currentRoundData.categoryRevealAt}
             />
           </div>
         )}

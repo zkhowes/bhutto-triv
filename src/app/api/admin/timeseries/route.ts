@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { authenticatedSessions } from "@/lib/admin-auth";
+import { isAdminAuthenticated } from "@/lib/admin-auth";
 
 type TimeRange = "7d" | "30d" | "90d" | "all";
 type Metric =
@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (!authenticatedSessions.has(session.user.id)) {
+  if (!(await isAdminAuthenticated(session.user.id))) {
     return NextResponse.json(
       { error: "Super admin authentication required" },
       { status: 403 }

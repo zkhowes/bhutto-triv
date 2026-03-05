@@ -8,9 +8,13 @@ import { notifyAboutToBeSkipped } from "@/lib/notifications";
  * without a bet+answer when a round's deadline is within 30–90 minutes.
  */
 export async function GET(request: NextRequest) {
-  // Authenticate cron requests
+  // Authenticate cron requests — always require secret
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret) {
+    return NextResponse.json({ error: "Cron secret not configured" }, { status: 500 });
+  }
   const secret = request.headers.get("x-cron-secret") ?? request.nextUrl.searchParams.get("secret");
-  if (process.env.CRON_SECRET && secret !== process.env.CRON_SECRET) {
+  if (secret !== cronSecret) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

@@ -59,10 +59,13 @@ export async function GET(
     return NextResponse.json({ error: "League not found" }, { status: 404 });
   }
 
+  // Require authentication to view league data
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   // Check if user is a member
-  const isPlayer = session?.user?.id
-    ? league.players.some((p) => p.userId === session.user.id)
-    : false;
+  const isPlayer = league.players.some((p) => p.userId === session.user.id);
   const myPlayer = session?.user?.id
     ? league.players.find((p) => p.userId === session.user.id)
     : null;

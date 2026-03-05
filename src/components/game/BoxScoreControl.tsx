@@ -2,25 +2,7 @@
 
 import { useState } from "react";
 import Avatar from "@/components/ui/Avatar";
-
-interface CheatSeekerData {
-  tabSwitches: number;
-  timeAway: number;
-  pasteDetected: boolean;
-  blurCount: number;
-}
-
-function getHeatLevel(data: CheatSeekerData): { score: number; label: string; color: string } {
-  const score =
-    data.tabSwitches * 2 +
-    data.blurCount * 1 +
-    (data.pasteDetected ? 3 : 0) +
-    (data.timeAway > 10000 ? 1 : 0);
-  if (score === 0) return { score, label: "Cold", color: "text-blue-400" };
-  if (score <= 2) return { score, label: "Warm", color: "text-amber-400" };
-  if (score <= 5) return { score, label: "Hot", color: "text-orange-400" };
-  return { score, label: "On Fire", color: "text-red-400" };
-}
+import CheatSeekerEye, { parseCheatSeekerData, getHeatLevel } from "./CheatSeekerEye";
 
 interface BoxScoreControlProps {
   answers: Array<{
@@ -38,6 +20,7 @@ interface BoxScoreControlProps {
     powerUpType: string | null;
     powerUpCost: number;
     cheatSeekerData: string | null;
+    answeredAt?: string | null;
     leaguePlayer: {
       id: string;
       fakeNickname: string | null;
@@ -54,6 +37,7 @@ interface BoxScoreControlProps {
   };
   myPlayerId: string | null;
   defaultOpen?: boolean;
+  categoryRevealAt?: string | null;
 }
 
 export default function BoxScoreControl({
@@ -61,6 +45,7 @@ export default function BoxScoreControl({
   question,
   myPlayerId,
   defaultOpen = false,
+  categoryRevealAt,
 }: BoxScoreControlProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
@@ -89,41 +74,18 @@ export default function BoxScoreControl({
     return answer.freeTextAnswer || "(no answer)";
   };
 
-  const renderCheatSeeker = (raw: string | null) => {
-    if (!raw) return null;
-    try {
-      const data: CheatSeekerData = JSON.parse(raw);
-      const heat = getHeatLevel(data);
-      if (heat.score === 0) {
-        return (
-          <span className="text-xs text-blue-400/60">Clean</span>
-        );
-      }
-      const signals: string[] = [];
-      if (data.tabSwitches > 0) signals.push(`${data.tabSwitches} tab switch${data.tabSwitches > 1 ? "es" : ""}`);
-      if (data.blurCount > 0) signals.push(`${data.blurCount} blur${data.blurCount > 1 ? "s" : ""}`);
-      if (data.pasteDetected) signals.push("paste");
-      if (data.timeAway > 10000) signals.push(`${Math.round(data.timeAway / 1000)}s away`);
-      return (
-        <span className={`text-xs ${heat.color}`}>
-          {heat.label} {heat.label === "On Fire" ? "🔥" : ""} — {signals.join(", ")}
-        </span>
-      );
-    } catch {
-      return null;
-    }
+  const getAnswerTimeSeconds = (answer: typeof answers[0]): number | null => {
+    if (!categoryRevealAt || !answer.answeredAt) return null;
+    const start = new Date(categoryRevealAt).getTime();
+    const end = new Date(answer.answeredAt).getTime();
+    return Math.round((end - start) / 1000);
   };
 
-  // Count players with cheat seeker data, and those flagged (score > 0)
+  // Count players with cheat seeker data flagged (score > 0)
   const hasCheatSeekerData = sortedAnswers.some((a) => !!a.cheatSeekerData);
   const cheatSeekerFlaggedCount = sortedAnswers.filter((a) => {
-    if (!a.cheatSeekerData) return false;
-    try {
-      const data: CheatSeekerData = JSON.parse(a.cheatSeekerData);
-      return getHeatLevel(data).score > 0;
-    } catch {
-      return false;
-    }
+    const data = parseCheatSeekerData(a.cheatSeekerData);
+    return data && getHeatLevel(data).score > 0;
   }).length;
 
   if (sortedAnswers.length === 0) return null;
@@ -187,6 +149,10 @@ export default function BoxScoreControl({
                       {name}
                       {isMe && <span className="text-xs text-[#e94560] ml-1">(you)</span>}
                     </span>
+                    <CheatSeekerEye
+                      cheatSeekerData={answer.cheatSeekerData}
+                      answerTimeSeconds={getAnswerTimeSeconds(answer)}
+                    />
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     {/* Points */}
@@ -236,7 +202,6 @@ export default function BoxScoreControl({
                   {answer.gradedBy === "override" && (
                     <span className="text-xs text-amber-400">Grader overruled AI</span>
                   )}
-                  {renderCheatSeeker(answer.cheatSeekerData)}
                 </div>
               </div>
             );

@@ -28,7 +28,7 @@ export async function gradeAnswer(
   try {
     const anthropic = getClient();
     const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-haiku-4-5-20251001",
       max_tokens: 300,
       messages: [
         {
@@ -175,7 +175,7 @@ export async function workshopQuestion(
   try {
     const anthropic = getClient();
     const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-haiku-4-5-20251001",
       max_tokens: 1500,
       system: WORKSHOP_SYSTEM_PROMPT,
       messages: [{ role: "user", content: prompt }],
@@ -202,7 +202,7 @@ export async function editWorkshopQuestion(
   try {
     const anthropic = getClient();
     const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-haiku-4-5-20251001",
       max_tokens: 1500,
       system: WORKSHOP_SYSTEM_PROMPT,
       messages: [{
@@ -256,7 +256,7 @@ export async function generateFunFact(
   try {
     const anthropic = getClient();
     const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-haiku-4-5-20251001",
       max_tokens: 200,
       messages: [
         {
@@ -342,7 +342,7 @@ export async function parseQuestionFromText(text: string): Promise<{
   try {
     const anthropic = getClient();
     const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-haiku-4-5-20251001",
       max_tokens: 600,
       messages: [
         {
@@ -403,7 +403,7 @@ export async function generateHint(
   try {
     const anthropic = getClient();
     const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-haiku-4-5-20251001",
       max_tokens: 150,
       messages: [
         {
@@ -448,7 +448,7 @@ export async function eliminateWrongOption(
   try {
     const anthropic = getClient();
     const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-haiku-4-5-20251001",
       max_tokens: 50,
       messages: [
         {
@@ -506,7 +506,7 @@ export async function assessQuestionDifficulty(
     const anthropic = getClient();
     const categoryRate = leagueStats.categoryCorrectRates[leagueStats.category];
     const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-haiku-4-5-20251001",
       max_tokens: 300,
       messages: [
         {
@@ -560,7 +560,7 @@ export async function suggestLeagueNames(): Promise<string[]> {
   try {
     const anthropic = getClient();
     const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-haiku-4-5-20251001",
       max_tokens: 200,
       messages: [
         {

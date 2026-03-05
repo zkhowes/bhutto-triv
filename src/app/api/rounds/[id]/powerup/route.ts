@@ -147,9 +147,14 @@ export async function POST(
   let resultForClient: Record<string, unknown> = {};
 
   if (type === POWER_UP_TYPE.HINT) {
-    const acceptableAnswers = question.acceptableAnswers
-      ? JSON.parse(question.acceptableAnswers)
-      : [];
+    let acceptableAnswers: string[] = [];
+    try {
+      acceptableAnswers = question.acceptableAnswers
+        ? JSON.parse(question.acceptableAnswers)
+        : [];
+    } catch {
+      acceptableAnswers = [];
+    }
     const hint = await generateHint(
       question.questionText,
       question.correctAnswer || "",

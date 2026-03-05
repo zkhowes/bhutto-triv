@@ -56,9 +56,26 @@ export async function PUT(
     "lightningMode",
   ];
 
+  // Validate field types
+  const fieldValidators: Record<string, (v: unknown) => boolean> = {
+    gamesPerSeason: (v) => typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= 50,
+    dailyDeadline: (v) => typeof v === "string" && /^\d{2}:\d{2}$/.test(v),
+    deadlineTimezone: (v) => typeof v === "string" && v.length <= 50,
+    submissionWindowStart: (v) => typeof v === "string" || v === null,
+    submissionWindowEnd: (v) => typeof v === "string" || v === null,
+    categoryRevealTime: (v) => typeof v === "number" && v >= 0 && v <= 300,
+    answerTimerSeconds: (v) => typeof v === "number" && v >= 0 && v <= 600,
+    absenteePenaltyType: (v) => typeof v === "string" && ["none", "proportional", "fixed"].includes(v),
+    lightningMode: (v) => typeof v === "boolean",
+  };
+
   const updateData: Record<string, unknown> = {};
   for (const field of allowedFields) {
     if (body[field] !== undefined) {
+      const validator = fieldValidators[field];
+      if (validator && !validator(body[field])) {
+        return NextResponse.json({ error: `Invalid value for ${field}` }, { status: 400 });
+      }
       updateData[field] = body[field];
     }
   }

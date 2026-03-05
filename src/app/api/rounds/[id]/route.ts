@@ -87,6 +87,20 @@ export async function GET(
     return NextResponse.json({ error: "Round not found" }, { status: 404 });
   }
 
+  // Require league membership to view round data
+  const leagueId = round.game.season.league.id;
+  if (session?.user?.id) {
+    const membership = await prisma.leaguePlayer.findFirst({
+      where: { leagueId, userId: session.user.id, isActive: true },
+      select: { id: true },
+    });
+    if (!membership && !session.user.isSuperAdmin) {
+      return NextResponse.json({ error: "Not a member of this league" }, { status: 403 });
+    }
+  } else {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   // If round is not yet graded, hide some answer details for non-graded rounds
   const isGraded = round.status === "graded" || round.status === "closed";
   const userId = session?.user?.id;

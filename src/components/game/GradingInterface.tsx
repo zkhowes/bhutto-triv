@@ -2,13 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { determinePirWinners } from "@/lib/scoring";
-
-interface CheatSeekerData {
-  tabSwitches: number;
-  timeAway: number;
-  pasteDetected: boolean;
-  blurCount: number;
-}
+import CheatSeekerEye from "./CheatSeekerEye";
 
 interface Answer {
   id: string;
@@ -40,18 +34,6 @@ interface Question {
   optionB: string | null;
   optionC: string | null;
   optionD: string | null;
-}
-
-function getHeatLevel(data: CheatSeekerData): { score: number; label: string; color: string } {
-  const score =
-    data.tabSwitches * 2 +
-    data.blurCount * 1 +
-    (data.pasteDetected ? 3 : 0) +
-    (data.timeAway > 10000 ? 1 : 0);
-  if (score === 0) return { score, label: "Cold", color: "text-blue-400" };
-  if (score <= 2) return { score, label: "Warm", color: "text-amber-400" };
-  if (score <= 5) return { score, label: "Hot", color: "text-orange-400" };
-  return { score, label: "On Fire", color: "text-red-400" };
 }
 
 interface GradingInterfaceProps {
@@ -112,6 +94,13 @@ export default function GradingInterface({
     return `${seconds}s`;
   };
 
+  const getAnswerTimeSeconds = (answer: Answer): number | null => {
+    if (!categoryRevealAt || !answer.answeredAt) return null;
+    const start = new Date(categoryRevealAt).getTime();
+    const end = new Date(answer.answeredAt).getTime();
+    return Math.round((end - start) / 1000);
+  };
+
   const getOriginalGrade = (answer: Answer): boolean => {
     if (isPriceIsRight) return pirPreview[answer.id] ?? false;
     return answer.isCorrect ?? false;
@@ -139,32 +128,11 @@ export default function GradingInterface({
   const getPowerUpBadge = (type: string | null, cost: number) => {
     if (!type) return null;
     const labels: Record<string, string> = {
-      hint: "💡 Hint",
-      elimination: "✂️ Elim",
-      highlow: "↕️ Hi/Lo",
+      hint: "\uD83D\uDCA1 Hint",
+      elimination: "\u2702\uFE0F Elim",
+      highlow: "\u2195\uFE0F Hi/Lo",
     };
     return `${labels[type] ?? type} (${cost}pt)`;
-  };
-
-  const renderCheatSeeker = (raw: string | null) => {
-    if (!raw) return null;
-    try {
-      const data: CheatSeekerData = JSON.parse(raw);
-      const heat = getHeatLevel(data);
-      if (heat.score === 0) return null;
-      const signals: string[] = [];
-      if (data.tabSwitches > 0) signals.push(`${data.tabSwitches} tab switch${data.tabSwitches > 1 ? "es" : ""}`);
-      if (data.blurCount > 0) signals.push(`${data.blurCount} blur${data.blurCount > 1 ? "s" : ""}`);
-      if (data.pasteDetected) signals.push("paste");
-      if (data.timeAway > 10000) signals.push(`${Math.round(data.timeAway / 1000)}s away`);
-      return (
-        <p className={`text-xs mt-1 ${heat.color}`}>
-          HEAT CHECK: {heat.label} {heat.label === "On Fire" ? "\uD83D\uDD25" : ""} — {signals.join(", ")}
-        </p>
-      );
-    } catch {
-      return null;
-    }
   };
 
   const getOptionText = (key: string): string => {
@@ -266,6 +234,10 @@ export default function GradingInterface({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-semibold text-white">{playerName}</p>
+                    <CheatSeekerEye
+                      cheatSeekerData={answer.cheatSeekerData}
+                      answerTimeSeconds={getAnswerTimeSeconds(answer)}
+                    />
                     {getPowerUpBadge(answer.powerUpType, answer.powerUpCost) && (
                       <span className="text-xs text-amber-400 font-medium">
                         {getPowerUpBadge(answer.powerUpType, answer.powerUpCost)}
@@ -291,7 +263,6 @@ export default function GradingInterface({
                   {isOverridden && (
                     <p className="text-xs text-amber-400 mt-1">Override applied</p>
                   )}
-                  {renderCheatSeeker(answer.cheatSeekerData)}
                 </div>
                 <button
                   onClick={() => toggleGrade(answer.id, grade)}

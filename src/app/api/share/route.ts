@@ -20,7 +20,15 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const token = nanoid(12);
+  // Verify user is a member of the league
+  const membership = await prisma.leaguePlayer.findFirst({
+    where: { leagueId, userId: session.user.id, isActive: true },
+  });
+  if (!membership) {
+    return NextResponse.json({ error: "Not a member of this league" }, { status: 403 });
+  }
+
+  const token = nanoid(21);
   const link = await prisma.shareableLink.create({
     data: {
       leagueId,

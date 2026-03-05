@@ -7,6 +7,7 @@ import NavBar from "@/components/layout/NavBar";
 import Link from "next/link";
 import Avatar from "@/components/ui/Avatar";
 import StarRating from "@/components/ui/StarRating";
+import CheatSeekerEye from "@/components/game/CheatSeekerEye";
 
 interface PlayerResult {
   name: string;
@@ -14,7 +15,7 @@ interface PlayerResult {
   isCorrect: boolean | null;
   isAbsent: boolean;
   pointsWon: number;
-  cheatSeekerHeat: string | null;
+  cheatSeekerData: string | null;
   questionRating: number | null;
 }
 
@@ -165,14 +166,7 @@ export default function QuestionHistoryPage() {
                                 {pr.pointsWon > 0 ? "+" : ""}{pr.pointsWon}
                               </span>
                             )}
-                            {pr.cheatSeekerHeat && (
-                              <span className={`text-xs ${
-                                pr.cheatSeekerHeat === "On Fire" ? "text-red-400" :
-                                pr.cheatSeekerHeat === "Hot" ? "text-orange-400" : "text-amber-400"
-                              }`}>
-                                {pr.cheatSeekerHeat === "On Fire" ? "\uD83D\uDD25" : ""} {pr.cheatSeekerHeat}
-                              </span>
-                            )}
+                            <CheatSeekerEye cheatSeekerData={pr.cheatSeekerData} />
                             {pr.questionRating != null && (
                               <StarRating value={pr.questionRating} size="sm" />
                             )}

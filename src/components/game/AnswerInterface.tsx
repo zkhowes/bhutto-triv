@@ -99,14 +99,6 @@ export default function AnswerInterface({
     };
   }, [isAnswerPhase]);
 
-  // Debug: help diagnose power-up visibility (visible in browser DevTools console)
-  console.log("[PowerUp]", {
-    visible: !powerUpUsed && isAnswerPhase && canAffordPowerUp,
-    powerUpUsed, isAnswerPhase, canAffordPowerUp,
-    playerPoints, betAmount, availableAfterBet, powerUpCost,
-    allActivePoints, roundStatus, answerFormat: question.answerFormat,
-  });
-
   const handleSubmit = async () => {
     if (isMultipleChoice && !selectedOption) {
       setError("Please select an answer");

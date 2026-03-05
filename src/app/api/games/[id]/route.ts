@@ -93,5 +93,10 @@ export async function GET(
     }
   }
 
+  // Require league membership to view game data
+  if (!myPlayerId && !session?.user?.isSuperAdmin) {
+    return NextResponse.json({ error: "Not a member of this league" }, { status: 403 });
+  }
+
   return NextResponse.json({ ...game, myRole, myPlayerId });
 }

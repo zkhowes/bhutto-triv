@@ -104,6 +104,7 @@ export default function BettingInterface({
             value={betAmount}
             onChange={(e) => setBetAmount(Number(e.target.value))}
             className="flex-1"
+            aria-label="Bet amount"
           />
           <input
             type="number"

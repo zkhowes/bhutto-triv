@@ -409,6 +409,15 @@ model GlobalSettings {
   updatedAt            DateTime @updatedAt
 }
 
+// ─── Admin Sessions ─────────────────────────────────────────────────────
+
+model AdminSession {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
 // ─── Admin Audit Log ────────────────────────────────────────────────────
 
 model AdminAuditLog {

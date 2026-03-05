@@ -23,7 +23,9 @@ export async function GET(
   });
 
   // `link` stores the final destination URL (e.g., /rounds/abc)
+  // Only allow relative URLs to prevent open redirect attacks
   const destination = notification.link ?? "/dashboard";
+  const safeDestination = destination.startsWith("/") ? destination : "/dashboard";
 
-  return NextResponse.redirect(new URL(destination, request.url));
+  return NextResponse.redirect(new URL(safeDestination, request.url));
 }

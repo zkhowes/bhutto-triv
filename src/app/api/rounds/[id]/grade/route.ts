@@ -57,6 +57,14 @@ export async function POST(
     );
   }
 
+  // Verify the answer belongs to this round (prevents IDOR)
+  const answer = await prisma.roundAnswer.findFirst({
+    where: { id: answerId, roundId },
+  });
+  if (!answer) {
+    return NextResponse.json({ error: "Answer not found in this round" }, { status: 404 });
+  }
+
   await prisma.roundAnswer.update({
     where: { id: answerId },
     data: {
