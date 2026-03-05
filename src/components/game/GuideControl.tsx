@@ -89,6 +89,9 @@ interface GameGuideProps {
   answerTimerSeconds: number;
   actAsPlayerId: string | null;
   onRefresh: () => void;
+  atBatPlayerName?: string;
+  roundNumber?: number;
+  gameNumber?: number;
 }
 
 type GuideControlProps = LeagueGuideProps | GameGuideProps;
@@ -168,6 +171,9 @@ export default function GuideControl(props: GuideControlProps) {
     answerTimerSeconds,
     actAsPlayerId,
     onRefresh,
+    atBatPlayerName,
+    roundNumber,
+    gameNumber,
   } = props;
 
   if (!round) return null;
@@ -413,6 +419,40 @@ export default function GuideControl(props: GuideControlProps) {
         <p className="text-xs text-[#a0a0b8] uppercase tracking-wider">Category</p>
         <p className="text-xl font-bold text-[#fbbf24] mt-1">
           {round.question.category}
+        </p>
+      </div>
+    );
+  }
+
+  // Awaiting question from another player -- welcome message
+  if (round.status === "awaiting_question" && !isAtBat) {
+    const isFirstRound = roundNumber === 1;
+    return (
+      <div className="card p-5 mb-6 text-center">
+        <p className="text-lg font-bold text-[#e94560] mb-2">
+          {isFirstRound
+            ? `Welcome to Game ${gameNumber ?? ""}!`
+            : `Round ${roundNumber ?? round.number}`}
+        </p>
+        <p className="text-[#a0a0b8]">
+          Waiting for <span className="text-white font-medium">{atBatPlayerName || "the next player"}</span> to submit a question...
+        </p>
+        <p className="text-xs text-[#666680] mt-2">
+          You&apos;ll be able to bet and answer once the question is in.
+        </p>
+      </div>
+    );
+  }
+
+  // Question submitted but no action needed yet (e.g. at-bat player viewing question_submitted)
+  if (round.status === "question_submitted" && !isAtBat && !round.question) {
+    return (
+      <div className="card p-5 mb-6 text-center">
+        <p className="text-lg font-bold text-[#e94560] mb-2">
+          Question Submitted
+        </p>
+        <p className="text-[#a0a0b8]">
+          A question has been submitted. Waiting for category reveal...
         </p>
       </div>
     );

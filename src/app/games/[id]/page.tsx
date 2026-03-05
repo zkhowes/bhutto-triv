@@ -457,6 +457,9 @@ export default function GamePage() {
           answerTimerSeconds={league.answerTimerSeconds}
           actAsPlayerId={actAsPlayerId}
           onRefresh={fetchGame}
+          atBatPlayerName={activeRound ? getPlayerName(activeRound.atBatPlayerId) : undefined}
+          roundNumber={activeRound?.number}
+          gameNumber={game.number}
         />
 
         {/* Round Control (graded round content) */}
