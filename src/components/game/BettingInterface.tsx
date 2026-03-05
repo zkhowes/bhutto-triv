@@ -88,66 +88,26 @@ export default function BettingInterface({
         </p>
       </div>
 
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-sm text-[#a0a0b8]">Your bet</span>
-          <span className="text-sm text-[#a0a0b8]">
-            Available: <span className="text-white font-bold">{maxPoints}</span>
-          </span>
-        </div>
+      {maxPoints > 1 && (
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm text-[#a0a0b8]">1</span>
+            <span className="text-sm text-[#a0a0b8]">
+              Available: <span className="text-white font-bold">{maxPoints}</span>
+            </span>
+          </div>
 
-        <div className="flex items-center gap-4 mb-4">
           <input
             type="range"
             min={1}
             max={maxPoints}
             value={betAmount}
             onChange={(e) => setBetAmount(Number(e.target.value))}
-            className="flex-1"
+            className="bet-slider w-full"
             aria-label="Bet amount"
           />
-          <input
-            type="number"
-            min={1}
-            max={maxPoints}
-            value={betAmount}
-            onChange={(e) =>
-              setBetAmount(
-                Math.min(Math.max(1, Number(e.target.value)), maxPoints)
-              )
-            }
-            className="input-field w-20 text-center text-lg font-bold"
-          />
         </div>
-
-        {/* Quick bet buttons */}
-        <div className="flex gap-2 mb-4">
-          <button
-            onClick={() => setBetAmount(1)}
-            className="btn-secondary text-xs flex-1"
-          >
-            Min (1)
-          </button>
-          <button
-            onClick={() => setBetAmount(Math.floor(maxPoints / 4))}
-            className="btn-secondary text-xs flex-1"
-          >
-            25%
-          </button>
-          <button
-            onClick={() => setBetAmount(Math.floor(maxPoints / 2))}
-            className="btn-secondary text-xs flex-1"
-          >
-            50%
-          </button>
-          <button
-            onClick={() => setBetAmount(maxPoints)}
-            className="btn-gold text-xs flex-1"
-          >
-            ALL IN!
-          </button>
-        </div>
-      </div>
+      )}
 
       {error && (
         <div className="text-red-400 text-sm bg-red-500/10 rounded-lg p-3 mb-4">
@@ -158,9 +118,17 @@ export default function BettingInterface({
       <button
         onClick={handlePlaceBet}
         disabled={placing || betAmount < 1}
-        className="btn-primary w-full text-lg"
+        className={`w-full text-lg font-bold py-3 rounded-lg transition-colors ${
+          betAmount === maxPoints
+            ? "btn-gold"
+            : "btn-primary"
+        }`}
       >
-        {placing ? "Placing Bet..." : `Lock In ${betAmount} Points`}
+        {placing
+          ? "Placing Bet..."
+          : betAmount === maxPoints
+            ? `Go All In! Bet ${betAmount} point${betAmount === 1 ? "" : "s"}`
+            : `Bet ${betAmount} point${betAmount === 1 ? "" : "s"}`}
       </button>
 
       <p className="text-center text-xs text-[#666680] mt-3">
