@@ -157,8 +157,8 @@ input[type="range"]::-webkit-slider-thumb {
 .bet-slider {
   -webkit-appearance: none;
   appearance: none;
-  height: 10px;
-  border-radius: 5px;
+  height: 12px;
+  border-radius: 6px;
   background: #1e3a5f;
   outline: none;
   touch-action: none;
@@ -166,29 +166,29 @@ input[type="range"]::-webkit-slider-thumb {
 .bet-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 40px;
-  height: 40px;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
   background: #fbbf24;
   cursor: pointer;
-  box-shadow: 0 0 12px rgba(251, 191, 36, 0.4);
-  border: 3px solid #1a1a2e;
+  box-shadow: 0 0 16px rgba(251, 191, 36, 0.5);
+  border: 4px solid #1a1a2e;
 }
 .bet-slider::-moz-range-thumb {
-  width: 40px;
-  height: 40px;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
   background: #fbbf24;
   cursor: pointer;
-  box-shadow: 0 0 12px rgba(251, 191, 36, 0.4);
-  border: 3px solid #1a1a2e;
+  box-shadow: 0 0 16px rgba(251, 191, 36, 0.5);
+  border: 4px solid #1a1a2e;
 }
 .bet-slider::-webkit-slider-runnable-track {
-  height: 10px;
-  border-radius: 5px;
+  height: 12px;
+  border-radius: 6px;
 }
 .bet-slider::-moz-range-track {
-  height: 10px;
-  border-radius: 5px;
+  height: 12px;
+  border-radius: 6px;
   background: #1e3a5f;
 }

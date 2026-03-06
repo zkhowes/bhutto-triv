@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import CountdownTimer from "./CountdownTimer";
+import StarRating from "@/components/ui/StarRating";
 import { computePowerUpCost } from "@/lib/scoring";
 
 interface AnswerInterfaceProps {
@@ -48,6 +49,7 @@ export default function AnswerInterface({
   const [submitting, setSubmitting] = useState(false);
   const [buyingPowerUp, setBuyingPowerUp] = useState(false);
   const [powerUpUsed, setPowerUpUsed] = useState(!!powerUpType);
+  const [questionRating, setQuestionRating] = useState(0);
   const [error, setError] = useState("");
 
   const isMultipleChoice = question.answerFormat === "multiple_choice";
@@ -143,6 +145,15 @@ export default function AnswerInterface({
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error || "Failed to submit answer");
+      }
+
+      // Submit question rating if provided
+      if (questionRating > 0) {
+        await fetch(`/api/rounds/${roundId}/rate${actAsParam}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ rating: questionRating }),
+        }).catch(() => {});
       }
 
       onAnswered();
@@ -352,6 +363,14 @@ export default function AnswerInterface({
           Power-up used this round
         </div>
       )}
+
+      {/* Question rating */}
+      <div className="mb-4 p-3 rounded-lg border border-[#1e3a5f] bg-[#0a0a1a] text-center">
+        <p className="text-xs text-[#a0a0b8] uppercase tracking-wider mb-2">
+          Rate this question
+        </p>
+        <StarRating value={questionRating} onChange={setQuestionRating} />
+      </div>
 
       {error && (
         <div className="text-red-400 text-sm bg-red-500/10 rounded-lg p-3 mb-4">

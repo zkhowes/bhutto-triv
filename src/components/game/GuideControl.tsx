@@ -6,7 +6,6 @@ import QuestionSubmitForm from "@/components/question/QuestionSubmitForm";
 import BettingInterface from "@/components/game/BettingInterface";
 import AnswerInterface from "@/components/game/AnswerInterface";
 import GradingInterface from "@/components/game/GradingInterface";
-import StarRating from "@/components/ui/StarRating";
 
 interface RoundData {
   id: string;
@@ -97,8 +96,6 @@ interface GameGuideProps {
 type GuideControlProps = LeagueGuideProps | GameGuideProps;
 
 export default function GuideControl(props: GuideControlProps) {
-  const [postAnswerRating, setPostAnswerRating] = useState(0);
-  const [ratingSubmitted, setRatingSubmitted] = useState(false);
   const [editingGrades, setEditingGrades] = useState(false);
 
   // League mode
@@ -381,33 +378,6 @@ export default function GuideControl(props: GuideControlProps) {
         <p className="text-sm text-[#666680] mt-2">
           Your bet: {myAnswer?.betAmount} points
         </p>
-
-        {/* Rate this question */}
-        {myPlayerId && (
-          <div className="mt-4 pt-4 border-t border-[#1e3a5f]">
-            <p className="text-xs text-[#a0a0b8] uppercase tracking-wider mb-2">
-              Rate this question
-            </p>
-            <StarRating
-              value={postAnswerRating}
-              onChange={ratingSubmitted ? undefined : async (rating) => {
-                setPostAnswerRating(rating);
-                setRatingSubmitted(true);
-                const ratingActAs = actAsPlayerId ? `?actAs=${actAsPlayerId}` : "";
-                await fetch(`/api/rounds/${round.id}/rate${ratingActAs}`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ rating }),
-                }).catch(() => {});
-              }}
-            />
-            {postAnswerRating > 0 && (
-              <p className="text-xs text-[#666680] mt-1">
-                You rated this {postAnswerRating}/5
-              </p>
-            )}
-          </div>
-        )}
       </div>
     );
   }

@@ -385,6 +385,25 @@ export default function GamePage() {
   // Use active round for guide unless game is completed
   const guideRoundData = game.status === "completed" ? currentRoundData : activeRoundData;
 
+  // Find the previous graded round for "last round results" display
+  const getPreviousGradedRound = () => {
+    if (!activeRound || game.status === "completed") return null;
+    // Only show when actively viewing the current round (not browsing history)
+    if (selectedRoundId && selectedRoundId !== activeRound.id) return null;
+    // Don't show if the active round itself is graded (results already visible)
+    if (activeRoundData?.status === "graded") return null;
+    const nonCancelled = game.rounds.filter((r) => !r.isCancelled);
+    const activeIdx = nonCancelled.findIndex((r) => r.id === activeRound.id);
+    // Walk backwards to find the most recent graded round
+    for (let i = activeIdx - 1; i >= 0; i--) {
+      if (nonCancelled[i].status === "graded") {
+        return roundDataCache.get(nonCancelled[i].id) || null;
+      }
+    }
+    return null;
+  };
+  const previousGradedRound = getPreviousGradedRound();
+
   return (
     <div className="min-h-screen">
       <NavBar />
@@ -461,6 +480,27 @@ export default function GamePage() {
           roundNumber={activeRound?.number}
           gameNumber={game.number}
         />
+
+        {/* Previous round results (shown when a new round is active) */}
+        {previousGradedRound && previousGradedRound.question && (
+          <div className="mb-6">
+            <p className="text-xs text-[#a0a0b8] uppercase tracking-wider mb-3">
+              Last Round (Round {previousGradedRound.number})
+            </p>
+            <RoundControl
+              round={previousGradedRound}
+              myPlayerId={myPlayerId}
+            />
+            <div className="mt-4">
+              <BoxScoreControl
+                answers={previousGradedRound.answers}
+                question={previousGradedRound.question}
+                myPlayerId={myPlayerId}
+                categoryRevealAt={previousGradedRound.categoryRevealAt}
+              />
+            </div>
+          </div>
+        )}
 
         {/* Round Control (graded round content) */}
         {showRoundResults && currentRoundData && (
