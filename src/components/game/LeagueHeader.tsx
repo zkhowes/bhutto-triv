@@ -42,7 +42,9 @@ export default function LeagueHeader({
   return (
     <div className="flex items-center justify-between mb-6">
       <div className="flex items-center gap-3">
-        <h1 className="text-2xl font-bold text-white">{leagueName}</h1>
+        <Link href={`/leagues/${leagueId}`} className="hover:opacity-80 transition-opacity">
+          <h1 className="text-2xl font-bold text-white">{leagueName}</h1>
+        </Link>
         <Link
           href={`/leagues/${leagueId}/hall-of-fame`}
           className="px-3 py-1 rounded-md bg-[#fbbf24]/20 text-[#fbbf24] text-xs font-bold uppercase tracking-wider hover:bg-[#fbbf24]/30 transition-colors flex items-center gap-1.5"

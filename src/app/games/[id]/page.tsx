@@ -444,7 +444,7 @@ export default function GamePage() {
           leagueId={league.id}
           leagueName={league.name}
           shareType="game"
-          shareEntityId={game.id}
+          shareEntityId={selectedRoundId ? `${game.id}?round=${selectedRoundId}` : game.id}
         />
 
         {/* Game Control */}

@@ -41,11 +41,13 @@ export function parseCheatSeekerData(raw: string | null): CheatSeekerData | null
 interface CheatSeekerEyeProps {
   cheatSeekerData: string | null;
   answerTimeSeconds?: number | null;
+  medianAnswerTimeSeconds?: number | null;
 }
 
 export default function CheatSeekerEye({
   cheatSeekerData,
   answerTimeSeconds,
+  medianAnswerTimeSeconds,
 }: CheatSeekerEyeProps) {
   const [showTooltip, setShowTooltip] = useState(false);
 
@@ -53,6 +55,18 @@ export default function CheatSeekerEye({
   if (!data) return null;
 
   const heat = getHeatLevel(data);
+  // Factor in answer time: if they took 2x+ the median, add suspicion
+  const answerTimeSlow = answerTimeSeconds != null && medianAnswerTimeSeconds != null && medianAnswerTimeSeconds > 0
+    ? answerTimeSeconds / medianAnswerTimeSeconds >= 2.5 ? 2 : answerTimeSeconds / medianAnswerTimeSeconds >= 1.8 ? 1 : 0
+    : 0;
+  const adjustedScore = heat.score + answerTimeSlow;
+  const adjustedHeat = adjustedScore === 0
+    ? { ...heat, score: 0 }
+    : adjustedScore <= 2
+      ? { score: adjustedScore, label: "Warm", color: "text-amber-400", iconColor: "text-amber-400" }
+      : adjustedScore <= 5
+        ? { score: adjustedScore, label: "Hot", color: "text-orange-400", iconColor: "text-orange-400" }
+        : { score: adjustedScore, label: "On Fire", color: "text-red-400", iconColor: "text-red-400" };
 
   return (
     <div
@@ -61,7 +75,7 @@ export default function CheatSeekerEye({
       onMouseLeave={() => setShowTooltip(false)}
     >
       <svg
-        className={`w-3.5 h-3.5 ${heat.iconColor} cursor-pointer`}
+        className={`w-3.5 h-3.5 ${adjustedHeat.iconColor} cursor-pointer`}
         fill="none"
         stroke="currentColor"
         viewBox="0 0 24 24"
@@ -84,10 +98,10 @@ export default function CheatSeekerEye({
         <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-50 w-48 p-3 rounded-lg bg-[#16162a] border border-[#1e3a5f] shadow-xl">
           {/* Heat label */}
           <div className="flex items-center justify-between mb-2">
-            <span className={`text-xs font-bold ${heat.color}`}>
-              {heat.label} {heat.label === "On Fire" ? "\uD83D\uDD25" : ""}
+            <span className={`text-xs font-bold ${adjustedHeat.color}`}>
+              {adjustedHeat.label} {adjustedHeat.label === "On Fire" ? "\uD83D\uDD25" : ""}
             </span>
-            <span className="text-[10px] text-[#666680]">score: {heat.score}</span>
+            <span className="text-[10px] text-[#666680]">score: {adjustedHeat.score}</span>
           </div>
 
           {/* Stats grid */}
@@ -137,8 +151,13 @@ export default function CheatSeekerEye({
             {answerTimeSeconds != null && (
               <div className="flex items-center justify-between pt-1 border-t border-[#1e3a5f]">
                 <span className="text-[10px] text-[#a0a0b8]">Answer time</span>
-                <span className="text-[10px] font-mono text-purple-400">
+                <span className={`text-[10px] font-mono ${answerTimeSlow > 0 ? "text-amber-400" : "text-purple-400"}`}>
                   {answerTimeSeconds}s
+                  {medianAnswerTimeSeconds != null && medianAnswerTimeSeconds > 0 && (
+                    <span className="text-[#666680] ml-1">
+                      ({(answerTimeSeconds / medianAnswerTimeSeconds).toFixed(1)}x)
+                    </span>
+                  )}
                 </span>
               </div>
             )}

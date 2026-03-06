@@ -136,6 +136,20 @@ export async function GET(
         .map(([leaguePlayerId, data]) => ({ leaguePlayerId, ...data }))
         .sort((a, b) => b.totalF1Points - a.totalF1Points);
     }
+
+    // If season is active but no completed games yet, show all players at 0
+    if (seasonStandings.length === 0 && activeSeason.status === "active") {
+      seasonStandings = league.players
+        .filter((p) => p.isActive)
+        .map((p) => ({
+          leaguePlayerId: p.id,
+          nickname: p.fakeNickname || p.user.nickname || "Unknown",
+          avatarUrl: p.user.avatarUrl || p.user.image,
+          totalF1Points: 0,
+          gamesPlayed: 0,
+          lastGameF1Points: 0,
+        }));
+    }
   }
 
   return NextResponse.json({

@@ -81,6 +81,14 @@ export default function BoxScoreControl({
     return Math.round((end - start) / 1000);
   };
 
+  // Compute median answer time for relative comparison
+  const answerTimes = sortedAnswers
+    .map((a) => getAnswerTimeSeconds(a))
+    .filter((t): t is number => t !== null && t > 0);
+  const medianAnswerTime = answerTimes.length > 0
+    ? answerTimes.sort((a, b) => a - b)[Math.floor(answerTimes.length / 2)]
+    : null;
+
   // Count players with cheat seeker data flagged (score > 0)
   const hasCheatSeekerData = sortedAnswers.some((a) => !!a.cheatSeekerData);
   const cheatSeekerFlaggedCount = sortedAnswers.filter((a) => {
@@ -152,6 +160,7 @@ export default function BoxScoreControl({
                     <CheatSeekerEye
                       cheatSeekerData={answer.cheatSeekerData}
                       answerTimeSeconds={getAnswerTimeSeconds(answer)}
+                      medianAnswerTimeSeconds={medianAnswerTime}
                     />
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">

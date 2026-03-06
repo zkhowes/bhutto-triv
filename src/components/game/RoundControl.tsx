@@ -181,6 +181,13 @@ export default function RoundControl({ round, myPlayerId }: RoundControlProps) {
             </div>
           </div>
         )}
+        {/* Show user's own rating if they rated */}
+        {myAnswer?.questionRating != null && myAnswer.questionRating > 0 && (
+          <div className="mt-2 flex items-center gap-2">
+            <span className="text-[10px] text-[#666680] uppercase tracking-wider">Your Rating</span>
+            <StarRating value={myAnswer.questionRating} size="sm" />
+          </div>
+        )}
 
         {/* Row 3: Fun fact */}
         {round.funFact && (

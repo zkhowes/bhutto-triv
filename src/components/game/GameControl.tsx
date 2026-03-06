@@ -68,33 +68,33 @@ export default function GameControl({
     <div className="round-card p-5 mb-6">
       {/* Season X Game Y header */}
       <div className="text-center mb-4">
-        <p className="text-sm uppercase tracking-[0.3em]">
+        <p className="text-xl uppercase tracking-[0.3em] drop-shadow-[0_2px_4px_rgba(233,69,96,0.3)]">
           {mode === "league" ? (
             <>
-              <span className="text-[#e94560] font-bold">Season </span>
-              <span className="text-white font-bold">{seasonNumber}</span>
+              <span className="text-[#e94560] font-extrabold">Season </span>
+              <span className="text-white font-extrabold">{seasonNumber}</span>
               <span className="text-[#a0a0b8] mx-2">&middot;</span>
               <Link href={`/games/${gameId}${actAsParam}`} className="hover:opacity-80 transition-opacity">
-                <span className="text-[#e94560] font-bold">Game </span>
-                <span className="text-white font-bold">{gameNumber}</span>
+                <span className="text-[#e94560] font-extrabold">Game </span>
+                <span className="text-white font-extrabold">{gameNumber}</span>
               </Link>
             </>
           ) : (
             <>
               {leagueId ? (
                 <Link href={`/leagues/${leagueId}`} className="hover:opacity-80 transition-opacity">
-                  <span className="text-[#e94560] font-bold">Season </span>
-                  <span className="text-white font-bold">{seasonNumber}</span>
+                  <span className="text-[#e94560] font-extrabold">Season </span>
+                  <span className="text-white font-extrabold">{seasonNumber}</span>
                 </Link>
               ) : (
                 <>
-                  <span className="text-[#e94560] font-bold">Season </span>
-                  <span className="text-white font-bold">{seasonNumber}</span>
+                  <span className="text-[#e94560] font-extrabold">Season </span>
+                  <span className="text-white font-extrabold">{seasonNumber}</span>
                 </>
               )}
               <span className="text-[#a0a0b8] mx-2">&middot;</span>
-              <span className="text-[#e94560] font-bold">Game </span>
-              <span className="text-white font-bold">{gameNumber}</span>
+              <span className="text-[#e94560] font-extrabold">Game </span>
+              <span className="text-white font-extrabold">{gameNumber}</span>
             </>
           )}
         </p>
@@ -155,10 +155,10 @@ export default function GameControl({
       {/* Play Control */}
       {mode === "league" && topPlayers && topPlayers.length > 0 && (
         <div className="border-t border-[#1e3a5f] pt-3">
-          <p className="text-[10px] text-[#e94560] uppercase tracking-wider font-bold mb-2">
+          <p className="text-[10px] text-[#e94560] uppercase tracking-wider font-bold mb-2 text-center">
             Top 3
           </p>
-          <div className="space-y-1.5">
+          <div className="max-w-[220px] mx-auto space-y-1.5">
             {topPlayers.slice(0, 3).map((p, i) => (
               <div key={p.leaguePlayerId} className="flex items-center gap-2">
                 <span className={`w-5 text-center font-bold text-xs ${
@@ -171,7 +171,7 @@ export default function GameControl({
                   {p.nickname}
                 </span>
                 <span className="text-xs font-mono text-[#fbbf24]">
-                  {p.points} pts
+                  {p.points}
                 </span>
               </div>
             ))}
