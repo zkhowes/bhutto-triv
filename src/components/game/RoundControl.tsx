@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import StarRating from "@/components/ui/StarRating";
+import InfoTooltip from "@/components/ui/InfoTooltip";
 
 interface RoundControlProps {
   round: {
@@ -46,8 +47,12 @@ interface RoundControlProps {
 }
 
 export default function RoundControl({ round, myPlayerId }: RoundControlProps) {
-  const [showScoreInfo, setShowScoreInfo] = useState(false);
+  const [liveRating, setLiveRating] = useState<number | null>(null);
+  const [ratingSubmitting, setRatingSubmitting] = useState(false);
   const myAnswer = round.answers.find((a) => a.leaguePlayerId === myPlayerId);
+  const isAtBat = myPlayerId === round.atBatPlayerId;
+  const existingRating = liveRating ?? myAnswer?.questionRating ?? null;
+  const canRate = myAnswer && !isAtBat;
   const sortedAnswers = [...round.answers].sort(
     (a, b) => (a.placement || 999) - (b.placement || 999)
   );
@@ -60,6 +65,22 @@ export default function RoundControl({ round, myPlayerId }: RoundControlProps) {
       case "C": return round.question.optionC;
       case "D": return round.question.optionD;
       default: return option;
+    }
+  };
+
+  const handleRate = async (rating: number) => {
+    setLiveRating(rating);
+    setRatingSubmitting(true);
+    try {
+      await fetch(`/api/rounds/${round.id}/rate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rating }),
+      });
+    } catch {
+      // silently fail
+    } finally {
+      setRatingSubmitting(false);
     }
   };
 
@@ -150,42 +171,31 @@ export default function RoundControl({ round, myPlayerId }: RoundControlProps) {
           )}
         </div>
 
-        {/* Question score — left-aligned below answer */}
+        {/* Question rating — left-aligned below answer */}
         {round.questionScore?.composite != null && (
           <div className="mt-2 flex items-center gap-2">
-            <span className="text-[10px] text-[#666680] uppercase tracking-wider">Question Score</span>
-            <StarRating value={round.questionScore.composite} size="sm" />
+            <span className="text-[10px] text-[#666680] uppercase tracking-wider">Question Rating:</span>
+            <StarRating value={round.questionScore.composite} size="sm" showLabel />
             {round.questionScore.successRate != null && (
               <span className="text-xs text-[#666680]">
                 {Math.round(round.questionScore.successRate * 100)}% correct
               </span>
             )}
-            <div className="relative">
-              <button
-                onClick={() => setShowScoreInfo(!showScoreInfo)}
-                className="w-5 h-5 rounded-full bg-[#1e3a5f] text-[#a0a0b8] text-xs flex items-center justify-center hover:text-white transition-colors"
-              >
-                i
-              </button>
-              {showScoreInfo && (
-                <div className="absolute left-0 top-7 z-10 w-56 p-3 rounded-lg bg-[#16162a] border border-[#1e3a5f] shadow-lg">
-                  <p className="text-xs text-[#a0a0b8]">
-                    Question score combines player ratings
-                    {round.questionScore.avgRating != null && (
-                      <> (avg {round.questionScore.avgRating.toFixed(1)}/5)</>
-                    )}
-                    {" "}and success rate.
-                  </p>
-                </div>
-              )}
-            </div>
+            <InfoTooltip text="Question rating combines player star ratings with difficulty balance (~50% correct is ideal)." />
           </div>
         )}
-        {/* Show user's own rating if they rated */}
-        {myAnswer?.questionRating != null && myAnswer.questionRating > 0 && (
+        {/* Retroactive rating fallback (for players who didn't rate during answer) */}
+        {canRate && !existingRating && (
           <div className="mt-2 flex items-center gap-2">
-            <span className="text-[10px] text-[#666680] uppercase tracking-wider">Your Rating</span>
-            <StarRating value={myAnswer.questionRating} size="sm" />
+            <span className="text-[10px] text-[#666680] uppercase tracking-wider">Rate Question:</span>
+            <StarRating
+              value={existingRating || 0}
+              size="sm"
+              onChange={handleRate}
+            />
+            {ratingSubmitting && (
+              <span className="text-[10px] text-[#666680]">saving...</span>
+            )}
           </div>
         )}
 

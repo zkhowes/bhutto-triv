@@ -223,7 +223,8 @@ model Round {
   categoryRevealAt          DateTime?
   deadlineAt                DateTime?
 
-  funFact      String?  // AI-generated "Did You Know" fact
+  funFact           String?  // AI-generated "Did You Know" fact
+  questionComposite Float?   // Computed question quality score (1-5 scale)
 
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt

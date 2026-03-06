@@ -187,30 +187,42 @@ export async function GET(
     }
   }
 
-  // Compute at-bat player's historical avg question rating
+  // Compute at-bat player's historical avg question rating (cross-league via userId)
   let atBatAvgRating: number | null = null;
   let atBatRatingCount = 0;
   if (round.atBatPlayerId) {
-    const ratingAgg = await prisma.roundAnswer.aggregate({
-      where: {
-        questionRating: { not: null },
-        round: {
-          atBatPlayerId: round.atBatPlayerId,
-          status: "graded",
-        },
-      },
-      _avg: { questionRating: true },
-      _count: { questionRating: true },
+    // Look up the at-bat player's userId to aggregate cross-league
+    const atBatPlayer = await prisma.leaguePlayer.findUnique({
+      where: { id: round.atBatPlayerId },
+      select: { userId: true },
     });
-    atBatRatingCount = ratingAgg._count.questionRating;
-    if (atBatRatingCount >= 3) {
-      atBatAvgRating = ratingAgg._avg.questionRating;
+    if (atBatPlayer) {
+      // Find all LeaguePlayer IDs for this user across all leagues
+      const allPlayerIds = await prisma.leaguePlayer.findMany({
+        where: { userId: atBatPlayer.userId },
+        select: { id: true },
+      });
+      const playerIds = allPlayerIds.map((p) => p.id);
+      const ratingAgg = await prisma.round.aggregate({
+        where: {
+          status: "graded",
+          questionComposite: { not: null },
+          atBatPlayerId: { in: playerIds },
+        },
+        _avg: { questionComposite: true },
+        _count: { questionComposite: true },
+      });
+      atBatRatingCount = ratingAgg._count.questionComposite;
+      if (atBatRatingCount >= 1) {
+        atBatAvgRating = ratingAgg._avg.questionComposite;
+      }
     }
   }
 
   // Compute question quality score for graded rounds
   let questionScore: { avgRating: number | null; successRate: number | null; composite: number | null } | null = null;
   if (round.status === "graded") {
+    const { computeQuestionComposite } = await import("@/lib/scoring");
     const nonAtBatAnswers = round.answers.filter(
       (a) => a.leaguePlayerId !== round.atBatPlayerId && !a.isAbsent
     );
@@ -224,14 +236,15 @@ export async function GET(
     const successRate = nonAtBatAnswers.length > 0
       ? correctCount / nonAtBatAnswers.length
       : null;
-    // Composite: weighted blend of avg rating (0-5 scale) and success rate mapped to 0-5
-    // 70% rating, 30% difficulty balance (ideal ~50% success = 5, 0% or 100% = lower)
-    const difficultyScore = successRate !== null
-      ? 5 - Math.abs(successRate - 0.5) * 6
-      : null;
-    const composite = avgRating !== null && difficultyScore !== null
-      ? Math.round((avgRating * 0.7 + Math.max(0, difficultyScore) * 0.3) * 10) / 10
-      : avgRating;
+    const composite = computeQuestionComposite(
+      avgRating,
+      round.question?.answerFormat || "free_text",
+      nonAtBatAnswers.map((a) => ({
+        isCorrect: a.isCorrect,
+        freeTextAnswer: a.freeTextAnswer,
+      })),
+      round.question?.correctAnswer || null
+    );
     questionScore = { avgRating, successRate, composite };
   }
 

@@ -116,6 +116,10 @@ export default function AnswerInterface({
         return;
       }
     }
+    if (questionRating === 0) {
+      setError("Please rate the question before submitting");
+      return;
+    }
 
     setSubmitting(true);
     setError("");
@@ -133,6 +137,7 @@ export default function AnswerInterface({
             : isPriceIsRight
               ? priceAnswer.trim()
               : undefined,
+          questionRating,
           cheatSeekerData: {
             tabSwitches: tabSwitches.current,
             timeAway: timeAway.current,
@@ -145,15 +150,6 @@ export default function AnswerInterface({
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error || "Failed to submit answer");
-      }
-
-      // Submit question rating if provided
-      if (questionRating > 0) {
-        await fetch(`/api/rounds/${roundId}/rate${actAsParam}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ rating: questionRating }),
-        }).catch(() => {});
       }
 
       onAnswered();
@@ -364,10 +360,12 @@ export default function AnswerInterface({
         </div>
       )}
 
-      {/* Question rating */}
-      <div className="mb-4 p-3 rounded-lg border border-[#1e3a5f] bg-[#0a0a1a] text-center">
+      {/* Question rating (required) */}
+      <div className={`mb-4 p-3 rounded-lg border bg-[#0a0a1a] text-center ${
+        questionRating === 0 && error ? "border-red-500/50" : "border-[#1e3a5f]"
+      }`}>
         <p className="text-xs text-[#a0a0b8] uppercase tracking-wider mb-2">
-          Rate this question
+          Rate this question <span className="text-[#e94560]">*</span>
         </p>
         <StarRating value={questionRating} onChange={setQuestionRating} />
       </div>

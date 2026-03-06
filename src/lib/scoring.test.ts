@@ -5,6 +5,7 @@ import {
   computePowerUpCost,
   determinePirWinners,
   calculateAbsenteePenalty,
+  computeQuestionComposite,
 } from "./scoring";
 
 describe("getF1PointsForPlacement", () => {
@@ -239,5 +240,155 @@ describe("calculateAbsenteePenalty", () => {
 
   it("floors the result", () => {
     expect(calculateAbsenteePenalty(10, 3)).toBe(3);
+  });
+});
+
+describe("computeQuestionComposite", () => {
+  const makeAnswers = (correctCount: number, total: number) =>
+    Array.from({ length: total }, (_, i) => ({
+      isCorrect: i < correctCount,
+      freeTextAnswer: null,
+    }));
+
+  // --- Null / empty cases ---
+
+  it("returns null when avgRating is null", () => {
+    expect(computeQuestionComposite(null, "free_text", makeAnswers(2, 4), "answer")).toBeNull();
+  });
+
+  it("returns null for empty answers and null rating", () => {
+    expect(computeQuestionComposite(null, "free_text", [], null)).toBeNull();
+  });
+
+  // --- Small sample guard (<3 answerers) ---
+
+  it("returns avgRating only for 1 answerer (no difficulty penalty)", () => {
+    expect(computeQuestionComposite(4.0, "free_text", makeAnswers(0, 1), "answer")).toBe(4.0);
+  });
+
+  it("returns avgRating only for 2 answerers (no difficulty penalty)", () => {
+    expect(computeQuestionComposite(3.5, "multiple_choice", makeAnswers(1, 2), "B")).toBe(3.5);
+  });
+
+  it("returns avgRating for 0 answerers", () => {
+    expect(computeQuestionComposite(4.0, "free_text", [], null)).toBe(4.0);
+  });
+
+  // --- Standard questions (MC / free text) with >= 3 answerers ---
+
+  it("ideal difficulty (50% correct) maximizes difficulty component", () => {
+    // 50% correct → difficultyScore = 5.0
+    // composite = 4.0 * 0.7 + 5.0 * 0.3 = 2.8 + 1.5 = 4.3
+    const result = computeQuestionComposite(4.0, "free_text", makeAnswers(2, 4), "answer");
+    expect(result).toBe(4.3);
+  });
+
+  it("100% correct penalizes difficulty (too easy)", () => {
+    // 100% correct → difficultyScore = 5 - 0.5 * 6 = 2.0
+    // composite = 4.0 * 0.7 + 2.0 * 0.3 = 2.8 + 0.6 = 3.4
+    const result = computeQuestionComposite(4.0, "free_text", makeAnswers(4, 4), "answer");
+    expect(result).toBe(3.4);
+  });
+
+  it("0% correct penalizes difficulty (too hard)", () => {
+    // 0% correct → difficultyScore = 5 - 0.5 * 6 = 2.0
+    // composite = 4.0 * 0.7 + 2.0 * 0.3 = 2.8 + 0.6 = 3.4
+    const result = computeQuestionComposite(4.0, "free_text", makeAnswers(0, 4), "answer");
+    expect(result).toBe(3.4);
+  });
+
+  it("difficulty score floors at 0 (very skewed success rate)", () => {
+    // 1/3 correct → successRate = 0.333
+    // difficultyScore = 5 - |0.333 - 0.5| * 6 = 5 - 1.0 = 4.0
+    // composite = 5.0 * 0.7 + 4.0 * 0.3 = 3.5 + 1.2 = 4.7
+    const result = computeQuestionComposite(5.0, "multiple_choice", makeAnswers(1, 3), "A");
+    expect(result).toBe(4.7);
+  });
+
+  it("low subjective rating with perfect difficulty still capped by rating weight", () => {
+    // 50% correct → difficultyScore = 5.0
+    // composite = 1.0 * 0.7 + 5.0 * 0.3 = 0.7 + 1.5 = 2.2
+    const result = computeQuestionComposite(1.0, "free_text", makeAnswers(2, 4), "answer");
+    expect(result).toBe(2.2);
+  });
+
+  // --- Price is Right ---
+
+  it("PIR: uses closeness metric, not binary correct/incorrect", () => {
+    // Target = 100, threshold = 25
+    // Guesses: 80 (within), 90 (within), 130 (over by 30, outside), 50 (under by 50, outside)
+    // closenessRate = 2/4 = 0.5 → difficultyScore = 5.0
+    // composite = 4.0 * 0.7 + 5.0 * 0.3 = 4.3
+    const answers = [
+      { isCorrect: null, freeTextAnswer: "80" },
+      { isCorrect: null, freeTextAnswer: "90" },
+      { isCorrect: null, freeTextAnswer: "130" },
+      { isCorrect: null, freeTextAnswer: "50" },
+    ];
+    expect(computeQuestionComposite(4.0, "price_is_right", answers, "100")).toBe(4.3);
+  });
+
+  it("PIR: all guesses close → penalizes difficulty (too easy to estimate)", () => {
+    // Target = 100, threshold = 25. All within → closenessRate = 1.0
+    // difficultyScore = 5 - 0.5 * 6 = 2.0
+    const answers = [
+      { isCorrect: null, freeTextAnswer: "95" },
+      { isCorrect: null, freeTextAnswer: "100" },
+      { isCorrect: null, freeTextAnswer: "105" },
+    ];
+    expect(computeQuestionComposite(4.0, "price_is_right", answers, "100")).toBe(3.4);
+  });
+
+  it("PIR: no guesses close → penalizes difficulty (too hard to estimate)", () => {
+    // Target = 100, threshold = 25. None within → closenessRate = 0.0
+    // difficultyScore = 5 - 0.5 * 6 = 2.0
+    const answers = [
+      { isCorrect: null, freeTextAnswer: "10" },
+      { isCorrect: null, freeTextAnswer: "200" },
+      { isCorrect: null, freeTextAnswer: "500" },
+    ];
+    expect(computeQuestionComposite(4.0, "price_is_right", answers, "100")).toBe(3.4);
+  });
+
+  it("PIR: target = 0 uses minimum threshold of 1", () => {
+    // Target = 0, threshold = max(0, 1) = 1
+    // Guesses: 0.5 (within 1), 2 (outside), 3 (outside)
+    // closenessRate = 1/3 → difficultyScore = 5 - |0.333 - 0.5| * 6 = 4.0
+    const answers = [
+      { isCorrect: null, freeTextAnswer: "0.5" },
+      { isCorrect: null, freeTextAnswer: "2" },
+      { isCorrect: null, freeTextAnswer: "3" },
+    ];
+    const result = computeQuestionComposite(4.0, "price_is_right", answers, "0");
+    expect(result).toBeGreaterThan(3.0);
+    expect(result).toBeLessThan(5.0);
+  });
+
+  it("PIR: NaN correctAnswer returns avgRating only", () => {
+    const answers = [
+      { isCorrect: null, freeTextAnswer: "50" },
+      { isCorrect: null, freeTextAnswer: "60" },
+      { isCorrect: null, freeTextAnswer: "70" },
+    ];
+    expect(computeQuestionComposite(3.0, "price_is_right", answers, "not a number")).toBe(3.0);
+  });
+
+  it("PIR: null correctAnswer returns avgRating only", () => {
+    const answers = [
+      { isCorrect: null, freeTextAnswer: "50" },
+      { isCorrect: null, freeTextAnswer: "60" },
+      { isCorrect: null, freeTextAnswer: "70" },
+    ];
+    expect(computeQuestionComposite(3.0, "price_is_right", answers, null)).toBe(3.0);
+  });
+
+  // --- Rounding ---
+
+  it("rounds to 1 decimal place", () => {
+    // 3/5 correct → successRate = 0.6
+    // difficultyScore = 5 - |0.6 - 0.5| * 6 = 5 - 0.6 = 4.4
+    // composite = 3.0 * 0.7 + 4.4 * 0.3 = 2.1 + 1.32 = 3.42 → 3.4
+    const result = computeQuestionComposite(3.0, "free_text", makeAnswers(3, 5), "answer");
+    expect(result).toBe(3.4);
   });
 });

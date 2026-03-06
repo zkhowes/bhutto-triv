@@ -3,6 +3,7 @@
 import { useState } from "react";
 import CountdownTimer from "./CountdownTimer";
 import StarRating from "@/components/ui/StarRating";
+import InfoTooltip from "@/components/ui/InfoTooltip";
 
 interface BettingInterfaceProps {
   roundId: string;
@@ -74,8 +75,9 @@ export default function BettingInterface({
         )}
         {atBatAvgRating != null && (
           <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#fbbf24]/10 border border-[#fbbf24]/20">
-            <span className="text-xs text-[#fbbf24] font-medium">Player Rating</span>
+            <span className="text-xs text-[#fbbf24] font-medium">Question Rating:</span>
             <StarRating value={atBatAvgRating} size="sm" showLabel />
+            <InfoTooltip text="Question rating combines player star ratings with difficulty balance (~50% correct is ideal)." />
           </div>
         )}
         {answerDeadline && (

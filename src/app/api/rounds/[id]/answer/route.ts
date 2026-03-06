@@ -14,7 +14,14 @@ export async function POST(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { leaguePlayerId, selectedOption, freeTextAnswer, cheatSeekerData } = await req.json();
+  const { leaguePlayerId, selectedOption, freeTextAnswer, cheatSeekerData, questionRating } = await req.json();
+
+  // Validate questionRating if provided
+  if (questionRating !== undefined && questionRating !== null) {
+    if (typeof questionRating !== "number" || questionRating < 1 || questionRating > 5 || !Number.isInteger(questionRating)) {
+      return NextResponse.json({ error: "Rating must be integer 1-5" }, { status: 400 });
+    }
+  }
   const roundId = params.id;
 
   // Verify player belongs to user (or commissioner acting as test player)
@@ -38,6 +45,7 @@ export async function POST(
       selectedOption,
       freeTextAnswer,
       cheatSeekerData: cheatSeekerData ? JSON.stringify(cheatSeekerData) : undefined,
+      questionRating: questionRating || undefined,
     });
     return NextResponse.json(result);
   } catch (error) {

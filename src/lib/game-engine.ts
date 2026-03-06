@@ -299,6 +299,7 @@ export async function submitAnswer(
     selectedOption?: string;
     freeTextAnswer?: string;
     cheatSeekerData?: string;
+    questionRating?: number;
   }
 ): Promise<{ isCorrect: boolean | null; gradedBy: string | null }> {
   const roundAnswer = await prisma.roundAnswer.findUnique({
@@ -351,6 +352,7 @@ export async function submitAnswer(
       gradedBy,
       aiGradeCorrect: gradedBy === "ai" ? isCorrect : null,
       cheatSeekerData: answer.cheatSeekerData || null,
+      questionRating: answer.questionRating ?? null,
     },
   });
 
@@ -607,10 +609,38 @@ export async function closeRound(roundId: string): Promise<void> {
     console.error("Failed to generate fun fact:", err);
   }
 
+  // Compute question composite score
+  let questionComposite: number | null = null;
+  {
+    const { computeQuestionComposite } = await import("./scoring");
+    // Re-fetch answers to get final state (including absentee records and ratings)
+    const finalAnswers = await prisma.roundAnswer.findMany({
+      where: { roundId },
+    });
+    const nonAtBatAnswers = finalAnswers.filter(
+      (a) => a.leaguePlayerId !== round.atBatPlayerId && !a.isAbsent
+    );
+    const ratings = nonAtBatAnswers
+      .map((a) => a.questionRating)
+      .filter((r): r is number => r !== null);
+    const avgRating = ratings.length > 0
+      ? ratings.reduce((s, r) => s + r, 0) / ratings.length
+      : null;
+    questionComposite = computeQuestionComposite(
+      avgRating,
+      round.question?.answerFormat || "free_text",
+      nonAtBatAnswers.map((a) => ({
+        isCorrect: a.isCorrect,
+        freeTextAnswer: a.freeTextAnswer,
+      })),
+      round.question?.correctAnswer || null
+    );
+  }
+
   // Update round status
   await prisma.round.update({
     where: { id: roundId },
-    data: { status: ROUND_STATUS.GRADED, funFact },
+    data: { status: ROUND_STATUS.GRADED, funFact, questionComposite },
   });
 
   // Notify all players of round results

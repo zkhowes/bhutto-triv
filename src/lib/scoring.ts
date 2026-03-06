@@ -212,3 +212,42 @@ export function calculateAbsenteePenalty(
   return Math.floor(currentPoints / remainingRounds);
 }
 
+/**
+ * Compute question quality composite score (1-5 scale).
+ * Blends subjective player ratings (70%) with difficulty balance (30%).
+ * For < 3 answerers, uses only subjective ratings (difficulty too noisy).
+ */
+export function computeQuestionComposite(
+  avgRating: number | null,
+  answerFormat: string,
+  answers: Array<{ isCorrect: boolean | null; freeTextAnswer: string | null }>,
+  correctAnswer: string | null
+): number | null {
+  if (avgRating === null) return null;
+  if (answers.length < 3) return avgRating;
+
+  let difficultyScore: number | null = null;
+
+  if (answerFormat === "price_is_right") {
+    const target = parseFloat(correctAnswer ?? "NaN");
+    if (!isNaN(target)) {
+      const threshold = Math.max(Math.abs(target) * 0.25, 1);
+      const closeCount = answers.filter((a) => {
+        const guess = parseFloat(a.freeTextAnswer ?? "NaN");
+        return !isNaN(guess) && Math.abs(guess - target) <= threshold;
+      }).length;
+      const closenessRate = closeCount / answers.length;
+      difficultyScore = 5 - Math.abs(closenessRate - 0.5) * 6;
+    }
+  } else {
+    const correctCount = answers.filter((a) => a.isCorrect).length;
+    const successRate = correctCount / answers.length;
+    difficultyScore = 5 - Math.abs(successRate - 0.5) * 6;
+  }
+
+  if (difficultyScore !== null) {
+    return Math.round((avgRating * 0.7 + Math.max(0, difficultyScore) * 0.3) * 10) / 10;
+  }
+  return avgRating;
+}
+
