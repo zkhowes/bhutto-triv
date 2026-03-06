@@ -12,6 +12,7 @@ import GameControl from "@/components/game/GameControl";
 import GuideControl from "@/components/game/GuideControl";
 import RoundControl from "@/components/game/RoundControl";
 import BoxScoreControl from "@/components/game/BoxScoreControl";
+import { STARTING_POINTS } from "@/lib/constants";
 
 const GameChart = dynamic(() => import("@/components/game/GameChart"), {
   ssr: false,
@@ -342,37 +343,47 @@ export default function GamePage() {
 
   const sortedStandings = [...game.playerStates].sort((a, b) => b.points - a.points);
 
-  // Build game chart data: cumulative points per round
+  // Build game chart data: total game points per round
   const buildGameChartData = () => {
     const gradedRounds = game.rounds
       .filter((r) => !r.isCancelled && r.status === "graded")
       .sort((a, b) => a.number - b.number);
 
-    if (gradedRounds.length < 2) return { data: [], playerNames: [] };
+    if (gradedRounds.length < 2) return { data: [], playerNames: [], playerAvatars: {} as Record<string, string> };
 
     const playerNames = game.playerStates.map(
       (ps) => ps.leaguePlayer.fakeNickname || ps.leaguePlayer.user.nickname
     );
 
-    // We need round answer data from the cache
-    const data: Array<Record<string, number>> = [];
+    const playerAvatars: Record<string, string> = {};
+    for (const ps of game.playerStates) {
+      const name = ps.leaguePlayer.fakeNickname || ps.leaguePlayer.user.nickname;
+      playerAvatars[name] = ps.leaguePlayer.user.avatarUrl || ps.leaguePlayer.user.image || "";
+    }
+
+    const data: Array<Record<string, number | string>> = [];
     const cumulative: Record<string, number> = {};
-    playerNames.forEach((n) => (cumulative[n] = 0));
+    playerNames.forEach((n) => (cumulative[n] = STARTING_POINTS));
+
+    // Starting point
+    const startPoint: Record<string, number | string> = { round: "Start" };
+    playerNames.forEach((n) => (startPoint[n] = STARTING_POINTS));
+    data.push(startPoint);
 
     for (const r of gradedRounds) {
       const rd = roundDataCache.get(r.id);
       if (!rd) continue;
-      const point: Record<string, number> = { round: r.number };
+      const point: Record<string, number | string> = { round: r.number };
       for (const ps of game.playerStates) {
         const name = ps.leaguePlayer.fakeNickname || ps.leaguePlayer.user.nickname;
         const answer = rd.answers.find((a) => a.leaguePlayerId === ps.leaguePlayerId);
-        cumulative[name] = (cumulative[name] || 0) + (answer?.pointsWon || 0);
+        cumulative[name] = (cumulative[name] || STARTING_POINTS) + (answer?.pointsWon || 0);
         point[name] = cumulative[name];
       }
       data.push(point);
     }
 
-    return { data, playerNames };
+    return { data, playerNames, playerAvatars };
   };
 
   const chartInfo = buildGameChartData();
@@ -599,7 +610,7 @@ export default function GamePage() {
         {/* Game Chart */}
         {chartInfo.data.length >= 2 && (
           <div className="mb-6">
-            <GameChart data={chartInfo.data} playerNames={chartInfo.playerNames} />
+            <GameChart data={chartInfo.data} playerNames={chartInfo.playerNames} playerAvatars={chartInfo.playerAvatars} />
           </div>
         )}
       </div>
