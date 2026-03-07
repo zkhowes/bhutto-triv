@@ -78,7 +78,11 @@ export default function NotificationsPage() {
     setNotifications((prev) =>
       prev.map((n) => (n.id === notif.id ? { ...n, isRead: true } : n))
     );
-    router.push(`/api/notifications/click/${notif.id}`);
+    // Record click in background, navigate directly to destination
+    fetch(`/api/notifications/click/${notif.id}`).catch(() => {});
+    if (notif.link) {
+      router.push(notif.link);
+    }
   };
 
   const markAllRead = async () => {

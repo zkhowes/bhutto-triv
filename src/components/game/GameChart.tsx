@@ -11,7 +11,7 @@ import {
 } from "recharts";
 import { useState } from "react";
 
-const COLORS = [
+export const CHART_COLORS = [
   "#e94560",
   "#fbbf24",
   "#34d399",
@@ -61,8 +61,8 @@ function AvatarDot({ cx, cy, avatarUrl, color }: { cx: number; cy: number; avata
 }
 
 function CustomDot(props: Record<string, unknown>) {
-  const { cx, cy, index, avatarUrl, color } = props as { cx: number; cy: number; index: number; avatarUrl: string; color: string };
-  if (index === 0) {
+  const { cx, cy, index, avatarUrl, color, totalPoints } = props as { cx: number; cy: number; index: number; avatarUrl: string; color: string; totalPoints: number };
+  if (index === totalPoints - 1) {
     return <AvatarDot cx={cx} cy={cy} avatarUrl={avatarUrl} color={color} />;
   }
   return <circle cx={cx} cy={cy} r={3} fill={color} stroke={color} />;
@@ -123,7 +123,7 @@ export default function GameChart({ data, playerNames, playerAvatars }: GameChar
               content={<CustomTooltip hoveredPlayer={hoveredPlayer} />}
             />
             {playerNames.map((name, i) => {
-              const color = COLORS[i % COLORS.length];
+              const color = CHART_COLORS[i % CHART_COLORS.length];
               return (
                 <Line
                   key={name}
@@ -131,7 +131,7 @@ export default function GameChart({ data, playerNames, playerAvatars }: GameChar
                   dataKey={name}
                   stroke={color}
                   strokeWidth={2}
-                  dot={<CustomDot avatarUrl={playerAvatars[name]} color={color} />}
+                  dot={<CustomDot avatarUrl={playerAvatars[name]} color={color} totalPoints={data.length} />}
                   activeDot={{ r: 5, onMouseOver: () => setHoveredPlayer(name) }}
                   onMouseEnter={() => setHoveredPlayer(name)}
                   onMouseLeave={() => setHoveredPlayer(null)}

@@ -168,8 +168,11 @@ export default function NavBar() {
     );
     setUnreadCount((prev) => Math.max(0, prev - (notif.isRead ? 0 : 1)));
     setMenuOpen(false);
-    const clickUrl = `/api/notifications/click/${notif.id}`;
-    router.push(clickUrl);
+    // Record click in background, navigate directly to destination
+    fetch(`/api/notifications/click/${notif.id}`).catch(() => {});
+    if (notif.link) {
+      router.push(notif.link);
+    }
   };
 
   const markAllRead = async () => {

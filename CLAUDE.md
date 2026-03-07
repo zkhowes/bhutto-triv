@@ -204,6 +204,49 @@ Required for development (see `.env.example`):
 
 ## Deployment
 
+## Kanban
+
+> Last updated: 2026-03-02
+
+### Backlog
+- [ ] Replay past questions — *schema has isReplay/originalQuestionId, needs UI + API*
+- [ ] View-only public round dashboard — *currently requires auth, no anonymous mode*
+- [ ] "Go back to previous player" commissioner control
+- [ ] Season pause (functional) — *stub exists, shows alert()*
+
+### Up Next
+- [ ] Auto-submit banked question when At Bat — *useOnNextRound flag stored, no consumption logic*
+- [ ] Commissioner settings editing UI — *API supports writes, UI is read-only*
+- [ ] Shareable link generation UI — *API + model exist, needs Share buttons on game/round/season pages*
+
+### In Progress
+
+### Done
+- [x] Google OAuth + profile setup flow
+- [x] Full data model (League/Season/Game/Round/Answer/Player/BattingOrder)
+- [x] Game engine — question submission, betting, answering, grading, round close, scoring
+- [x] F1 scoring system + Fastest Lap bonus
+- [x] AI grading — fuzzy match for free text, auto for MC
+- [x] AI question workshop — 3-variation cards, edit flow, draft bank
+- [x] AI league name suggestions + avatar generation
+- [x] Lightning Mode — AI auto-grade, skip manual review
+- [x] Price-is-Right answer format — *beyond spec*
+- [x] Power-ups (hint, elimination, high-low) — *beyond spec*
+- [x] Question quality ratings + bonus — *beyond spec*
+- [x] Notification system — in-app + SMS via Mosio
+- [x] Cron-based deadline warning (every 15 min)
+- [x] Notification center page + NavBar bell
+- [x] Commissioner tools — players, game controls, season mgmt, Lightning Mode toggle
+- [x] Hall of Fame — 9 season awards + career stats table
+- [x] Test mode — fake players, advance controls, act-as switching
+- [x] Super Admin dashboard — stats, charts, search, question bank, notification stats
+- [x] Shareable link infrastructure — model, API, redirect handler
+- [x] Invitation link flow (join via code/link)
+- [x] Absentee penalty system (two-strike skip + point deduction)
+- [x] Fun facts after round close
+
+## Deployment
+
 Production deployed to Vercel (bwiz.zkhowes.fun):
 - **Auto-deploys via GitHub Action** (`.github/workflows/deploy.yml`) on every push to `main`
 - Do NOT rely on Vercel's built-in git integration for production — it only creates preview builds

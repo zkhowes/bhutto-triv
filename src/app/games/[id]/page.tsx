@@ -13,6 +13,7 @@ import GuideControl from "@/components/game/GuideControl";
 import RoundControl from "@/components/game/RoundControl";
 import BoxScoreControl from "@/components/game/BoxScoreControl";
 import { STARTING_POINTS } from "@/lib/constants";
+import { CHART_COLORS } from "@/components/game/GameChart";
 
 const GameChart = dynamic(() => import("@/components/game/GameChart"), {
   ssr: false,
@@ -349,7 +350,7 @@ export default function GamePage() {
       .filter((r) => !r.isCancelled && r.status === "graded")
       .sort((a, b) => a.number - b.number);
 
-    if (gradedRounds.length < 2) return { data: [], playerNames: [], playerAvatars: {} as Record<string, string> };
+    if (gradedRounds.length < 2) return { data: [], playerNames: [], playerAvatars: {} as Record<string, string>, playerColorMap: {} as Record<string, string> };
 
     const playerNames = game.playerStates.map(
       (ps) => ps.leaguePlayer.fakeNickname || ps.leaguePlayer.user.nickname
@@ -383,7 +384,12 @@ export default function GamePage() {
       data.push(point);
     }
 
-    return { data, playerNames, playerAvatars };
+    const playerColorMap: Record<string, string> = {};
+    game.playerStates.forEach((ps, i) => {
+      playerColorMap[ps.leaguePlayerId] = CHART_COLORS[i % CHART_COLORS.length];
+    });
+
+    return { data, playerNames, playerAvatars, playerColorMap };
   };
 
   const chartInfo = buildGameChartData();
@@ -580,7 +586,10 @@ export default function GamePage() {
                           name={ps.leaguePlayer.fakeNickname || ps.leaguePlayer.user.nickname}
                           size="sm"
                         />
-                        <span className="text-white text-sm font-medium">
+                        <span
+                          className="text-sm font-medium"
+                          style={chartInfo.playerColorMap[ps.leaguePlayerId] ? { color: chartInfo.playerColorMap[ps.leaguePlayerId] } : { color: "white" }}
+                        >
                           {ps.leaguePlayer.fakeNickname || ps.leaguePlayer.user.nickname}
                           {ps.leaguePlayerId === myPlayerId && (
                             <span className="text-xs text-[#e94560] ml-1">(you)</span>

@@ -340,9 +340,9 @@ export default function QuestionSubmitForm({
             <button
               type="button"
               onClick={() => setShowNewCategoryInput(true)}
-              className="mt-2 text-xs text-[#666680] hover:text-[#a0a0b8] transition-colors"
+              className="mt-3 text-sm text-[#4fc3f7] hover:text-white transition-colors font-medium"
             >
-              + Create new category...
+              + Create new category
             </button>
           ) : (
             <div className="mt-2 flex gap-2">

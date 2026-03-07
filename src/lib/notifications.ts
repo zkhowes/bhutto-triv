@@ -173,7 +173,6 @@ export async function notifyAtBat(roundId: string): Promise<void> {
     const player = await getPlayerInfo(round.atBatPlayerId);
     if (!player || !player.isActive || player.isFake) return;
 
-    const appUrl = process.env.NEXTAUTH_URL ?? "";
     await createNotification({
       userId: player.userId,
       leagueId,
@@ -182,7 +181,7 @@ export async function notifyAtBat(roundId: string): Promise<void> {
       type: "at_bat",
       title: "You're up – time to submit a question",
       message: "It's your turn to submit today's trivia question. Get creative!",
-      destinationUrl: `${appUrl}/games/${round.gameId}?round=${roundId}`,
+      destinationUrl: `/games/${round.gameId}?round=${roundId}`,
       phoneNumber: player.phoneNumber,
     });
   } catch (err) {
@@ -201,7 +200,6 @@ export async function notifyNewQuestion(roundId: string): Promise<void> {
     if (!round) return;
 
     const leagueId = round.game.season.league.id;
-    const appUrl = process.env.NEXTAUTH_URL ?? "";
 
     // All active, non-at-bat players
     const recipients = round.game.playerStates.filter(
@@ -220,7 +218,7 @@ export async function notifyNewQuestion(roundId: string): Promise<void> {
         type: "new_question",
         title: "New question is ready – get your bets in",
         message: "A new trivia question has been submitted. Place your bet and answer before the deadline!",
-        destinationUrl: `${appUrl}/games/${round.gameId}?round=${roundId}`,
+        destinationUrl: `/games/${round.gameId}?round=${roundId}`,
         phoneNumber: ps.leaguePlayer.user.phoneNumber ?? undefined,
       });
     }
@@ -243,7 +241,6 @@ export async function notifyAllAnswersIn(roundId: string): Promise<void> {
     const player = await getPlayerInfo(round.atBatPlayerId);
     if (!player || !player.isActive || player.isFake) return;
 
-    const appUrl = process.env.NEXTAUTH_URL ?? "";
     await createNotification({
       userId: player.userId,
       leagueId,
@@ -252,7 +249,7 @@ export async function notifyAllAnswersIn(roundId: string): Promise<void> {
       type: "all_answers_in",
       title: "All questions submitted – time to grade",
       message: "All players have answered. Review and validate the AI grades for your question.",
-      destinationUrl: `${appUrl}/games/${round.gameId}?round=${roundId}`,
+      destinationUrl: `/games/${round.gameId}?round=${roundId}`,
       phoneNumber: player.phoneNumber,
     });
   } catch (err) {
@@ -274,7 +271,6 @@ export async function notifyOnDeck(roundId: string): Promise<void> {
     const player = await getPlayerInfo(round.onDeckPlayerId);
     if (!player || !player.isActive || player.isFake) return;
 
-    const appUrl = process.env.NEXTAUTH_URL ?? "";
     await createNotification({
       userId: player.userId,
       leagueId,
@@ -283,7 +279,7 @@ export async function notifyOnDeck(roundId: string): Promise<void> {
       type: "on_deck",
       title: "You're on deck – start preparing a question",
       message: "You're up next! Start working on your trivia question. You can queue one in advance if needed.",
-      destinationUrl: `${appUrl}/games/${round.gameId}?round=${roundId}`,
+      destinationUrl: `/games/${round.gameId}?round=${roundId}`,
       phoneNumber: player.phoneNumber,
     });
   } catch (err) {
@@ -302,7 +298,6 @@ export async function notifyRoundResults(roundId: string): Promise<void> {
     if (!round) return;
 
     const leagueId = round.game.season.league.id;
-    const appUrl = process.env.NEXTAUTH_URL ?? "";
 
     const recipients = round.game.playerStates.filter(
       (ps) => !ps.leaguePlayer.isFake && ps.leaguePlayer.isActive
@@ -317,7 +312,7 @@ export async function notifyRoundResults(roundId: string): Promise<void> {
         type: "round_results",
         title: "Round results are in!",
         message: "The round has been scored. Check how you placed!",
-        destinationUrl: `${appUrl}/games/${round.gameId}?round=${roundId}`,
+        destinationUrl: `/games/${round.gameId}?round=${roundId}`,
         phoneNumber: ps.leaguePlayer.user.phoneNumber ?? undefined,
       });
     }
@@ -353,7 +348,6 @@ export async function notifyAboutToBeSkipped(
     if (!round) return;
 
     const leagueId = round.game.season.league.id;
-    const appUrl = process.env.NEXTAUTH_URL ?? "";
 
     await createNotification({
       userId: player.userId,
@@ -363,7 +357,7 @@ export async function notifyAboutToBeSkipped(
       type: "about_to_be_skipped",
       title: "You're about to be skipped – get your bet in soon",
       message: "The deadline is approaching! You're the last player without a bet and answer. Act now to avoid being skipped.",
-      destinationUrl: `${appUrl}/games/${round.gameId}?round=${roundId}`,
+      destinationUrl: `/games/${round.gameId}?round=${roundId}`,
       phoneNumber: player.phoneNumber,
     });
   } catch (err) {
@@ -385,7 +379,6 @@ export async function notifyRoundClosedByCommissioner(
     if (!round) return;
 
     const leagueId = round.game.season.league.id;
-    const appUrl = process.env.NEXTAUTH_URL ?? "";
 
     // Find the commissioner's userId
     const commissioner = await prisma.leaguePlayer.findFirst({
@@ -407,8 +400,8 @@ export async function notifyRoundClosedByCommissioner(
       ? ` ${absentPlayerNames.join(", ")} marked absent.`
       : "";
     const destinationUrl = nextRound
-      ? `${appUrl}/games/${round.gameId}?round=${nextRound.id}`
-      : `${appUrl}/games/${round.gameId}`;
+      ? `/games/${round.gameId}?round=${nextRound.id}`
+      : `/games/${round.gameId}`;
 
     const recipients = round.game.playerStates.filter(
       (ps) =>
