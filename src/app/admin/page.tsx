@@ -1041,10 +1041,13 @@ export default function AdminPage() {
                         <th className="p-2 text-right text-sm text-[#a0a0b8]">
                           Points
                         </th>
+                        <th className="p-2 text-left text-sm text-[#a0a0b8]">
+                          Power-Up
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
-                      {questionAnswers.map((a) => (
+                      {questionAnswers.map((a: any) => (
                         <tr key={a.id} className="border-b border-[#2a4a6f]">
                           <td className="p-2 text-sm text-white">
                             {a.player.nickname}
@@ -1075,6 +1078,22 @@ export default function AdminPage() {
                           >
                             {a.pointsWon > 0 ? "+" : ""}
                             {a.pointsWon}
+                          </td>
+                          <td className="p-2 text-sm">
+                            {a.powerUpType ? (
+                              <span className="text-amber-400">
+                                {a.powerUpType === "hint"
+                                  ? "Hint"
+                                  : a.powerUpType === "elimination"
+                                  ? "Elim"
+                                  : "Hi/Lo"}{" "}
+                                ({a.powerUpCost}pt)
+                              </span>
+                            ) : (
+                              <span className="text-[#666680] text-xs">
+                                {a.powerUpEligibility || "—"}
+                              </span>
+                            )}
                           </td>
                         </tr>
                       ))}
