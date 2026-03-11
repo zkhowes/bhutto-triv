@@ -6,6 +6,9 @@ import {
   SEASON_STATUS,
   SKIP_PENALTY_PERCENTAGE,
   QUESTION_QUALITY_BONUS,
+  FLAG_VOTE_THRESHOLD,
+  FLAG_DISAGREE_PENALTY,
+  MIN_PLAYERS_FOR_FLAG,
   isDefaultCategory,
 } from "./constants";
 import { scoreRound, calculateAbsenteePenalty, getF1PointsForPlacement, determinePirWinners } from "./scoring";
@@ -15,6 +18,8 @@ import {
   notifyAllAnswersIn,
   notifyOnDeck,
   notifyRoundResults,
+  notifyFlagThrown,
+  notifyFlagResolved,
 } from "./notifications";
 
 /**
@@ -965,4 +970,530 @@ async function awardQuestionQualityBonus(gameId: string): Promise<void> {
     where: { gameId, leaguePlayerId: bestPlayerId },
     data: { totalF1Points: { increment: QUESTION_QUALITY_BONUS } },
   });
+}
+
+// ─── Flag Challenge System ───────────────────────────────────────────────
+
+/**
+ * Throw a challenge flag on a graded round.
+ * Validates eligibility, creates the review, pauses game if possible, notifies voters.
+ */
+export async function throwFlag(
+  roundId: string,
+  leaguePlayerId: string,
+  objection: string
+): Promise<{ flagReviewId: string }> {
+  const round = await prisma.round.findUnique({
+    where: { id: roundId },
+    include: {
+      flagReview: true,
+      game: {
+        include: {
+          rounds: { orderBy: { number: "asc" } },
+          playerStates: {
+            include: {
+              leaguePlayer: {
+                include: { user: { select: { nickname: true, id: true } } },
+              },
+            },
+          },
+          season: { include: { league: { select: { id: true } } } },
+        },
+      },
+    },
+  });
+
+  if (!round) throw new Error("Round not found");
+  if (round.status !== ROUND_STATUS.GRADED) throw new Error("Can only flag a graded round");
+  if (round.flagReview) throw new Error("This round already has a flag review");
+  if (round.atBatPlayerId === leaguePlayerId) throw new Error("Cannot flag your own question");
+
+  // Check flag window: no subsequent round should be graded
+  const hasLaterGraded = round.game.rounds.some(
+    (r) => r.number > round.number && !r.isCancelled && r.status === ROUND_STATUS.GRADED
+  );
+  if (hasLaterGraded) throw new Error("Flag window has closed — a later round is already graded");
+
+  // Check player state
+  const playerState = round.game.playerStates.find(
+    (ps) => ps.leaguePlayerId === leaguePlayerId
+  );
+  if (!playerState) throw new Error("Player not in this game");
+  if (playerState.isEliminated) throw new Error("Eliminated players cannot throw flags");
+  if (playerState.flagUsed) throw new Error("You already used your flag this game");
+
+  // Check minimum players (no flags in heads-up)
+  const activePlayers = round.game.playerStates.filter((ps) => !ps.isEliminated);
+  if (activePlayers.length < MIN_PLAYERS_FOR_FLAG) {
+    throw new Error(`Flags require at least ${MIN_PLAYERS_FOR_FLAG} active players`);
+  }
+
+  // Mark flag as used
+  await prisma.gamePlayerState.update({
+    where: { id: playerState.id },
+    data: { flagUsed: true },
+  });
+
+  // Create the flag review
+  const flagReview = await prisma.flagReview.create({
+    data: {
+      roundId,
+      gameId: round.gameId,
+      flaggedById: leaguePlayerId,
+      objection,
+      status: "pending",
+    },
+  });
+
+  // Set round to under_review
+  await prisma.round.update({
+    where: { id: roundId },
+    data: { status: ROUND_STATUS.UNDER_REVIEW },
+  });
+
+  // Pause game: if next round is still awaiting_question, revert to pending
+  const nextRound = round.game.rounds.find(
+    (r) => r.number > round.number && !r.isCancelled && r.status === ROUND_STATUS.AWAITING_QUESTION
+  );
+  if (nextRound) {
+    await prisma.round.update({
+      where: { id: nextRound.id },
+      data: { status: ROUND_STATUS.PENDING },
+    });
+  }
+
+  // If game was already completed (flag on last round), revert to active
+  if (round.game.status === GAME_STATUS.COMPLETED) {
+    await prisma.game.update({
+      where: { id: round.gameId },
+      data: { status: GAME_STATUS.ACTIVE, completedAt: null },
+    });
+  }
+
+  // Get flagger name for notification
+  const flaggerName =
+    playerState.leaguePlayer.user.nickname || "A player";
+
+  await notifyFlagThrown(roundId, leaguePlayerId, flaggerName);
+
+  return { flagReviewId: flagReview.id };
+}
+
+/**
+ * Get eligible voter count for a flag review.
+ * Eligible = non-eliminated, non-flagger, non-at-bat (question maker).
+ */
+function getEligibleVoterIds(
+  playerStates: Array<{ leaguePlayerId: string; isEliminated: boolean }>,
+  flaggedById: string,
+  atBatPlayerId: string | null
+): string[] {
+  return playerStates
+    .filter(
+      (ps) =>
+        !ps.isEliminated &&
+        ps.leaguePlayerId !== flaggedById &&
+        ps.leaguePlayerId !== atBatPlayerId
+    )
+    .map((ps) => ps.leaguePlayerId);
+}
+
+/**
+ * Submit a vote on a flag review. Auto-resolves when threshold is met.
+ */
+export async function submitFlagVote(
+  flagReviewId: string,
+  leaguePlayerId: string,
+  vote: "agree" | "disagree",
+  isProxy: boolean = false
+): Promise<{ resolved: boolean; outcome?: string }> {
+  const flagReview = await prisma.flagReview.findUnique({
+    where: { id: flagReviewId },
+    include: {
+      votes: true,
+      round: true,
+      game: {
+        include: {
+          playerStates: {
+            include: {
+              leaguePlayer: {
+                include: { user: { select: { nickname: true } } },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!flagReview) throw new Error("Flag review not found");
+  if (flagReview.status !== "pending") throw new Error("Flag review already resolved");
+  if (leaguePlayerId === flagReview.flaggedById) throw new Error("Flagger cannot vote");
+  if (leaguePlayerId === flagReview.round.atBatPlayerId) throw new Error("Question maker cannot vote");
+
+  // Check not already voted
+  const existingVote = flagReview.votes.find((v) => v.leaguePlayerId === leaguePlayerId);
+  if (existingVote) throw new Error("Already voted");
+
+  // Verify voter is eligible (non-eliminated)
+  const voterState = flagReview.game.playerStates.find(
+    (ps) => ps.leaguePlayerId === leaguePlayerId
+  );
+  if (!voterState) throw new Error("Player not in this game");
+
+  await prisma.flagVote.create({
+    data: {
+      flagReviewId,
+      leaguePlayerId,
+      vote,
+      isProxyVote: isProxy,
+    },
+  });
+
+  // Check resolution
+  const eligibleVoterIds = getEligibleVoterIds(
+    flagReview.game.playerStates,
+    flagReview.flaggedById,
+    flagReview.round.atBatPlayerId
+  );
+  const totalEligible = eligibleVoterIds.length;
+  const allVotes = [...flagReview.votes, { vote, leaguePlayerId }];
+  const agreeCount = allVotes.filter((v) => v.vote === "agree").length;
+  const disagreeCount = allVotes.filter((v) => v.vote === "disagree").length;
+  const threshold = Math.ceil(totalEligible * FLAG_VOTE_THRESHOLD);
+
+  if (agreeCount >= threshold) {
+    await resolveFlagAgree(flagReview.id);
+    return { resolved: true, outcome: "agreed" };
+  }
+
+  // If it's impossible to reach threshold (remaining votes can't push agree over)
+  const remainingVotes = totalEligible - allVotes.length;
+  if (agreeCount + remainingVotes < threshold) {
+    await resolveFlagDisagree(flagReview.id);
+    return { resolved: true, outcome: "disagreed" };
+  }
+
+  // All voted but didn't hit threshold
+  if (allVotes.length >= totalEligible) {
+    if (agreeCount >= threshold) {
+      await resolveFlagAgree(flagReview.id);
+      return { resolved: true, outcome: "agreed" };
+    } else {
+      await resolveFlagDisagree(flagReview.id);
+      return { resolved: true, outcome: "disagreed" };
+    }
+  }
+
+  return { resolved: false };
+}
+
+/**
+ * Resolve a flag review as agreed: reverse scoring, cancel round, handle skip logic.
+ */
+async function resolveFlagAgree(flagReviewId: string): Promise<void> {
+  const flagReview = await prisma.flagReview.findUnique({
+    where: { id: flagReviewId },
+    include: {
+      round: {
+        include: {
+          answers: true,
+          game: {
+            include: {
+              rounds: { orderBy: { number: "asc" } },
+              playerStates: {
+                include: {
+                  leaguePlayer: {
+                    include: { user: { select: { nickname: true } } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!flagReview) throw new Error("Flag review not found");
+
+  const { round } = flagReview;
+  const game = round.game;
+
+  // 1. Reverse round scoring for all answers
+  for (const answer of round.answers) {
+    if (answer.pointsWon === 0) continue;
+    const playerState = game.playerStates.find(
+      (ps) => ps.leaguePlayerId === answer.leaguePlayerId
+    );
+    if (!playerState) continue;
+
+    const reversedPoints = playerState.points - answer.pointsWon;
+    await prisma.gamePlayerState.update({
+      where: { id: playerState.id },
+      data: {
+        points: Math.max(0, reversedPoints),
+        isEliminated: reversedPoints <= 0 ? playerState.isEliminated : false,
+      },
+    });
+  }
+
+  // 2. Cancel the round
+  await prisma.round.update({
+    where: { id: round.id },
+    data: {
+      status: ROUND_STATUS.CANCELLED,
+      isCancelled: true,
+    },
+  });
+
+  await prisma.game.update({
+    where: { id: game.id },
+    data: { totalRounds: { decrement: 1 } },
+  });
+
+  // 3. Handle question maker skip
+  const atBatPlayerId = round.atBatPlayerId!;
+  const atBatState = game.playerStates.find(
+    (ps) => ps.leaguePlayerId === atBatPlayerId
+  );
+
+  if (atBatState) {
+    if (atBatState.skipCount >= 1) {
+      // 2nd+ skip: penalty, no new round
+      const penalty = Math.floor(atBatState.points * SKIP_PENALTY_PERCENTAGE);
+      const newPoints = Math.max(0, atBatState.points - penalty);
+      await prisma.gamePlayerState.update({
+        where: { id: atBatState.id },
+        data: {
+          skipCount: atBatState.skipCount + 1,
+          points: newPoints,
+          isEliminated: newPoints === 0,
+        },
+      });
+    } else {
+      // 1st skip: add a new round at the end for this player
+      await prisma.gamePlayerState.update({
+        where: { id: atBatState.id },
+        data: { skipCount: 1 },
+      });
+
+      const maxRoundNumber = Math.max(...game.rounds.map((r) => r.number));
+      await prisma.round.create({
+        data: {
+          gameId: game.id,
+          number: maxRoundNumber + 1,
+          status: ROUND_STATUS.PENDING,
+          atBatPlayerId,
+        },
+      });
+
+      await prisma.game.update({
+        where: { id: game.id },
+        data: { totalRounds: { increment: 1 } },
+      });
+    }
+  }
+
+  // 4. Mark flag review as agreed
+  await prisma.flagReview.update({
+    where: { id: flagReviewId },
+    data: { status: "agreed", resolvedAt: new Date() },
+  });
+
+  // 5. Check game end or activate next round
+  const updatedRounds = await prisma.round.findMany({
+    where: { gameId: game.id },
+    orderBy: { number: "asc" },
+  });
+
+  const remainingRounds = updatedRounds.filter(
+    (r) => !r.isCancelled && r.status !== ROUND_STATUS.GRADED && r.status !== ROUND_STATUS.CANCELLED
+  );
+
+  if (remainingRounds.length === 0) {
+    // Complete the game
+    const finalStates = await prisma.gamePlayerState.findMany({
+      where: { gameId: game.id },
+    });
+    const sortedByPoints = [...finalStates].sort((a, b) => b.points - a.points);
+    for (let i = 0; i < sortedByPoints.length; i++) {
+      const f1Points = getF1PointsForPlacement(i + 1, sortedByPoints.length);
+      await prisma.gamePlayerState.update({
+        where: { id: sortedByPoints[i].id },
+        data: { totalF1Points: f1Points },
+      });
+    }
+    await awardQuestionQualityBonus(game.id);
+    await prisma.game.update({
+      where: { id: game.id },
+      data: { status: GAME_STATUS.COMPLETED, completedAt: new Date() },
+    });
+  } else {
+    // Activate next pending round if needed
+    const nextPending = remainingRounds.find(
+      (r) => r.status === ROUND_STATUS.PENDING
+    );
+    const hasActiveRound = remainingRounds.some(
+      (r) =>
+        r.status !== ROUND_STATUS.PENDING &&
+        r.status !== ROUND_STATUS.GRADED &&
+        r.status !== ROUND_STATUS.CANCELLED
+    );
+
+    if (nextPending && !hasActiveRound) {
+      await prisma.round.update({
+        where: { id: nextPending.id },
+        data: { status: ROUND_STATUS.AWAITING_QUESTION },
+      });
+      await notifyAtBat(nextPending.id);
+      await notifyOnDeck(nextPending.id);
+    }
+  }
+
+  // 6. Notify
+  const flaggerState = game.playerStates.find(
+    (ps) => ps.leaguePlayerId === flagReview.flaggedById
+  );
+  const flaggerName = flaggerState?.leaguePlayer.user.nickname || "A player";
+  await notifyFlagResolved(round.id, "agreed", flaggerName);
+}
+
+/**
+ * Resolve a flag review as disagreed: penalize flagger, restore round, unpause game.
+ */
+async function resolveFlagDisagree(flagReviewId: string): Promise<void> {
+  const flagReview = await prisma.flagReview.findUnique({
+    where: { id: flagReviewId },
+    include: {
+      round: {
+        include: {
+          game: {
+            include: {
+              rounds: { orderBy: { number: "asc" } },
+              playerStates: {
+                include: {
+                  leaguePlayer: {
+                    include: { user: { select: { nickname: true } } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!flagReview) throw new Error("Flag review not found");
+
+  const { round } = flagReview;
+  const game = round.game;
+
+  // 1. Penalize the flagger: lose 50% of current points
+  const flaggerState = game.playerStates.find(
+    (ps) => ps.leaguePlayerId === flagReview.flaggedById
+  );
+
+  if (flaggerState) {
+    const penalty = Math.floor(flaggerState.points * FLAG_DISAGREE_PENALTY);
+    const newPoints = Math.max(0, flaggerState.points - penalty);
+    await prisma.gamePlayerState.update({
+      where: { id: flaggerState.id },
+      data: {
+        points: newPoints,
+        isEliminated: newPoints === 0,
+      },
+    });
+  }
+
+  // 2. Revert round status to graded
+  await prisma.round.update({
+    where: { id: round.id },
+    data: { status: ROUND_STATUS.GRADED },
+  });
+
+  // 3. Mark flag review as disagreed
+  await prisma.flagReview.update({
+    where: { id: flagReviewId },
+    data: { status: "disagreed", resolvedAt: new Date() },
+  });
+
+  // 4. Unpause game: if we paused a round, re-activate it
+  const pausedRound = game.rounds.find(
+    (r) =>
+      r.number > round.number &&
+      !r.isCancelled &&
+      r.status === ROUND_STATUS.PENDING
+  );
+
+  // Only re-activate if there's no other active round
+  if (pausedRound) {
+    const hasActiveRound = game.rounds.some(
+      (r) =>
+        r.id !== pausedRound.id &&
+        !r.isCancelled &&
+        !([ROUND_STATUS.PENDING, ROUND_STATUS.GRADED, ROUND_STATUS.CANCELLED, ROUND_STATUS.UNDER_REVIEW] as string[]).includes(r.status)
+    );
+
+    if (!hasActiveRound) {
+      await prisma.round.update({
+        where: { id: pausedRound.id },
+        data: { status: ROUND_STATUS.AWAITING_QUESTION },
+      });
+      await notifyAtBat(pausedRound.id);
+      await notifyOnDeck(pausedRound.id);
+    }
+  }
+
+  // 5. If game was completed and we reverted it, re-complete
+  const allRounds = await prisma.round.findMany({
+    where: { gameId: game.id },
+  });
+  const allDone = allRounds.every(
+    (r) => r.isCancelled || r.status === ROUND_STATUS.GRADED
+  );
+  if (allDone && game.status === GAME_STATUS.ACTIVE) {
+    const finalStates = await prisma.gamePlayerState.findMany({
+      where: { gameId: game.id },
+    });
+    const sortedByPoints = [...finalStates].sort((a, b) => b.points - a.points);
+    for (let i = 0; i < sortedByPoints.length; i++) {
+      const f1Points = getF1PointsForPlacement(i + 1, sortedByPoints.length);
+      await prisma.gamePlayerState.update({
+        where: { id: sortedByPoints[i].id },
+        data: { totalF1Points: f1Points },
+      });
+    }
+    await awardQuestionQualityBonus(game.id);
+    await prisma.game.update({
+      where: { id: game.id },
+      data: { status: GAME_STATUS.COMPLETED, completedAt: new Date() },
+    });
+  }
+
+  // 6. Notify
+  const flaggerName = flaggerState?.leaguePlayer.user.nickname || "A player";
+  await notifyFlagResolved(round.id, "disagreed", flaggerName);
+}
+
+/**
+ * Commissioner force-closes a flag review based on current vote tally or override.
+ */
+export async function forceCloseFlagReview(
+  flagReviewId: string,
+  resolution: "agree" | "disagree"
+): Promise<void> {
+  const flagReview = await prisma.flagReview.findUnique({
+    where: { id: flagReviewId },
+  });
+
+  if (!flagReview) throw new Error("Flag review not found");
+  if (flagReview.status !== "pending") throw new Error("Flag review already resolved");
+
+  if (resolution === "agree") {
+    await resolveFlagAgree(flagReviewId);
+  } else {
+    await resolveFlagDisagree(flagReviewId);
+  }
 }

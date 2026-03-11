@@ -44,6 +44,9 @@ The game engine (`src/lib/game-engine.ts`) manages the core gameplay loop. Under
 
 ```
 awaiting_question → question_submitted → category_revealed → closed → graded
+                                                                        ↓
+                                                                   under_review → graded (flag denied)
+                                                                               → cancelled (flag upheld)
 ```
 
 **Round Status Transitions:**
@@ -220,6 +223,7 @@ Required for development (see `.env.example`):
 - [ ] Shareable link generation UI — *API + model exist, needs Share buttons on game/round/season pages*
 
 ### In Progress
+- [ ] Throw a Flag — *NFL-style challenge system: contest rounds, player voting, score reversal*
 
 ### Done
 - [x] Google OAuth + profile setup flow

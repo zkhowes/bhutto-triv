@@ -26,6 +26,10 @@ export const STARTING_POINTS = 20;
 
 export const SKIP_PENALTY_PERCENTAGE = 0.5;
 
+export const FLAG_VOTE_THRESHOLD = 2 / 3;
+export const FLAG_DISAGREE_PENALTY = 0.5;
+export const MIN_PLAYERS_FOR_FLAG = 3;
+
 export const QUESTION_QUALITY_BONUS = 3;
 
 export const DEFAULT_SETTINGS = {
@@ -58,6 +62,7 @@ export const ROUND_STATUS = {
   CATEGORY_REVEALED: "category_revealed",
   CLOSED: "closed",
   GRADED: "graded",
+  UNDER_REVIEW: "under_review",
   CANCELLED: "cancelled",
 } as const;
 
@@ -130,4 +135,6 @@ export const NOTIFICATION_TYPES = {
   RESULTS: "results",
   SEASON_END: "season_end",
   INVITATION: "invitation",
+  FLAG_THROWN: "flag_thrown",
+  FLAG_RESOLVED: "flag_resolved",
 } as const;

@@ -128,7 +128,9 @@ export default function GameControl({
                     ? "bg-emerald-500/20 text-emerald-400"
                     : r.status === "pending"
                       ? "bg-[#0f0f23] text-[#666680]"
-                      : "bg-[#e94560]/20 text-[#e94560] animate-pulse-slow"
+                      : r.status === "under_review"
+                        ? "bg-amber-500/20 text-amber-400 animate-pulse-slow"
+                        : "bg-[#e94560]/20 text-[#e94560] animate-pulse-slow"
                 }`}
               >
                 {r.number}
@@ -142,7 +144,9 @@ export default function GameControl({
                     ? "bg-emerald-500/20 text-emerald-400"
                     : r.status === "pending"
                       ? "bg-[#0f0f23] text-[#666680]"
-                      : "bg-[#e94560]/20 text-[#e94560] animate-pulse-slow"
+                      : r.status === "under_review"
+                        ? "bg-amber-500/20 text-amber-400 animate-pulse-slow"
+                        : "bg-[#e94560]/20 text-[#e94560] animate-pulse-slow"
                 }`}
               >
                 {r.number}

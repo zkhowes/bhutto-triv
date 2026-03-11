@@ -124,6 +124,15 @@ interface RoundData {
       user: { id: string; nickname: string; avatarUrl: string | null; image: string | null };
     };
   }>;
+  flagReview: {
+    id: string;
+    status: string;
+    flaggedById: string;
+    objection: string;
+  } | null;
+  flagUsed: boolean;
+  flagWindowOpen: boolean;
+  activePlayerCount: number;
   game: {
     id: string;
     number: number;
@@ -395,7 +404,7 @@ export default function GamePage() {
   const chartInfo = buildGameChartData();
 
   // Determine if we should show round results (RoundControl + BoxScoreControl)
-  const showRoundResults = currentRoundData && currentRoundData.status === "graded" && currentRoundData.question;
+  const showRoundResults = currentRoundData && (currentRoundData.status === "graded" || currentRoundData.status === "under_review") && currentRoundData.question;
 
   // Determine which round data to use for the guide (always the active round, not selected)
   const activeRoundData = activeRound ? roundDataCache.get(activeRound.id) : null;
@@ -525,6 +534,12 @@ export default function GamePage() {
             <RoundControl
               round={currentRoundData}
               myPlayerId={myPlayerId}
+              flagUsed={currentRoundData.flagUsed}
+              flagWindowOpen={currentRoundData.flagWindowOpen}
+              activePlayerCount={currentRoundData.activePlayerCount}
+              actAsPlayerId={actAsPlayerId}
+              onRefresh={fetchGame}
+              isCommissioner={isCommissioner}
             />
           </div>
         )}

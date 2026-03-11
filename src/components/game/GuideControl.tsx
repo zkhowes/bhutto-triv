@@ -6,6 +6,7 @@ import QuestionSubmitForm from "@/components/question/QuestionSubmitForm";
 import BettingInterface from "@/components/game/BettingInterface";
 import AnswerInterface from "@/components/game/AnswerInterface";
 import GradingInterface from "@/components/game/GradingInterface";
+import FlagReviewInterface from "@/components/game/FlagReviewInterface";
 
 interface RoundData {
   id: string;
@@ -188,6 +189,19 @@ export default function GuideControl(props: GuideControlProps) {
       : null;
 
   const actAsParam = actAsPlayerId ? `?actAs=${actAsPlayerId}` : "";
+
+  // Under review -> flag review interface
+  if (round.status === "under_review") {
+    return (
+      <FlagReviewInterface
+        roundId={round.id}
+        myPlayerId={myPlayerId}
+        isCommissioner={isCommissioner}
+        actAsPlayerId={actAsPlayerId}
+        onResolved={onRefresh}
+      />
+    );
+  }
 
   // Graded -> contextual message
   if (isGraded) {

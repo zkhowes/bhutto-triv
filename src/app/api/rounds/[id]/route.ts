@@ -102,7 +102,7 @@ export async function GET(
   }
 
   // If round is not yet graded, hide some answer details for non-graded rounds
-  const isGraded = round.status === "graded" || round.status === "closed";
+  const isGraded = round.status === "graded" || round.status === "closed" || round.status === "under_review";
   const userId = session?.user?.id;
 
   // Support test mode actAs parameter for correct player identification
@@ -221,7 +221,7 @@ export async function GET(
 
   // Compute question quality score for graded rounds
   let questionScore: { avgRating: number | null; successRate: number | null; composite: number | null } | null = null;
-  if (round.status === "graded") {
+  if (round.status === "graded" || round.status === "under_review") {
     const { computeQuestionComposite } = await import("@/lib/scoring");
     const nonAtBatAnswers = round.answers.filter(
       (a) => a.leaguePlayerId !== round.atBatPlayerId && !a.isAbsent
@@ -248,6 +248,30 @@ export async function GET(
     questionScore = { avgRating, successRate, composite };
   }
 
+  // Flag data: check if this round has a flag review and if current player can flag
+  const flagReview = await prisma.flagReview.findUnique({
+    where: { roundId: round.id },
+    select: { id: true, status: true, flaggedById: true, objection: true },
+  });
+
+  // Check if current player's flag is used (for showing/hiding flag button)
+  const currentPlayerId = actAsPlayerId || round.game.playerStates.find(
+    (ps) => ps.leaguePlayer.user.id === userId
+  )?.leaguePlayerId;
+  const currentPlayerState = currentPlayerId
+    ? round.game.playerStates.find((ps) => ps.leaguePlayerId === currentPlayerId)
+    : null;
+
+  // Check if a later round is already graded (flag window closed)
+  const laterGradedRound = await prisma.round.findFirst({
+    where: {
+      gameId: round.gameId,
+      number: { gt: round.number },
+      isCancelled: false,
+      status: "graded",
+    },
+  });
+
   return NextResponse.json({
     ...round,
     question: questionData,
@@ -255,5 +279,9 @@ export async function GET(
     atBatAvgRating,
     atBatRatingCount,
     questionScore,
+    flagReview: flagReview || null,
+    flagUsed: currentPlayerState?.flagUsed ?? false,
+    flagWindowOpen: !laterGradedRound,
+    activePlayerCount: round.game.playerStates.filter((ps) => !ps.isEliminated).length,
   });
 }

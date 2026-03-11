@@ -9,7 +9,9 @@ export type NotificationType =
   | "on_deck"
   | "round_results"
   | "about_to_be_skipped"
-  | "round_closed_by_commissioner";
+  | "round_closed_by_commissioner"
+  | "flag_thrown"
+  | "flag_resolved";
 
 // Which levels each notification type gets sent at
 const LEVEL_MAP: Record<NotificationType, NotificationLevel[]> = {
@@ -20,6 +22,8 @@ const LEVEL_MAP: Record<NotificationType, NotificationLevel[]> = {
   round_results: ["high"],
   about_to_be_skipped: ["high"],
   round_closed_by_commissioner: ["low"],
+  flag_thrown: ["low", "high"],
+  flag_resolved: ["low", "high"],
 };
 
 // ─── Effective Level Resolution ───────────────────────────────────────────────
@@ -425,5 +429,91 @@ export async function notifyRoundClosedByCommissioner(
     }
   } catch (err) {
     console.error("[Notifications] notifyRoundClosedByCommissioner failed:", err);
+  }
+}
+
+/**
+ * "Flag thrown on Round N!"
+ * Level: Low + High | Recipient: all active players except flagger
+ * Trigger: Player throws a challenge flag
+ */
+export async function notifyFlagThrown(
+  roundId: string,
+  flaggerPlayerId: string,
+  flaggerName: string
+): Promise<void> {
+  try {
+    const round = await getRoundContext(roundId);
+    if (!round) return;
+
+    const leagueId = round.game.season.league.id;
+
+    const recipients = round.game.playerStates.filter(
+      (ps) =>
+        ps.leaguePlayerId !== flaggerPlayerId &&
+        !ps.leaguePlayer.isFake &&
+        ps.leaguePlayer.isActive
+    );
+
+    for (const ps of recipients) {
+      await createNotification({
+        userId: ps.leaguePlayer.userId,
+        leagueId,
+        gameId: round.gameId,
+        roundId,
+        type: "flag_thrown",
+        title: `Flag thrown on Round ${round.number}!`,
+        message: `${flaggerName} is contesting the round. Cast your vote!`,
+        destinationUrl: `/games/${round.gameId}?round=${roundId}`,
+        phoneNumber: ps.leaguePlayer.user.phoneNumber ?? undefined,
+      });
+    }
+  } catch (err) {
+    console.error("[Notifications] notifyFlagThrown failed:", err);
+  }
+}
+
+/**
+ * "Flag review resolved"
+ * Level: Low + High | Recipient: all active players
+ * Trigger: Flag review resolves (agreed or disagreed)
+ */
+export async function notifyFlagResolved(
+  roundId: string,
+  outcome: "agreed" | "disagreed",
+  relevantPlayerName: string
+): Promise<void> {
+  try {
+    const round = await getRoundContext(roundId);
+    if (!round) return;
+
+    const leagueId = round.game.season.league.id;
+
+    const title = outcome === "agreed"
+      ? `Round ${round.number} thrown out`
+      : `Flag denied on Round ${round.number}`;
+    const message = outcome === "agreed"
+      ? `Round ${round.number} has been thrown out. Scores reversed.`
+      : `${relevantPlayerName}'s flag was denied. They lose half their points.`;
+
+    const recipients = round.game.playerStates.filter(
+      (ps) => !ps.leaguePlayer.isFake && ps.leaguePlayer.isActive
+    );
+
+    for (const ps of recipients) {
+      await createNotification({
+        userId: ps.leaguePlayer.userId,
+        leagueId,
+        gameId: round.gameId,
+        roundId,
+        type: "flag_resolved",
+        title,
+        message,
+        destinationUrl: `/games/${round.gameId}?round=${roundId}`,
+        phoneNumber: ps.leaguePlayer.user.phoneNumber ?? undefined,
+      });
+    }
+  } catch (err) {
+    console.error("[Notifications] notifyFlagResolved failed:", err);
   }
 }

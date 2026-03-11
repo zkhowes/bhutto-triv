@@ -51,85 +51,87 @@ model User {
   image         String?
 
   // Profile fields
-  nickname      String?
-  phoneNumber   String?
-  timezone      String   @default("America/Los_Angeles")
-  avatarUrl     String?
+  nickname        String?
+  phoneNumber     String?
+  timezone        String  @default("America/Los_Angeles")
+  avatarUrl       String?
   profileComplete Boolean @default(false)
 
   // Super admin
-  isSuperAdmin  Boolean  @default(false)
+  isSuperAdmin Boolean @default(false)
 
   // Notification preference override (null = use league setting)
-  notificationPreference  String?  // "none" | "low" | "high"
+  notificationPreference String? // "none" | "low" | "high"
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  lastLoginAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  lastLoginAt DateTime?
 
   // Relations
-  accounts      Account[]
-  sessions      Session[]
-  leaguePlayers LeaguePlayer[]
+  accounts         Account[]
+  sessions         Session[]
+  leaguePlayers    LeaguePlayer[]
   questionsCreated Question[]
-  roundAnswers  RoundAnswer[]
-  notifications Notification[]
-  questionDrafts QuestionDraft[]
+  roundAnswers     RoundAnswer[]
+  notifications    Notification[]
+  questionDrafts   QuestionDraft[]
 }
 
 // ─── League Structure ───────────────────────────────────────────────────
 
 model League {
-  id             String   @id @default(cuid())
-  name           String
-  type           String   @default("season") // "single", "season", "test"
-  inviteCode     String   @unique
-  isActive       Boolean  @default(true)
-  deactivatedAt  DateTime?
+  id               String    @id @default(cuid())
+  name             String
+  type             String    @default("season") // "single", "season", "test"
+  inviteCode       String    @unique
+  isActive         Boolean   @default(true)
+  deactivatedAt    DateTime?
   deactivateReason String?
 
   // Settings
-  gamesPerSeason      Int @default(10)
-  maxPlayers          Int @default(10)
-  dailyDeadline       String @default("10:00") // HH:mm format
-  deadlineTimezone    String @default("America/Los_Angeles")
-  submissionWindowStart String @default("17:00")
-  submissionWindowEnd   String @default("07:00")
-  categoryRevealTime    String @default("07:00")
-  answerTimerSeconds    Int @default(120) // Timer from category reveal to answer deadline
-  absenteePenaltyType   String @default("half") // "half", "quarter", "none"
-  lightningMode       Boolean @default(false) // AI auto-grades, game keeps moving
-  notificationMode    String  @default("low")  // "none" | "low" | "high"
+  gamesPerSeason        Int     @default(10)
+  maxPlayers            Int     @default(10)
+  dailyDeadline         String  @default("10:00") // HH:mm format
+  deadlineTimezone      String  @default("America/Los_Angeles")
+  submissionWindowStart String  @default("17:00")
+  submissionWindowEnd   String  @default("07:00")
+  categoryRevealTime    String  @default("07:00")
+  answerTimerSeconds    Int     @default(120) // Timer from category reveal to answer deadline
+  absenteePenaltyType   String  @default("half") // "half", "quarter", "none"
+  lightningMode         Boolean @default(false) // AI auto-grades, game keeps moving
+  notificationMode      String  @default("low") // "none" | "low" | "high"
 
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  players        LeaguePlayer[]
-  seasons        Season[]
-  shareableLinks ShareableLink[]
+  players          LeaguePlayer[]
+  seasons          Season[]
+  shareableLinks   ShareableLink[]
   customCategories LeagueCategory[]
 }
 
 model LeaguePlayer {
-  id          String   @id @default(cuid())
-  leagueId    String
-  userId      String
-  role        String   @default("player") // "commissioner", "player"
-  isActive    Boolean  @default(true)
-  isFake      Boolean  @default(false)  // For test mode
-  fakeNickname String?                   // For test mode fake players
+  id           String  @id @default(cuid())
+  leagueId     String
+  userId       String
+  role         String  @default("player") // "commissioner", "player"
+  isActive     Boolean @default(true)
+  isFake       Boolean @default(false) // For test mode
+  fakeNickname String? // For test mode fake players
 
-  joinedAt    DateTime @default(now())
-  removedAt   DateTime?
+  joinedAt  DateTime  @default(now())
+  removedAt DateTime?
 
-  league      League   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  league League @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   battingOrderEntries BattingOrderEntry[]
   gamePlayerStates    GamePlayerState[]
   roundAnswers        RoundAnswer[]
   questionsCreated    Question[]
+  flagReviews         FlagReview[]
+  flagVotes           FlagVote[]
 
   @@unique([leagueId, userId])
 }
@@ -137,57 +139,59 @@ model LeaguePlayer {
 // ─── Season & Game Structure ────────────────────────────────────────────
 
 model Season {
-  id         String   @id @default(cuid())
-  leagueId   String
-  number     Int      // Season number (1, 2, 3...)
-  status     String   @default("pending") // "pending", "active", "paused", "completed"
+  id       String @id @default(cuid())
+  leagueId String
+  number   Int // Season number (1, 2, 3...)
+  status   String @default("pending") // "pending", "active", "paused", "completed"
 
-  startedAt  DateTime?
+  startedAt   DateTime?
   completedAt DateTime?
-  pausedAt   DateTime?
+  pausedAt    DateTime?
 
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  league     League   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
-  games      Game[]
-  awards     SeasonAward[]
+  league League        @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  games  Game[]
+  awards SeasonAward[]
 
   @@unique([leagueId, number])
 }
 
 model Game {
-  id         String   @id @default(cuid())
-  seasonId   String
-  number     Int      // Game number within season
-  status     String   @default("pending") // "pending", "active", "completed"
-  totalRounds Int     @default(0)         // Set at creation = player count, decremented on cancel
+  id          String @id @default(cuid())
+  seasonId    String
+  number      Int // Game number within season
+  status      String @default("pending") // "pending", "active", "completed"
+  totalRounds Int    @default(0) // Set at creation = player count, decremented on cancel
 
-  startedAt  DateTime?
+  startedAt   DateTime?
   completedAt DateTime?
 
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  season     Season   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
-  rounds     Round[]
+  season       Season              @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  rounds       Round[]
   battingOrder BattingOrderEntry[]
   playerStates GamePlayerState[]
+  flagReviews  FlagReview[]
 
   @@unique([seasonId, number])
 }
 
 model GamePlayerState {
-  id             String @id @default(cuid())
+  id             String  @id @default(cuid())
   gameId         String
   leaguePlayerId String
-  points         Int    @default(20) // Betting points
-  totalF1Points  Int    @default(0)  // Accumulated F1 scoring points
-  skipCount      Int     @default(0)       // Cumulative skips this game
+  points         Int     @default(20) // Betting points
+  totalF1Points  Int     @default(0) // Accumulated F1 scoring points
+  skipCount      Int     @default(0) // Cumulative skips this game
   isEliminated   Boolean @default(false)
+  flagUsed       Boolean @default(false) // One challenge flag per game
 
-  game           Game         @relation(fields: [gameId], references: [id], onDelete: Cascade)
-  leaguePlayer   LeaguePlayer @relation(fields: [leaguePlayerId], references: [id], onDelete: Cascade)
+  game         Game         @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  leaguePlayer LeaguePlayer @relation(fields: [leaguePlayerId], references: [id], onDelete: Cascade)
 
   @@unique([gameId, leaguePlayerId])
 }
@@ -196,10 +200,10 @@ model BattingOrderEntry {
   id             String @id @default(cuid())
   gameId         String
   leaguePlayerId String
-  position       Int    // 0-indexed position in batting order
+  position       Int // 0-indexed position in batting order
 
-  game           Game         @relation(fields: [gameId], references: [id], onDelete: Cascade)
-  leaguePlayer   LeaguePlayer @relation(fields: [leaguePlayerId], references: [id], onDelete: Cascade)
+  game         Game         @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  leaguePlayer LeaguePlayer @relation(fields: [leaguePlayerId], references: [id], onDelete: Cascade)
 
   @@unique([gameId, leaguePlayerId])
   @@unique([gameId, position])
@@ -208,142 +212,143 @@ model BattingOrderEntry {
 // ─── Round & Questions ──────────────────────────────────────────────────
 
 model Round {
-  id           String   @id @default(cuid())
-  gameId       String
-  number       Int      // Round number within game
-  status       String   @default("pending")
-  // "pending" | "awaiting_question" | "question_submitted" | "category_revealed" | "closed" | "graded" | "cancelled"
-  isCancelled  Boolean  @default(false)
+  id          String  @id @default(cuid())
+  gameId      String
+  number      Int // Round number within game
+  status      String  @default("pending")
+  // "pending" | "awaiting_question" | "question_submitted" | "category_revealed" | "closed" | "graded" | "under_review" | "cancelled"
+  isCancelled Boolean @default(false)
 
-  atBatPlayerId    String? // LeaguePlayer id of player creating question
-  onDeckPlayerId   String? // Next player
+  atBatPlayerId     String? // LeaguePlayer id of player creating question
+  onDeckPlayerId    String? // Next player
   inTheHolePlayerId String? // Player after next
 
   questionSubmissionOpensAt DateTime?
   categoryRevealAt          DateTime?
   deadlineAt                DateTime?
 
-  funFact           String?  // AI-generated "Did You Know" fact
-  questionComposite Float?   // Computed question quality score (1-5 scale)
+  funFact           String? // AI-generated "Did You Know" fact
+  questionComposite Float? // Computed question quality score (1-5 scale)
 
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  game         Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
-  question     Question?
-  answers      RoundAnswer[]
+  game       Game          @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  question   Question?
+  answers    RoundAnswer[]
+  flagReview FlagReview?
 
   @@unique([gameId, number])
 }
 
 model Question {
-  id             String   @id @default(cuid())
-  roundId        String?  @unique
+  id             String  @id @default(cuid())
+  roundId        String? @unique
   leaguePlayerId String
   creatorUserId  String
 
-  category       String   // Geography, Sports, etc.
-  questionText   String
-  answerFormat    String   // "multiple_choice" or "free_text"
+  category     String // Geography, Sports, etc.
+  questionText String
+  answerFormat String // "multiple_choice" or "free_text"
 
   // Multiple choice
-  optionA        String?
-  optionB        String?
-  optionC        String?
-  optionD        String?
-  correctOption  String?  // "A", "B", "C", or "D"
+  optionA       String?
+  optionB       String?
+  optionC       String?
+  optionD       String?
+  correctOption String? // "A", "B", "C", or "D"
 
   // Free text
-  correctAnswer  String?
+  correctAnswer     String?
   acceptableAnswers String? // JSON array of acceptable variations
 
-  isEditable     Boolean  @default(true) // Locked once first bet placed
-  isFromBank     Boolean  @default(false)
-  isReplay       Boolean  @default(false)
+  isEditable         Boolean @default(true) // Locked once first bet placed
+  isFromBank         Boolean @default(false)
+  isReplay           Boolean @default(false)
   originalQuestionId String?
 
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  round          Round?        @relation(fields: [roundId], references: [id])
-  leaguePlayer   LeaguePlayer  @relation(fields: [leaguePlayerId], references: [id])
-  creator        User          @relation(fields: [creatorUserId], references: [id])
-  answers        RoundAnswer[]
+  round        Round?        @relation(fields: [roundId], references: [id])
+  leaguePlayer LeaguePlayer  @relation(fields: [leaguePlayerId], references: [id])
+  creator      User          @relation(fields: [creatorUserId], references: [id])
+  answers      RoundAnswer[]
 }
 
 model QuestionDraft {
-  id             String   @id @default(cuid())
-  userId         String
-  category       String?
-  questionText   String?
-  answerFormat    String?
-  optionA        String?
-  optionB        String?
-  optionC        String?
-  optionD        String?
-  correctOption  String?
-  correctAnswer  String?
+  id                String  @id @default(cuid())
+  userId            String
+  category          String?
+  questionText      String?
+  answerFormat      String?
+  optionA           String?
+  optionB           String?
+  optionC           String?
+  optionD           String?
+  correctOption     String?
+  correctAnswer     String?
   acceptableAnswers String?
-  useOnNextRound Boolean  @default(false)
-  leagueId       String?  // If associated with specific league
+  useOnNextRound    Boolean @default(false)
+  leagueId          String? // If associated with specific league
 
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 // ─── Answers & Grading ──────────────────────────────────────────────────
 
 model RoundAnswer {
-  id             String   @id @default(cuid())
+  id             String @id @default(cuid())
   roundId        String
   questionId     String
   leaguePlayerId String
   userId         String
 
   // Betting
-  betAmount      Int?
-  betPlacedAt    DateTime?
+  betAmount   Int?
+  betPlacedAt DateTime?
 
   // Answer
-  selectedOption String?  // For multiple choice: "A", "B", "C", "D"
-  freeTextAnswer String?  // For free text
+  selectedOption String? // For multiple choice: "A", "B", "C", "D"
+  freeTextAnswer String? // For free text
   answeredAt     DateTime?
 
   // Grading
-  isCorrect      Boolean?
-  gradedBy       String?  // "auto", "ai", "creator", "commissioner"
-  aiGradeCorrect Boolean? // What AI graded (before creator override)
-  creatorValidated Boolean @default(false)
+  isCorrect        Boolean?
+  gradedBy         String? // "auto", "ai", "creator", "commissioner"
+  aiGradeCorrect   Boolean? // What AI graded (before creator override)
+  creatorValidated Boolean  @default(false)
 
   // Scoring
-  pointsWon      Int      @default(0) // Positive for win, negative for loss
-  f1Points       Int      @default(0) // F1 placement points
-  placement      Int?     // 1st, 2nd, etc.
-  fastestLap     Boolean  @default(false)
+  pointsWon  Int     @default(0) // Positive for win, negative for loss
+  f1Points   Int     @default(0) // F1 placement points
+  placement  Int? // 1st, 2nd, etc.
+  fastestLap Boolean @default(false)
 
   // Power-ups
-  powerUpType    String?  // "hint" | "elimination" | "highlow"
-  powerUpCost    Int      @default(0)
-  powerUpData    String?  // JSON: { hint?, eliminatedOption?, probeValue?, direction? }
+  powerUpType String? // "hint" | "elimination" | "highlow"
+  powerUpCost Int     @default(0)
+  powerUpData String? // JSON: { hint?, eliminatedOption?, probeValue?, direction? }
 
   // Cheat Seeker (client-side signals collected during answering)
-  cheatSeekerData String?  // JSON: { tabSwitches, timeAway, pasteDetected, blurCount }
+  cheatSeekerData String? // JSON: { tabSwitches, timeAway, pasteDetected, blurCount }
 
   // Question quality rating (1-5 stars)
   questionRating Int?
 
   // Absentee
-  isAbsent       Boolean  @default(false)
+  isAbsent Boolean @default(false)
 
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  round          Round        @relation(fields: [roundId], references: [id], onDelete: Cascade)
-  question       Question     @relation(fields: [questionId], references: [id])
-  leaguePlayer   LeaguePlayer @relation(fields: [leaguePlayerId], references: [id])
-  user           User         @relation(fields: [userId], references: [id])
+  round        Round        @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  question     Question     @relation(fields: [questionId], references: [id])
+  leaguePlayer LeaguePlayer @relation(fields: [leaguePlayerId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
 
   @@unique([roundId, leaguePlayerId])
 }
@@ -351,56 +356,56 @@ model RoundAnswer {
 // ─── Awards & Stats ─────────────────────────────────────────────────────
 
 model SeasonAward {
-  id         String @id @default(cuid())
-  seasonId   String
-  awardType  String // "mvp", "iron_man", "offensive", "defensive", "comeback", "rookie", "clutch", "strategist", "most_improved"
-  playerId   String // LeaguePlayer id
-  stat       String // Relevant statistic description
-  value      Float? // Numeric value if applicable
+  id        String @id @default(cuid())
+  seasonId  String
+  awardType String // "mvp", "iron_man", "offensive", "defensive", "comeback", "rookie", "clutch", "strategist", "most_improved"
+  playerId  String // LeaguePlayer id
+  stat      String // Relevant statistic description
+  value     Float? // Numeric value if applicable
 
-  createdAt  DateTime @default(now())
+  createdAt DateTime @default(now())
 
-  season     Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  season Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
 }
 
 // ─── Notifications ──────────────────────────────────────────────────────
 
 model Notification {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String
   leagueId  String?
   gameId    String?
   roundId   String?
-  type      String   // "at_bat" | "new_question" | "all_answers_in" | "on_deck" | "round_results" | "about_to_be_skipped"
+  type      String // "at_bat" | "new_question" | "all_answers_in" | "on_deck" | "round_results" | "about_to_be_skipped"
   title     String
   message   String
-  link      String?  // click-through URL (/api/notifications/click/[id] → actual page)
-  data      String?  // JSON with additional context
-  isRead    Boolean  @default(false)
-  smsStatus String?  // null (in-app only) | "sent" | "failed"
+  link      String? // click-through URL (/api/notifications/click/[id] → actual page)
+  data      String? // JSON with additional context
+  isRead    Boolean   @default(false)
+  smsStatus String? // null (in-app only) | "sent" | "failed"
   smsSentAt DateTime?
   clickedAt DateTime? // set when player clicks the notification link
 
   createdAt DateTime @default(now())
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 // ─── Shareable Links ────────────────────────────────────────────────────
 
 model ShareableLink {
-  id         String   @id @default(cuid())
-  leagueId   String
-  type       String   // "invitation", "round", "game", "season", "league"
-  token      String   @unique
-  entityId   String?  // ID of the round/game/season being shared
-  isActive   Boolean  @default(true)
-  viewCount  Int      @default(0)
+  id        String  @id @default(cuid())
+  leagueId  String
+  type      String // "invitation", "round", "game", "season", "league"
+  token     String  @unique
+  entityId  String? // ID of the round/game/season being shared
+  isActive  Boolean @default(true)
+  viewCount Int     @default(0)
 
-  createdAt  DateTime @default(now())
-  expiresAt  DateTime?
+  createdAt DateTime  @default(now())
+  expiresAt DateTime?
 
-  league     League   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  league League @relation(fields: [leagueId], references: [id], onDelete: Cascade)
 }
 
 // ─── Global Settings ────────────────────────────────────────────────────
@@ -426,11 +431,11 @@ model LeagueCategory {
   id          String   @id @default(cuid())
   leagueId    String
   name        String
-  createdById String   // LeaguePlayer id who first used it
+  createdById String // LeaguePlayer id who first used it
   usageCount  Int      @default(1)
   createdAt   DateTime @default(now())
 
-  league      League   @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  league League @relation(fields: [leagueId], references: [id], onDelete: Cascade)
 
   @@unique([leagueId, name])
 }
@@ -438,11 +443,43 @@ model LeagueCategory {
 // ─── Admin Audit Log ────────────────────────────────────────────────────
 
 model AdminAuditLog {
-  id        String   @id @default(cuid())
-  adminId   String   // User id of admin
-  action    String   // Description of action taken
+  id         String  @id @default(cuid())
+  adminId    String // User id of admin
+  action     String // Description of action taken
   entityType String? // "league", "player", "question"
-  entityId  String?
+  entityId   String?
 
   createdAt DateTime @default(now())
+}
+
+// ─── Flag Reviews (Challenge System) ─────────────────────────────────
+
+model FlagReview {
+  id          String    @id @default(cuid())
+  roundId     String    @unique
+  gameId      String
+  flaggedById String // LeaguePlayer who threw the flag
+  objection   String // Plain text reason for contesting
+  status      String    @default("pending") // "pending" | "agreed" | "disagreed"
+  resolvedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  round     Round        @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  game      Game         @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  flaggedBy LeaguePlayer @relation(fields: [flaggedById], references: [id])
+  votes     FlagVote[]
+}
+
+model FlagVote {
+  id             String   @id @default(cuid())
+  flagReviewId   String
+  leaguePlayerId String
+  vote           String // "agree" | "disagree"
+  isProxyVote    Boolean  @default(false) // Commissioner voted on behalf
+  createdAt      DateTime @default(now())
+
+  flagReview   FlagReview   @relation(fields: [flagReviewId], references: [id], onDelete: Cascade)
+  leaguePlayer LeaguePlayer @relation(fields: [leaguePlayerId], references: [id])
+
+  @@unique([flagReviewId, leaguePlayerId])
 }

@@ -3,17 +3,25 @@
 import { useState } from "react";
 import StarRating from "@/components/ui/StarRating";
 import InfoTooltip from "@/components/ui/InfoTooltip";
+import ThrowFlagButton from "@/components/game/ThrowFlagButton";
 
 interface RoundControlProps {
   round: {
     id: string;
     number: number;
+    status?: string;
     funFact?: string | null;
     atBatPlayerId?: string | null;
     questionScore?: {
       avgRating: number | null;
       successRate: number | null;
       composite: number | null;
+    } | null;
+    flagReview?: {
+      id: string;
+      status: string;
+      flaggedById: string;
+      objection: string;
     } | null;
     question: {
       category: string;
@@ -42,11 +50,32 @@ interface RoundControlProps {
         user: { id: string; nickname: string; avatarUrl: string | null; image: string | null };
       };
     }>;
+    game?: {
+      playerStates?: Array<{
+        leaguePlayerId: string;
+        points: number;
+      }>;
+    };
   };
   myPlayerId: string | null;
+  flagUsed?: boolean;
+  flagWindowOpen?: boolean;
+  activePlayerCount?: number;
+  actAsPlayerId?: string | null;
+  onRefresh?: () => void;
+  isCommissioner?: boolean;
 }
 
-export default function RoundControl({ round, myPlayerId }: RoundControlProps) {
+export default function RoundControl({
+  round,
+  myPlayerId,
+  flagUsed = false,
+  flagWindowOpen = false,
+  activePlayerCount = 0,
+  actAsPlayerId = null,
+  onRefresh,
+  isCommissioner = false,
+}: RoundControlProps) {
   const [liveRating, setLiveRating] = useState<number | null>(null);
   const [ratingSubmitting, setRatingSubmitting] = useState(false);
   const myAnswer = round.answers.find((a) => a.leaguePlayerId === myPlayerId);
@@ -207,6 +236,31 @@ export default function RoundControl({ round, myPlayerId }: RoundControlProps) {
             </p>
             <p className="text-sm text-[#e8e8e8]">{round.funFact}</p>
           </div>
+        )}
+
+        {/* Flag outcome badge */}
+        {round.flagReview && round.flagReview.status !== "pending" && (
+          <div className={`mt-4 pt-3 border-t ${round.flagReview.status === "agreed" ? "border-emerald-500/20" : "border-red-500/20"}`}>
+            <p className={`text-xs font-bold uppercase tracking-wider ${round.flagReview.status === "agreed" ? "text-emerald-400" : "text-amber-400"}`}>
+              {round.flagReview.status === "agreed" ? "Round was challenged and thrown out" : "Flag was denied"}
+            </p>
+          </div>
+        )}
+
+        {/* Throw Flag button */}
+        {myPlayerId && round.status === "graded" && onRefresh && (
+          <ThrowFlagButton
+            roundId={round.id}
+            myPlayerId={myPlayerId}
+            atBatPlayerId={round.atBatPlayerId || null}
+            flagUsed={flagUsed}
+            flagWindowOpen={flagWindowOpen}
+            activePlayerCount={activePlayerCount}
+            hasFlagReview={!!round.flagReview}
+            myPoints={round.game?.playerStates?.find((ps) => ps.leaguePlayerId === myPlayerId)?.points ?? 0}
+            actAsPlayerId={actAsPlayerId}
+            onFlagThrown={onRefresh}
+          />
         )}
       </div>
     </div>
