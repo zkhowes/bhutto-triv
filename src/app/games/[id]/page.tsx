@@ -387,7 +387,7 @@ export default function GamePage() {
       for (const ps of game.playerStates) {
         const name = ps.leaguePlayer.fakeNickname || ps.leaguePlayer.user.nickname;
         const answer = rd.answers.find((a) => a.leaguePlayerId === ps.leaguePlayerId);
-        cumulative[name] = (cumulative[name] || STARTING_POINTS) + (answer?.pointsWon || 0);
+        cumulative[name] = Math.max(0, (cumulative[name] || STARTING_POINTS) + (answer?.pointsWon || 0));
         point[name] = cumulative[name];
       }
       data.push(point);
