@@ -66,7 +66,7 @@ export default function AnswerInterface({
   const availableAfterBet = playerPoints - betAmount;
   const powerUpCost = computePowerUpCost(playerPoints, allActivePoints);
   const canAffordPowerUp = availableAfterBet >= powerUpCost;
-  const isAnswerPhase = roundStatus === "category_revealed";
+  const isAnswerPhase = roundStatus === "category_revealed" || roundStatus === "question_submitted";
 
   // Cheat Seeker tracking
   const tabSwitches = useRef(0);
