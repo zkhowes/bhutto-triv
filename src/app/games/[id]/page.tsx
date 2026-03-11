@@ -534,6 +534,12 @@ export default function GamePage() {
             <RoundControl
               round={previousGradedRound}
               myPlayerId={myPlayerId}
+              flagUsed={previousGradedRound.flagUsed}
+              flagWindowOpen={previousGradedRound.flagWindowOpen}
+              activePlayerCount={previousGradedRound.activePlayerCount}
+              actAsPlayerId={actAsPlayerId}
+              onRefresh={fetchGame}
+              isCommissioner={isCommissioner}
             />
             <div className="mt-4">
               <BoxScoreControl
