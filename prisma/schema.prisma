@@ -117,10 +117,12 @@ model LeaguePlayer {
   userId       String
   role         String  @default("player") // "commissioner", "player"
   isActive     Boolean @default(true)
+  isPaused     Boolean @default(false) // Temporarily removed from active play; history preserved
   isFake       Boolean @default(false) // For test mode
   fakeNickname String? // For test mode fake players
 
   joinedAt  DateTime  @default(now())
+  pausedAt  DateTime?
   removedAt DateTime?
 
   league League @relation(fields: [leagueId], references: [id], onDelete: Cascade)

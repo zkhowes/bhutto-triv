@@ -98,5 +98,22 @@ export async function GET(
     return NextResponse.json({ error: "Not a member of this league" }, { status: 403 });
   }
 
-  return NextResponse.json({ ...game, myRole, myPlayerId });
+  // Find previous game's last graded round (for cross-game recap on new game start)
+  let previousGameLastRoundId: string | null = null;
+  if (game.number > 1) {
+    const prevGame = await prisma.game.findFirst({
+      where: { seasonId: game.seasonId, number: game.number - 1 },
+      select: {
+        rounds: {
+          where: { status: "graded", isCancelled: false },
+          orderBy: { number: "desc" },
+          take: 1,
+          select: { id: true },
+        },
+      },
+    });
+    previousGameLastRoundId = prevGame?.rounds[0]?.id ?? null;
+  }
+
+  return NextResponse.json({ ...game, myRole, myPlayerId, previousGameLastRoundId });
 }

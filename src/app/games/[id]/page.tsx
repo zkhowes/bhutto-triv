@@ -26,6 +26,7 @@ interface GameData {
   totalRounds: number;
   myRole: string | null;
   myPlayerId: string | null;
+  previousGameLastRoundId: string | null;
   season: {
     id: string;
     number: number;
@@ -245,8 +246,15 @@ export default function GamePage() {
       const gradedRoundIds = gameData.rounds
         .filter((r) => !r.isCancelled && r.status === "graded")
         .map((r) => r.id);
+
+      // Also fetch previous game's last round if available (for cross-game recap)
+      const roundIdsToFetch = [...gradedRoundIds];
+      if (gameData.previousGameLastRoundId && !roundIdsToFetch.includes(gameData.previousGameLastRoundId)) {
+        roundIdsToFetch.push(gameData.previousGameLastRoundId);
+      }
+
       await Promise.all(
-        gradedRoundIds.map((id) => fetchRoundData(id))
+        roundIdsToFetch.map((id) => fetchRoundData(id))
       );
     } catch {
       router.push("/dashboard");
@@ -412,7 +420,7 @@ export default function GamePage() {
   const guideRoundData = game.status === "completed" ? currentRoundData : activeRoundData;
 
   // Find the previous graded round for "last round results" display
-  const getPreviousGradedRound = () => {
+  const getPreviousGradedRound = (): { round: RoundData; fromPreviousGame: boolean } | null => {
     if (!activeRound || game.status === "completed") return null;
     // Only show when actively viewing the current round (not browsing history)
     if (selectedRoundId && selectedRoundId !== activeRound.id) return null;
@@ -420,15 +428,23 @@ export default function GamePage() {
     if (activeRoundData?.status === "graded") return null;
     const nonCancelled = game.rounds.filter((r) => !r.isCancelled);
     const activeIdx = nonCancelled.findIndex((r) => r.id === activeRound.id);
-    // Walk backwards to find the most recent graded round
+    // Walk backwards to find the most recent graded round within this game
     for (let i = activeIdx - 1; i >= 0; i--) {
       if (nonCancelled[i].status === "graded") {
-        return roundDataCache.get(nonCancelled[i].id) || null;
+        const rd = roundDataCache.get(nonCancelled[i].id);
+        return rd ? { round: rd, fromPreviousGame: false } : null;
       }
+    }
+    // Fall back to previous game's last round
+    if (game.previousGameLastRoundId) {
+      const rd = roundDataCache.get(game.previousGameLastRoundId);
+      return rd ? { round: rd, fromPreviousGame: true } : null;
     }
     return null;
   };
-  const previousGradedRound = getPreviousGradedRound();
+  const previousGradedRoundInfo = getPreviousGradedRound();
+  const previousGradedRound = previousGradedRoundInfo?.round ?? null;
+
 
   return (
     <div className="min-h-screen">
@@ -511,7 +527,9 @@ export default function GamePage() {
         {previousGradedRound && previousGradedRound.question && (
           <div className="mb-6">
             <p className="text-xs text-[#a0a0b8] uppercase tracking-wider mb-3">
-              Last Round (Round {previousGradedRound.number})
+              Last Round {previousGradedRoundInfo?.fromPreviousGame
+                ? `(Game ${(game.number - 1)} Round ${previousGradedRound.number})`
+                : `(Round ${previousGradedRound.number})`}
             </p>
             <RoundControl
               round={previousGradedRound}

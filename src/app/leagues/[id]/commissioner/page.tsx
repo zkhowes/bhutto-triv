@@ -38,6 +38,7 @@ interface LeagueInfo {
   inviteCode: string;
   myRole: string | null;
   players: Player[];
+  pausedPlayers: Player[];
   seasons: Array<{
     id: string;
     number: number;
@@ -97,6 +98,25 @@ export default function CommissionerPage() {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ playerId }),
+    });
+    await fetchLeague();
+  };
+
+  const pausePlayer = async (playerId: string) => {
+    if (!confirm("Pause this player? They'll be removed from active play but keep all their history and can rejoin later.")) return;
+    await fetch(`/api/leagues/${leagueId}/players`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerId, action: "pause" }),
+    });
+    await fetchLeague();
+  };
+
+  const unpausePlayer = async (playerId: string) => {
+    await fetch(`/api/leagues/${leagueId}/players`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playerId, action: "unpause" }),
     });
     await fetchLeague();
   };
@@ -326,18 +346,72 @@ export default function CommissionerPage() {
                         )}
                       </span>
                       {p.role !== "commissioner" && (
-                        <button
-                          onClick={() => removePlayer(p.id)}
-                          className="text-xs text-red-400 hover:text-red-300"
-                        >
-                          Remove
-                        </button>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => pausePlayer(p.id)}
+                            className="text-xs text-amber-400 hover:text-amber-300"
+                          >
+                            Pause
+                          </button>
+                          <button
+                            onClick={() => removePlayer(p.id)}
+                            className="text-xs text-red-400 hover:text-red-300"
+                          >
+                            Remove
+                          </button>
+                        </div>
                       )}
                     </div>
                   );
                 })}
               </div>
             </div>
+
+            {league.pausedPlayers.length > 0 && (
+              <div className="card p-5">
+                <h2 className="text-sm font-semibold text-[#a0a0b8] uppercase tracking-wider mb-3">
+                  Paused Players
+                </h2>
+                <p className="text-xs text-[#666680] mb-3">
+                  Paused players keep all history and stats but are excluded from new games.
+                </p>
+                <div className="space-y-2">
+                  {league.pausedPlayers.map((p) => {
+                    const name = p.fakeNickname || p.user.nickname || p.user.name;
+                    return (
+                      <div
+                        key={p.id}
+                        className="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-[#0f0f23]/50"
+                      >
+                        <Avatar
+                          src={p.user.avatarUrl || p.user.image}
+                          name={name}
+                          size="sm"
+                        />
+                        <span className="flex-1 text-[#a0a0b8] text-sm">
+                          {name}
+                          <span className="ml-1.5 text-xs text-amber-400">(paused)</span>
+                        </span>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => unpausePlayer(p.id)}
+                            className="text-xs text-emerald-400 hover:text-emerald-300"
+                          >
+                            Resume
+                          </button>
+                          <button
+                            onClick={() => removePlayer(p.id)}
+                            className="text-xs text-red-400 hover:text-red-300"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             <div className="card p-5">
               <h2 className="text-sm font-semibold text-[#a0a0b8] uppercase tracking-wider mb-3">

@@ -209,7 +209,7 @@ Required for development (see `.env.example`):
 
 ## Kanban
 
-> Last updated: 2026-03-02
+> Last updated: 2026-03-11
 
 ### Backlog
 - [ ] Replay past questions — *schema has isReplay/originalQuestionId, needs UI + API*
@@ -223,9 +223,11 @@ Required for development (see `.env.example`):
 - [ ] Shareable link generation UI — *API + model exist, needs Share buttons on game/round/season pages*
 
 ### In Progress
-- [ ] Throw a Flag — *NFL-style challenge system: contest rounds, player voting, score reversal*
 
 ### Done
+- [x] Pause player status — *commissioner can pause/resume players, preserves history, excludes from active play*
+- [x] Cross-game round recap — *show previous game's last round results on new game start*
+- [x] Throw a Flag — *NFL-style challenge system: contest rounds, player voting, score reversal*
 - [x] Google OAuth + profile setup flow
 - [x] Full data model (League/Season/Game/Round/Answer/Player/BattingOrder)
 - [x] Game engine — question submission, betting, answering, grading, round close, scoring

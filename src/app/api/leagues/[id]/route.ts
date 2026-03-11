@@ -152,6 +152,22 @@ export async function GET(
     }
   }
 
+  // Fetch paused players for commissioner tools
+  const pausedPlayers = await prisma.leaguePlayer.findMany({
+    where: { leagueId, isPaused: true },
+    include: {
+      user: {
+        select: {
+          id: true,
+          nickname: true,
+          avatarUrl: true,
+          image: true,
+          name: true,
+        },
+      },
+    },
+  });
+
   return NextResponse.json({
     ...league,
     isPlayer,
@@ -159,6 +175,7 @@ export async function GET(
     myPlayerId: myPlayer?.id || null,
     seasonStandings,
     seasonChartData,
+    pausedPlayers,
   });
 }
 
