@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { MIN_PLAYERS_FOR_FLAG } from "@/lib/constants";
+import InfoTooltip from "@/components/ui/InfoTooltip";
 
 interface ThrowFlagButtonProps {
   roundId: string;
@@ -72,12 +73,18 @@ export default function ThrowFlagButton({
 
   if (!expanded) {
     return (
-      <button
-        onClick={() => setExpanded(true)}
-        className="w-full mt-4 py-2.5 px-4 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-400 text-sm font-medium hover:bg-amber-500/20 transition-colors"
-      >
-        Throw a Flag
-      </button>
+      <div className="mt-4 flex items-center gap-2">
+        <button
+          onClick={() => setExpanded(true)}
+          className="py-2 px-4 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-400 text-sm font-medium hover:bg-amber-500/20 transition-colors flex items-center gap-2"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-red-500">
+            <path d="M4 2a1 1 0 0 1 1 1v1h11.586a1 1 0 0 1 .707 1.707L13.414 9.5l3.879 3.793A1 1 0 0 1 16.586 15H5v6a1 1 0 1 1-2 0V3a1 1 0 0 1 1-1z" />
+          </svg>
+          Throw a Flag
+        </button>
+        <InfoTooltip text="Challenge this round if you think the grading was wrong. Other players vote on your objection. If denied, you lose 50% of your points." />
+      </div>
     );
   }
 

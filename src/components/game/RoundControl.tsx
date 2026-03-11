@@ -228,6 +228,22 @@ export default function RoundControl({
           </div>
         )}
 
+        {/* Throw Flag button — between answer/rating and fun fact */}
+        {myPlayerId && round.status === "graded" && onRefresh && (
+          <ThrowFlagButton
+            roundId={round.id}
+            myPlayerId={myPlayerId}
+            atBatPlayerId={round.atBatPlayerId || null}
+            flagUsed={flagUsed}
+            flagWindowOpen={flagWindowOpen}
+            activePlayerCount={activePlayerCount}
+            hasFlagReview={!!round.flagReview}
+            myPoints={round.game?.playerStates?.find((ps) => ps.leaguePlayerId === myPlayerId)?.points ?? 0}
+            actAsPlayerId={actAsPlayerId}
+            onFlagThrown={onRefresh}
+          />
+        )}
+
         {/* Row 3: Fun fact */}
         {round.funFact && (
           <div className="mt-4 pt-3 border-t border-purple-500/20">
@@ -245,22 +261,6 @@ export default function RoundControl({
               {round.flagReview.status === "agreed" ? "Round was challenged and thrown out" : "Flag was denied"}
             </p>
           </div>
-        )}
-
-        {/* Throw Flag button */}
-        {myPlayerId && round.status === "graded" && onRefresh && (
-          <ThrowFlagButton
-            roundId={round.id}
-            myPlayerId={myPlayerId}
-            atBatPlayerId={round.atBatPlayerId || null}
-            flagUsed={flagUsed}
-            flagWindowOpen={flagWindowOpen}
-            activePlayerCount={activePlayerCount}
-            hasFlagReview={!!round.flagReview}
-            myPoints={round.game?.playerStates?.find((ps) => ps.leaguePlayerId === myPlayerId)?.points ?? 0}
-            actAsPlayerId={actAsPlayerId}
-            onFlagThrown={onRefresh}
-          />
         )}
       </div>
     </div>
