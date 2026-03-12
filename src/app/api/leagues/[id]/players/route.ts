@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { notifyAtBat, notifyOnDeck } from "@/lib/notifications";
 
 // GET - list players
 export async function GET(
@@ -74,6 +75,95 @@ export async function PATCH(
       where: { id: playerId },
       data: { isActive: false, isPaused: true, pausedAt: new Date() },
     });
+
+    // Handle active game: cancel paused player's pending rounds and eliminate them
+    const activeGame = await prisma.game.findFirst({
+      where: {
+        season: { leagueId: params.id },
+        status: "active",
+      },
+      include: {
+        rounds: { orderBy: { number: "asc" } },
+        playerStates: true,
+      },
+    });
+
+    if (activeGame) {
+      // Eliminate the player from the game
+      await prisma.gamePlayerState.updateMany({
+        where: { gameId: activeGame.id, leaguePlayerId: playerId },
+        data: { isEliminated: true },
+      });
+
+      // Find rounds where this player is at bat that haven't progressed past awaiting_question
+      const playerRounds = activeGame.rounds.filter(
+        (r) =>
+          r.atBatPlayerId === playerId &&
+          !r.isCancelled &&
+          (r.status === "pending" || r.status === "awaiting_question")
+      );
+
+      for (const r of playerRounds) {
+        // Cancel the round
+        await prisma.round.update({
+          where: { id: r.id },
+          data: { status: "cancelled", isCancelled: true },
+        });
+
+        // Decrement totalRounds
+        await prisma.game.update({
+          where: { id: activeGame.id },
+          data: { totalRounds: { decrement: 1 } },
+        });
+
+        // If this was the active round (awaiting_question), advance to next round
+        if (r.status === "awaiting_question") {
+          const nextPending = activeGame.rounds.find(
+            (nr) =>
+              nr.number > r.number &&
+              !nr.isCancelled &&
+              nr.atBatPlayerId !== playerId &&
+              nr.status === "pending"
+          );
+          if (nextPending) {
+            await prisma.round.update({
+              where: { id: nextPending.id },
+              data: { status: "awaiting_question" },
+            });
+            await notifyAtBat(nextPending.id);
+            await notifyOnDeck(nextPending.id);
+          } else {
+            // No more rounds — check if game should complete
+            const remainingRounds = activeGame.rounds.filter(
+              (nr) =>
+                !nr.isCancelled &&
+                nr.id !== r.id &&
+                nr.atBatPlayerId !== playerId &&
+                nr.status !== "graded"
+            );
+            if (remainingRounds.length === 0) {
+              // Complete the game
+              const { getF1PointsForPlacement } = await import("@/lib/scoring");
+              const finalStates = await prisma.gamePlayerState.findMany({
+                where: { gameId: activeGame.id },
+              });
+              const sorted = [...finalStates].sort((a, b) => b.points - a.points);
+              for (let i = 0; i < sorted.length; i++) {
+                const f1Points = getF1PointsForPlacement(i + 1, sorted.length);
+                await prisma.gamePlayerState.update({
+                  where: { id: sorted[i].id },
+                  data: { totalF1Points: f1Points },
+                });
+              }
+              await prisma.game.update({
+                where: { id: activeGame.id },
+                data: { status: "completed", completedAt: new Date() },
+              });
+            }
+          }
+        }
+      }
+    }
   } else {
     if (!targetPlayer.isPaused) {
       return NextResponse.json({ error: "Player is not paused" }, { status: 400 });
