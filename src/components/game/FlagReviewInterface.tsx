@@ -30,11 +30,26 @@ interface FlagReviewData {
   };
 }
 
+interface RoundContext {
+  questionText: string;
+  correctAnswer: string | null;
+  category: string;
+  answers: Array<{
+    leaguePlayerId: string;
+    nickname: string;
+    freeTextAnswer: string | null;
+    selectedOption: string | null;
+    isCorrect: boolean | null;
+    pointsWon: number;
+  }>;
+}
+
 interface FlagReviewInterfaceProps {
   roundId: string;
   myPlayerId: string | null;
   isCommissioner: boolean;
   actAsPlayerId: string | null;
+  roundContext?: RoundContext | null;
   onResolved: () => void;
 }
 
@@ -43,6 +58,7 @@ export default function FlagReviewInterface({
   myPlayerId,
   isCommissioner,
   actAsPlayerId,
+  roundContext,
   onResolved,
 }: FlagReviewInterfaceProps) {
   const [review, setReview] = useState<FlagReviewData | null>(null);
@@ -212,6 +228,30 @@ export default function FlagReviewInterface({
         <p className="text-xs text-[#666680] uppercase tracking-wider mb-1">Objection</p>
         <p className="text-sm text-[#e8e8e8]">&ldquo;{review.objection}&rdquo;</p>
       </div>
+
+      {/* Round context: question, correct answer, player answers */}
+      {roundContext && (
+        <div className="bg-[#0f0f23] rounded-lg p-3 mb-4 space-y-2">
+          <p className="text-xs text-[#666680] uppercase tracking-wider">Round Details</p>
+          <p className="text-sm text-white font-medium">{roundContext.questionText}</p>
+          {roundContext.correctAnswer && (
+            <p className="text-xs text-[#a0a0b8]">
+              Correct answer: <span className="text-emerald-400 font-medium">{roundContext.correctAnswer}</span>
+            </p>
+          )}
+          <div className="border-t border-[#1e3a5f] pt-2 mt-2 space-y-1">
+            {roundContext.answers.map((a) => (
+              <div key={a.leaguePlayerId} className="flex justify-between items-center text-xs">
+                <span className="text-[#e8e8e8]">{a.nickname}</span>
+                <span className={a.isCorrect ? "text-emerald-400" : a.isCorrect === false ? "text-red-400" : "text-[#a0a0b8]"}>
+                  {a.freeTextAnswer || a.selectedOption || "—"}
+                  {a.isCorrect !== null && (a.isCorrect ? " ✓" : " ✗")}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Vote tally */}
       <div className="flex justify-between items-center mb-4 text-sm">

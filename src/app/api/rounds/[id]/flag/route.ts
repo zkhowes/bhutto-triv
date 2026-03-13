@@ -85,6 +85,7 @@ export async function GET(
                 select: {
                   leaguePlayerId: true,
                   isEliminated: true,
+                  leaguePlayer: { select: { isPaused: true } },
                 },
               },
             },
@@ -98,10 +99,10 @@ export async function GET(
     return NextResponse.json({ flagReview: null });
   }
 
-  // Calculate eligible voter count
+  // Calculate eligible voter count (paused excluded, busted can still vote)
   const eligibleVoters = flagReview.round.game.playerStates.filter(
     (ps) =>
-      !ps.isEliminated &&
+      !ps.leaguePlayer.isPaused &&
       ps.leaguePlayerId !== flagReview.flaggedById &&
       ps.leaguePlayerId !== flagReview.round.atBatPlayerId
   );

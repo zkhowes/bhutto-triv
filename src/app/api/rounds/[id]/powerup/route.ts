@@ -52,7 +52,7 @@ export async function POST(
     return NextResponse.json({ error: "Round not found" }, { status: 404 });
   }
 
-  if (round.status !== ROUND_STATUS.CATEGORY_REVEALED) {
+  if (round.status !== ROUND_STATUS.CATEGORY_REVEALED && round.status !== ROUND_STATUS.QUESTION_SUBMITTED) {
     return NextResponse.json(
       { error: "Power-ups are only available during the answer phase" },
       { status: 400 }

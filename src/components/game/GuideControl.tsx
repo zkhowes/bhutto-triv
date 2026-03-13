@@ -192,12 +192,29 @@ export default function GuideControl(props: GuideControlProps) {
 
   // Under review -> flag review interface
   if (round.status === "under_review") {
+    const roundContext = round.question ? {
+      questionText: round.question.questionText,
+      correctAnswer: round.question.correctAnswer,
+      category: round.question.category,
+      answers: round.answers
+        .filter((a) => a.leaguePlayerId !== round.atBatPlayerId && !a.isAbsent)
+        .map((a) => ({
+          leaguePlayerId: a.leaguePlayerId,
+          nickname: a.leaguePlayer.fakeNickname || a.leaguePlayer.user.nickname,
+          freeTextAnswer: a.freeTextAnswer,
+          selectedOption: a.selectedOption,
+          isCorrect: a.isCorrect,
+          pointsWon: a.pointsWon,
+        })),
+    } : null;
+
     return (
       <FlagReviewInterface
         roundId={round.id}
         myPlayerId={myPlayerId}
         isCommissioner={isCommissioner}
         actAsPlayerId={actAsPlayerId}
+        roundContext={roundContext}
         onResolved={onRefresh}
       />
     );

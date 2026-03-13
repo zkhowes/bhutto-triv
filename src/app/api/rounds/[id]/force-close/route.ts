@@ -29,7 +29,11 @@ export async function POST(
       },
       game: {
         include: {
-          playerStates: true,
+          playerStates: {
+            include: {
+              leaguePlayer: { select: { isPaused: true } },
+            },
+          },
           season: {
             include: {
               league: {
@@ -67,10 +71,12 @@ export async function POST(
   }
 
   try {
-    // Identify players who haven't answered and mark them absent
-    const allPlayerIds = round.game.playerStates.map((ps) => ps.leaguePlayerId);
+    // Identify players who haven't answered and mark them absent (exclude paused)
+    const activePlayerIds = round.game.playerStates
+      .filter((ps) => !ps.leaguePlayer.isPaused)
+      .map((ps) => ps.leaguePlayerId);
     const answeredPlayerIds = round.answers.map((a) => a.leaguePlayerId);
-    const absentPlayerIds = allPlayerIds.filter(
+    const absentPlayerIds = activePlayerIds.filter(
       (id) => !answeredPlayerIds.includes(id) && id !== round.atBatPlayerId
     );
 

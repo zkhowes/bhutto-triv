@@ -431,7 +431,11 @@ export async function closeRound(roundId: string): Promise<void> {
       },
       game: {
         include: {
-          playerStates: true,
+          playerStates: {
+            include: {
+              leaguePlayer: { select: { isPaused: true } },
+            },
+          },
           battingOrder: true,
           rounds: { orderBy: { number: "asc" } },
           season: { include: { league: true } },
@@ -445,10 +449,12 @@ export async function closeRound(roundId: string): Promise<void> {
   const game = round.game;
   const league = game.season.league;
 
-  // Mark absent players
-  const allPlayerIds = game.playerStates.map((ps) => ps.leaguePlayerId);
+  // Mark absent players (exclude paused players — they're out of the game entirely)
+  const activePlayerIds = game.playerStates
+    .filter((ps) => !ps.leaguePlayer.isPaused)
+    .map((ps) => ps.leaguePlayerId);
   const answeredPlayerIds = round.answers.map((a) => a.leaguePlayerId);
-  const absentPlayerIds = allPlayerIds.filter(
+  const absentPlayerIds = activePlayerIds.filter(
     (id) => !answeredPlayerIds.includes(id) && id !== round.atBatPlayerId
   );
 
@@ -1019,11 +1025,11 @@ export async function throwFlag(
     (ps) => ps.leaguePlayerId === leaguePlayerId
   );
   if (!playerState) throw new Error("Player not in this game");
-  if (playerState.isEliminated) throw new Error("Eliminated players cannot throw flags");
+  if (playerState.leaguePlayer.isPaused) throw new Error("Paused players cannot throw flags");
   if (playerState.flagUsed) throw new Error("You already used your flag this game");
 
-  // Check minimum players (no flags in heads-up)
-  const activePlayers = round.game.playerStates.filter((ps) => !ps.isEliminated);
+  // Check minimum players (no flags in heads-up) — paused excluded, busted still count
+  const activePlayers = round.game.playerStates.filter((ps) => !ps.leaguePlayer.isPaused);
   if (activePlayers.length < MIN_PLAYERS_FOR_FLAG) {
     throw new Error(`Flags require at least ${MIN_PLAYERS_FOR_FLAG} active players`);
   }
@@ -1081,17 +1087,18 @@ export async function throwFlag(
 
 /**
  * Get eligible voter count for a flag review.
- * Eligible = non-eliminated, non-flagger, non-at-bat (question maker).
+ * Eligible = non-paused, non-flagger, non-at-bat (question maker).
+ * Eliminated (busted) players CAN vote; only paused players are excluded.
  */
 function getEligibleVoterIds(
-  playerStates: Array<{ leaguePlayerId: string; isEliminated: boolean }>,
+  playerStates: Array<{ leaguePlayerId: string; isEliminated: boolean; leaguePlayer: { isPaused: boolean } }>,
   flaggedById: string,
   atBatPlayerId: string | null
 ): string[] {
   return playerStates
     .filter(
       (ps) =>
-        !ps.isEliminated &&
+        !ps.leaguePlayer.isPaused &&
         ps.leaguePlayerId !== flaggedById &&
         ps.leaguePlayerId !== atBatPlayerId
     )
@@ -1135,11 +1142,12 @@ export async function submitFlagVote(
   const existingVote = flagReview.votes.find((v) => v.leaguePlayerId === leaguePlayerId);
   if (existingVote) throw new Error("Already voted");
 
-  // Verify voter is eligible (non-eliminated)
+  // Verify voter is eligible (not paused)
   const voterState = flagReview.game.playerStates.find(
     (ps) => ps.leaguePlayerId === leaguePlayerId
   );
   if (!voterState) throw new Error("Player not in this game");
+  if (voterState.leaguePlayer.isPaused) throw new Error("Paused players cannot vote on flags");
 
   await prisma.flagVote.create({
     data: {
