@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import CountdownTimer from "./CountdownTimer";
-import StarRating from "@/components/ui/StarRating";
 import InfoTooltip from "@/components/ui/InfoTooltip";
 
 interface BettingInterfaceProps {
@@ -75,9 +74,10 @@ export default function BettingInterface({
         )}
         {atBatAvgRating != null && (
           <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#fbbf24]/10 border border-[#fbbf24]/20">
-            <span className="text-xs text-[#fbbf24] font-medium">Question Rating:</span>
-            <StarRating value={atBatAvgRating} size="sm" showLabel />
-            <InfoTooltip text="Question rating combines player star ratings with difficulty balance (~50% correct is ideal)." />
+            <span className="text-xs text-[#a0a0b8] font-medium">Players question ratings:</span>
+            <span className="text-sm text-[#fbbf24] font-bold">{atBatAvgRating.toFixed(1)}</span>
+            <span className="text-xs text-[#666680]">/ 5</span>
+            <InfoTooltip text="Average rating from players who have rated this question submitter's previous questions." />
           </div>
         )}
         {answerDeadline && (

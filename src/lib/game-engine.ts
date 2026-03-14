@@ -610,9 +610,13 @@ export async function closeRound(roundId: string): Promise<void> {
     if (roundWithQuestion?.question) {
       const { generateFunFact } = await import("./ai");
       const q = roundWithQuestion.question;
+      const correctAnswerText = q.correctAnswer
+        || (q.correctOption
+          ? `${q.correctOption}. ${q.correctOption === "A" ? q.optionA : q.correctOption === "B" ? q.optionB : q.correctOption === "C" ? q.optionC : q.correctOption === "D" ? q.optionD : q.correctOption}`
+          : "");
       funFact = await generateFunFact(
         q.questionText,
-        q.correctAnswer || q.correctOption || "",
+        correctAnswerText,
         q.category
       );
     }

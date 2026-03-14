@@ -204,7 +204,8 @@ export default function RoundControl({
         {round.questionScore?.composite != null && (
           <div className="mt-2 flex items-center gap-2">
             <span className="text-[10px] text-[#666680] uppercase tracking-wider">Question Rating:</span>
-            <StarRating value={round.questionScore.composite} size="sm" showLabel />
+            <span className="text-sm text-[#fbbf24] font-bold">{round.questionScore.composite.toFixed(1)}</span>
+            <span className="text-xs text-[#666680]">/ 5</span>
             {round.questionScore.successRate != null && (
               <span className="text-xs text-[#666680]">
                 {Math.round(round.questionScore.successRate * 100)}% correct
