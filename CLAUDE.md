@@ -212,12 +212,16 @@ Required for development (see `.env.example`):
 > Last updated: 2026-03-11
 
 ### Backlog
+- [ ] Improve or deprecate plain text questions for improved game play
 - [ ] Replay past questions — *schema has isReplay/originalQuestionId, needs UI + API*
 - [ ] View-only public round dashboard — *currently requires auth, no anonymous mode*
 - [ ] "Go back to previous player" commissioner control
 - [ ] Season pause (functional) — *stub exists, shows alert()*
 
 ### Up Next
+- [ ] Apple Sign-In — *add AppleProvider to NextAuth, second OAuth button on landing page*
+- [ ] Demo click-through — */demo route, guided walkthrough of game phases with mock data*
+- [ ] Branding/lore section — *Bhutto monks mythology on landing page*
 - [ ] Auto-submit banked question when At Bat — *useOnNextRound flag stored, no consumption logic*
 - [ ] Commissioner settings editing UI — *API supports writes, UI is read-only*
 - [ ] Shareable link generation UI — *API + model exist, needs Share buttons on game/round/season pages*

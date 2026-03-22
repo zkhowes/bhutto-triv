@@ -1,4 +1,5 @@
 import { NextAuthOptions, getServerSession } from "next-auth";
+import AppleProvider from "next-auth/providers/apple";
 import GoogleProvider from "next-auth/providers/google";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { prisma } from "./prisma";
@@ -6,6 +7,10 @@ import { prisma } from "./prisma";
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   providers: [
+    AppleProvider({
+      clientId: process.env.APPLE_ID || "",
+      clientSecret: process.env.APPLE_SECRET || "",
+    }),
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID || "",
       clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
