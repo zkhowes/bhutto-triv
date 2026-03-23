@@ -11,7 +11,7 @@ interface ImageAttachmentProps {
   onChange: (image: {
     url: string;
     source: string;
-    attribution: string;
+    attribution?: string;
   } | null) => void;
 }
 
@@ -35,7 +35,7 @@ export default function ImageAttachment({
   const handleSelect = (selected: {
     url: string;
     source: string;
-    attribution: string;
+    attribution?: string;
   }) => {
     setImgBroken(false);
     onChange(selected);
