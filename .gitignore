@@ -41,3 +41,6 @@ prisma/*.db-journal
 # uploads
 /public/uploads/*
 !/public/uploads/.gitkeep
+
+# superpowers brainstorming
+.superpowers/
