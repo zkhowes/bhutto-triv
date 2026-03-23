@@ -264,6 +264,11 @@ model Question {
   correctAnswer     String?
   acceptableAnswers String? // JSON array of acceptable variations
 
+  // Image attachment (optional)
+  imageUrl         String?
+  imageSource      String?   // "unsplash" | "google" | "upload" | "url"
+  imageAttribution String?   // JSON: {"name":"...","profileUrl":"..."} for Unsplash
+
   isEditable         Boolean @default(true) // Locked once first bet placed
   isFromBank         Boolean @default(false)
   isReplay           Boolean @default(false)
@@ -291,6 +296,9 @@ model QuestionDraft {
   correctOption     String?
   correctAnswer     String?
   acceptableAnswers String?
+  imageUrl         String?
+  imageSource      String?
+  imageAttribution String?
   useOnNextRound    Boolean @default(false)
   leagueId          String? // If associated with specific league
 
