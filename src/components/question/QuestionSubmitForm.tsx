@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { CATEGORIES, isDefaultCategory } from "@/lib/constants";
 import WorkshopEmbed from "./WorkshopEmbed";
+import ImageAttachment from "./ImageAttachment";
 
 interface QuestionSubmitFormProps {
   roundId: string;
@@ -53,6 +54,9 @@ export default function QuestionSubmitForm({
   const [error, setError] = useState("");
   const [draftLoaded, setDraftLoaded] = useState(false);
   const [autoSubmitDraftId, setAutoSubmitDraftId] = useState<string | null>(null);
+  const [imageUrl, setImageUrl] = useState("");
+  const [imageSource, setImageSource] = useState("");
+  const [imageAttribution, setImageAttribution] = useState("");
 
   // AI Workshop
   const [showWorkshop, setShowWorkshop] = useState(false);
@@ -89,6 +93,11 @@ export default function QuestionSubmitForm({
             setCorrectAnswer(autoSubmitDraft.correctAnswer || "");
           }
           // price_is_right uses correctAnswer field same as free_text
+          if ((autoSubmitDraft as Draft & { imageUrl?: string }).imageUrl) {
+            setImageUrl((autoSubmitDraft as Draft & { imageUrl?: string }).imageUrl!);
+            setImageSource((autoSubmitDraft as Draft & { imageSource?: string }).imageSource || "");
+            setImageAttribution((autoSubmitDraft as Draft & { imageAttribution?: string }).imageAttribution || "");
+          }
         }
         setDraftLoaded(true);
       })
@@ -172,6 +181,12 @@ export default function QuestionSubmitForm({
         answerFormat,
       };
 
+      if (imageUrl) {
+        body.imageUrl = imageUrl;
+        body.imageSource = imageSource;
+        body.imageAttribution = imageAttribution;
+      }
+
       if (answerFormat === "multiple_choice") {
         body.optionA = optionA;
         body.optionB = optionB;
@@ -208,6 +223,9 @@ export default function QuestionSubmitForm({
         }).catch(() => {});
       }
 
+      setImageUrl("");
+      setImageSource("");
+      setImageAttribution("");
       onSubmitted();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to submit");
@@ -277,6 +295,12 @@ export default function QuestionSubmitForm({
                   if (q.acceptableAnswers?.length) {
                     setAcceptableAnswers(q.acceptableAnswers.join(", "));
                   }
+                }
+                const qWithImage = q as typeof q & { imageUrl?: string; imageSource?: string; imageAttribution?: string };
+                if (qWithImage.imageUrl) {
+                  setImageUrl(qWithImage.imageUrl);
+                  setImageSource(qWithImage.imageSource || "");
+                  setImageAttribution(qWithImage.imageAttribution || "");
                 }
                 setShowWorkshop(false);
               }}
@@ -388,6 +412,25 @@ export default function QuestionSubmitForm({
             placeholder="Enter your trivia question..."
           />
         </div>
+
+        {/* Image Attachment */}
+        <ImageAttachment
+          imageUrl={imageUrl}
+          imageSource={imageSource}
+          imageAttribution={imageAttribution}
+          questionText={questionText}
+          onChange={(img) => {
+            if (img) {
+              setImageUrl(img.url);
+              setImageSource(img.source);
+              setImageAttribution(img.attribution || "");
+            } else {
+              setImageUrl("");
+              setImageSource("");
+              setImageAttribution("");
+            }
+          }}
+        />
 
         {/* Answer Format */}
         <div className="mb-4">
