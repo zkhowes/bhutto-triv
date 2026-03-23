@@ -155,6 +155,9 @@ export async function submitQuestion(
     acceptableAnswers?: string[];
     leaguePlayerId: string;
     creatorUserId: string;
+    imageUrl?: string;
+    imageSource?: string;
+    imageAttribution?: string;
   }
 ): Promise<string> {
   const round = await prisma.round.findUnique({
@@ -191,6 +194,9 @@ export async function submitQuestion(
       acceptableAnswers: questionData.acceptableAnswers
         ? JSON.stringify(questionData.acceptableAnswers)
         : null,
+      imageUrl: questionData.imageUrl || null,
+      imageSource: questionData.imageSource || null,
+      imageAttribution: questionData.imageAttribution || null,
     },
   });
 

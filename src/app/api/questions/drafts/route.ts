@@ -44,6 +44,9 @@ export async function POST(req: NextRequest) {
         : null,
       useOnNextRound: body.useOnNextRound || false,
       leagueId: body.leagueId,
+      imageUrl: body.imageUrl || null,
+      imageSource: body.imageSource || null,
+      imageAttribution: body.imageAttribution || null,
     },
   });
 
@@ -80,7 +83,7 @@ export async function PUT(req: NextRequest) {
 
   // Build update payload only from keys actually sent
   const data: Record<string, unknown> = {};
-  const fields = ["category", "questionText", "answerFormat", "optionA", "optionB", "optionC", "optionD", "correctOption", "correctAnswer", "useOnNextRound"];
+  const fields = ["category", "questionText", "answerFormat", "optionA", "optionB", "optionC", "optionD", "correctOption", "correctAnswer", "useOnNextRound", "imageUrl", "imageSource", "imageAttribution"];
   for (const field of fields) {
     if (field in updateData) {
       data[field] = updateData[field];

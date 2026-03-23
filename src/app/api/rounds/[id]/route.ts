@@ -175,6 +175,9 @@ export async function GET(
         correctOption: null,
         correctAnswer: null,
         acceptableAnswers: null,
+        imageUrl: null,
+        imageSource: null,
+        imageAttribution: null,
       };
     } else {
       // Player has bet, show question but hide correct answer
