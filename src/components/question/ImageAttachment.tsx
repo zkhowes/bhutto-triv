@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import ImageSearchModal from "./ImageSearchModal";
 
 interface ImageAttachmentProps {
@@ -28,9 +28,22 @@ export default function ImageAttachment({
   const hasImage = !!imageUrl;
 
   // Reset broken state when imageUrl changes
+  useEffect(() => { setImgBroken(false); }, [imageUrl]);
+
   const handleImageError = () => {
     setImgBroken(true);
   };
+
+  // Parse attribution JSON for Unsplash display
+  const parsedAttribution = useMemo(() => {
+    if (imageSource !== "unsplash" || !imageAttribution) return null;
+    try {
+      const attr = JSON.parse(imageAttribution);
+      return { name: attr.name, profileUrl: attr.profileUrl };
+    } catch {
+      return { name: imageAttribution, profileUrl: "https://unsplash.com" };
+    }
+  }, [imageSource, imageAttribution]);
 
   const handleSelect = (selected: {
     url: string;
@@ -46,11 +59,6 @@ export default function ImageAttachment({
     setImgBroken(false);
     onChange(null);
   };
-
-  // Parse attribution: "Photo by {name} on Unsplash" or raw name
-  const unsplashProfileUrl = imageAttribution
-    ? `https://unsplash.com/@${imageAttribution.toLowerCase().replace(/\s+/g, "")}`
-    : "https://unsplash.com";
 
   return (
     <>
@@ -134,14 +142,14 @@ export default function ImageAttachment({
           <div className="flex items-center justify-between px-3 py-2 bg-[#0a0f1e]">
             {/* Attribution */}
             <div className="flex-1 min-w-0">
-              {imageSource === "unsplash" && imageAttribution ? (
+              {parsedAttribution ? (
                 <a
-                  href={unsplashProfileUrl}
+                  href={parsedAttribution.profileUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-[11px] text-[#4a6fa5] hover:text-[#4a9eff] transition-colors duration-150 truncate block"
                 >
-                  Photo by {imageAttribution} on Unsplash
+                  Photo by {parsedAttribution.name} on Unsplash
                 </a>
               ) : (
                 <span className="text-[11px] text-[#4a6fa5] truncate block">
