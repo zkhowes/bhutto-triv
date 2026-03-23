@@ -103,6 +103,7 @@ export interface WorkshopVariation {
   acceptableAnswers?: string[];
   difficulty: "easy" | "medium" | "hard";
   hook: string;
+  imageSearchTerm?: string;
 }
 
 export interface WorkshopResponse {
@@ -144,7 +145,8 @@ Return this exact JSON structure:
       "correctAnswer": "...",
       "acceptableAnswers": ["alt1", "alt2"],
       "difficulty": "hard",
-      "hook": "Test your knowledge of..."
+      "hook": "Test your knowledge of...",
+      "imageSearchTerm": null
     },
     {
       "category": "Geography",
@@ -152,17 +154,20 @@ Return this exact JSON structure:
       "answerFormat": "price_is_right",
       "correctAnswer": "42",
       "difficulty": "easy",
-      "hook": "How well do you know..."
+      "hook": "How well do you know...",
+      "imageSearchTerm": "a short search query for an accompanying image, or null if the question doesn't benefit from one"
     }
   ]
 }
 
 Rules:
 - "hook" is a short 5-8 word teaser for each card
+- "imageSearchTerm": a concise, specific search query for an image that enhances the question, or null if no image would add value
 - Mix up the answer formats across the 3 variations
 - Each variation should feel genuinely different, not a rewrite
 - Return ONLY valid JSON, no markdown fences, no extra text
-- If the user is having a conversation (not asking for a question), return: {"type": "conversation", "text": "your response here"}`;
+- If the user is having a conversation (not asking for a question), return: {"type": "conversation", "text": "your response here"}
+- Actively look for opportunities to suggest image-based questions. Visual identification questions ("Who is this?", "Name this landmark", "What flag is this?") are high-joy and engaging. When a question would benefit from an image, populate imageSearchTerm with a concise, specific search query. Not every question needs an image — only suggest when it genuinely adds to the experience.`;
 
 /**
  * AI-assisted question workshop — returns structured JSON with 3 variations

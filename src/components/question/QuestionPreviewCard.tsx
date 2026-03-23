@@ -15,6 +15,9 @@ interface QuestionPreviewCardProps {
   selected?: boolean;
   compact?: boolean;
   onSelect?: () => void;
+  imageUrl?: string;
+  imageSearchTerm?: string;
+  onImageClick?: () => void;
 }
 
 const difficultyColors = {
@@ -44,6 +47,9 @@ export default function QuestionPreviewCard({
   selected = false,
   compact = false,
   onSelect,
+  imageUrl,
+  imageSearchTerm,
+  onImageClick,
 }: QuestionPreviewCardProps) {
   const options = [
     { key: "A", text: optionA },
@@ -91,6 +97,32 @@ export default function QuestionPreviewCard({
       >
         {questionText}
       </h3>
+
+      {/* Image preview */}
+      {imageUrl && (
+        <div className="relative mb-3">
+          <img
+            src={imageUrl}
+            alt="Question image"
+            className="rounded-lg w-full max-h-48 object-cover cursor-pointer"
+            onClick={(e) => { e.stopPropagation(); onImageClick?.(); }}
+            onError={(e) => {
+              (e.target as HTMLImageElement).style.display = "none";
+            }}
+          />
+          <span className="absolute bottom-2 right-2 bg-black/60 text-xs text-blue-400 px-2 py-1 rounded">
+            Click to change
+          </span>
+        </div>
+      )}
+      {!imageUrl && imageSearchTerm && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onImageClick?.(); }}
+          className="w-full mb-3 py-2 border border-dashed border-blue-500/50 rounded-lg text-blue-400 text-sm hover:bg-blue-500/10 transition-colors"
+        >
+          + Add suggested image
+        </button>
+      )}
 
       {/* Answer preview */}
       {answerFormat === "multiple_choice" && options.length > 0 && (

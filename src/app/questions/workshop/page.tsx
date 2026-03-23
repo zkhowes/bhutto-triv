@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
 import NavBar from "@/components/layout/NavBar";
 import QuestionPreviewCard from "@/components/question/QuestionPreviewCard";
+import ImageSearchModal from "@/components/question/ImageSearchModal";
 import Avatar from "@/components/ui/Avatar";
 import StarRating from "@/components/ui/StarRating";
 import type { WorkshopVariation, WorkshopResponse } from "@/lib/ai";
@@ -78,6 +79,12 @@ interface PastQuestion {
 
 type BankFilter = "all" | "drafts" | "past";
 
+interface CardImage {
+  url: string;
+  source: string;
+  attribution?: string;
+}
+
 const SUGGESTION_CHIPS = [
   "Geography challenge",
   "Obscure history",
@@ -140,6 +147,12 @@ export default function WorkshopPage() {
   const [saving, setSaving] = useState(false);
   const [savedFeedback, setSavedFeedback] = useState(false);
 
+  // Image state
+  const [cardImages, setCardImages] = useState<Record<number, CardImage>>({});
+  const [imageModalOpen, setImageModalOpen] = useState(false);
+  const [imageModalIdx, setImageModalIdx] = useState<number | null>(null);
+  const [imageModalQuery, setImageModalQuery] = useState("");
+
   // Edit state
   const [editInput, setEditInput] = useState("");
 
@@ -194,6 +207,56 @@ export default function WorkshopPage() {
     }
   }, [session, loadDrafts, loadPastQuestions]);
 
+  // ── Image search auto-fetch and modal handlers ─────────────────────────────
+
+  // Auto-search image for first card when variations load
+  useEffect(() => {
+    if (workshopState !== "viewing_cards" || variations.length === 0) return;
+    const firstTerm = variations[0]?.imageSearchTerm;
+    if (!firstTerm) return;
+    fetch("/api/images/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: firstTerm, source: "unsplash" }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        const results = data.results as Array<{ url: string; attribution?: { name: string } }> | undefined;
+        if (results && results.length > 0) {
+          setCardImages((prev) => ({
+            ...prev,
+            0: {
+              url: results[0].url,
+              source: "unsplash",
+              attribution: results[0].attribution?.name,
+            },
+          }));
+        }
+      })
+      .catch(() => {/* ignore */});
+  }, [variations, workshopState]);
+
+  const handleOpenImageModal = (idx: number) => {
+    const term = variations[idx]?.imageSearchTerm || "";
+    setImageModalIdx(idx);
+    setImageModalQuery(term);
+    setImageModalOpen(true);
+  };
+
+  const handleImageSelected = (image: { url: string; source: string; attribution?: string }) => {
+    if (imageModalIdx === null) return;
+    setCardImages((prev) => ({
+      ...prev,
+      [imageModalIdx]: {
+        url: image.url,
+        source: image.source,
+        attribution: image.attribution,
+      },
+    }));
+    setImageModalOpen(false);
+    setImageModalIdx(null);
+  };
+
   // ── Workshop actions ───────────────────────────────────────────────────────
 
   const handlePrompt = async (prompt: string) => {
@@ -204,6 +267,7 @@ export default function WorkshopPage() {
     setSelectedIdx(null);
     setConversationText(null);
     setVariations([]);
+    setCardImages({});
 
     try {
       const res = await fetch("/api/questions/workshop", {
@@ -241,6 +305,7 @@ export default function WorkshopPage() {
     const question = variations[selectedIdx];
     setWorkshopState("loading");
     setSelectedIdx(null);
+    setCardImages({});
 
     try {
       const res = await fetch("/api/questions/workshop/edit", {
@@ -558,6 +623,9 @@ export default function WorkshopPage() {
                     hook={v.hook}
                     compact
                     onSelect={() => handleSelectCard(i)}
+                    imageUrl={cardImages[i]?.url}
+                    imageSearchTerm={v.imageSearchTerm}
+                    onImageClick={() => handleOpenImageModal(i)}
                   />
                 ))}
               </div>
@@ -606,6 +674,9 @@ export default function WorkshopPage() {
                       selected={i === selectedIdx}
                       compact
                       onSelect={() => handleSelectCard(i)}
+                      imageUrl={cardImages[i]?.url}
+                      imageSearchTerm={v.imageSearchTerm}
+                      onImageClick={() => handleOpenImageModal(i)}
                     />
                   </div>
                 ))}
@@ -651,6 +722,8 @@ export default function WorkshopPage() {
                   {...variations[selectedIdx]}
                   selected
                   compact
+                  imageUrl={cardImages[selectedIdx]?.url}
+                  onImageClick={() => handleOpenImageModal(selectedIdx)}
                 />
               </div>
 
@@ -1072,6 +1145,13 @@ export default function WorkshopPage() {
           )}
         </section>
       </div>
+
+      <ImageSearchModal
+        isOpen={imageModalOpen}
+        onClose={() => { setImageModalOpen(false); setImageModalIdx(null); }}
+        onSelect={(img) => handleImageSelected({ url: img.url, source: img.source, attribution: img.attribution })}
+        initialQuery={imageModalQuery}
+      />
     </div>
   );
 }

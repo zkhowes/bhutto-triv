@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import QuestionPreviewCard from "./QuestionPreviewCard";
+import ImageSearchModal from "./ImageSearchModal";
 import type { WorkshopVariation, WorkshopResponse } from "@/lib/ai";
 
 interface Draft {
@@ -32,7 +33,16 @@ interface WorkshopEmbedProps {
     correctOption?: string;
     correctAnswer?: string;
     acceptableAnswers?: string[];
+    imageUrl?: string;
+    imageSource?: string;
+    imageAttribution?: string;
   }) => void;
+}
+
+interface CardImage {
+  url: string;
+  source: string;
+  attribution?: string;
 }
 
 type WorkshopState = "idle" | "loading" | "viewing_cards" | "selected" | "editing";
@@ -67,6 +77,12 @@ export default function WorkshopEmbed({ onSelectQuestion }: WorkshopEmbedProps) 
   const [conversationText, setConversationText] = useState<string | null>(null);
   const [editInput, setEditInput] = useState("");
 
+  // Image state
+  const [cardImages, setCardImages] = useState<Record<number, CardImage>>({});
+  const [imageModalOpen, setImageModalOpen] = useState(false);
+  const [imageModalIdx, setImageModalIdx] = useState<number | null>(null);
+  const [imageModalQuery, setImageModalQuery] = useState("");
+
   // Bank state
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [draftsLoading, setDraftsLoading] = useState(true);
@@ -85,6 +101,56 @@ export default function WorkshopEmbed({ onSelectQuestion }: WorkshopEmbedProps) 
     loadDrafts();
   }, [loadDrafts]);
 
+  // Auto-search image for first card when variations load
+  useEffect(() => {
+    if (workshopState !== "viewing_cards" || variations.length === 0) return;
+    const firstTerm = variations[0]?.imageSearchTerm;
+    if (!firstTerm) return;
+    // Reset images when new variations arrive
+    setCardImages({});
+    fetch("/api/images/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: firstTerm, source: "unsplash" }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        const results = data.results as Array<{ url: string; attribution?: { name: string } }> | undefined;
+        if (results && results.length > 0) {
+          setCardImages((prev) => ({
+            ...prev,
+            0: {
+              url: results[0].url,
+              source: "unsplash",
+              attribution: results[0].attribution?.name,
+            },
+          }));
+        }
+      })
+      .catch(() => {/* ignore */});
+  }, [variations, workshopState]);
+
+  const handleOpenImageModal = (idx: number) => {
+    const term = variations[idx]?.imageSearchTerm || "";
+    setImageModalIdx(idx);
+    setImageModalQuery(term);
+    setImageModalOpen(true);
+  };
+
+  const handleImageSelected = (image: { url: string; source: string; attribution?: string }) => {
+    if (imageModalIdx === null) return;
+    setCardImages((prev) => ({
+      ...prev,
+      [imageModalIdx]: {
+        url: image.url,
+        source: image.source,
+        attribution: image.attribution,
+      },
+    }));
+    setImageModalOpen(false);
+    setImageModalIdx(null);
+  };
+
   // Workshop actions
   const handlePrompt = async (prompt: string) => {
     if (!prompt.trim()) return;
@@ -94,6 +160,7 @@ export default function WorkshopEmbed({ onSelectQuestion }: WorkshopEmbedProps) 
     setSelectedIdx(null);
     setConversationText(null);
     setVariations([]);
+    setCardImages({});
 
     try {
       const res = await fetch("/api/questions/workshop", {
@@ -121,7 +188,8 @@ export default function WorkshopEmbed({ onSelectQuestion }: WorkshopEmbedProps) 
     setWorkshopState("selected");
   };
 
-  const handleUseQuestion = (v: WorkshopVariation) => {
+  const handleUseQuestion = (v: WorkshopVariation, idx: number) => {
+    const img = cardImages[idx];
     onSelectQuestion({
       category: v.category,
       questionText: v.questionText,
@@ -133,6 +201,9 @@ export default function WorkshopEmbed({ onSelectQuestion }: WorkshopEmbedProps) 
       correctOption: v.correctOption,
       correctAnswer: v.correctAnswer,
       acceptableAnswers: v.acceptableAnswers,
+      imageUrl: img?.url,
+      imageSource: img?.source,
+      imageAttribution: img?.attribution,
     });
   };
 
@@ -141,6 +212,7 @@ export default function WorkshopEmbed({ onSelectQuestion }: WorkshopEmbedProps) 
     const question = variations[selectedIdx];
     setWorkshopState("loading");
     setSelectedIdx(null);
+    setCardImages({});
 
     try {
       const res = await fetch("/api/questions/workshop/edit", {
@@ -271,6 +343,8 @@ export default function WorkshopEmbed({ onSelectQuestion }: WorkshopEmbedProps) 
                     {...v}
                     compact
                     onSelect={() => handleSelectCard(i)}
+                    imageUrl={cardImages[i]?.url}
+                    onImageClick={() => handleOpenImageModal(i)}
                   />
                 ))}
               </div>
@@ -302,13 +376,15 @@ export default function WorkshopEmbed({ onSelectQuestion }: WorkshopEmbedProps) 
                       selected={i === selectedIdx}
                       compact
                       onSelect={() => handleSelectCard(i)}
+                      imageUrl={cardImages[i]?.url}
+                      onImageClick={() => handleOpenImageModal(i)}
                     />
                   </div>
                 ))}
               </div>
               <div className="flex gap-2 justify-center">
                 <button
-                  onClick={() => handleUseQuestion(variations[selectedIdx])}
+                  onClick={() => handleUseQuestion(variations[selectedIdx], selectedIdx)}
                   className="btn-primary text-sm"
                 >
                   Use This Question
@@ -333,7 +409,13 @@ export default function WorkshopEmbed({ onSelectQuestion }: WorkshopEmbedProps) 
           {workshopState === "editing" && selectedIdx !== null && (
             <div className="space-y-3">
               <div className="max-w-xs mx-auto">
-                <QuestionPreviewCard {...variations[selectedIdx]} selected compact />
+                <QuestionPreviewCard
+                  {...variations[selectedIdx]}
+                  selected
+                  compact
+                  imageUrl={cardImages[selectedIdx]?.url}
+                  onImageClick={() => handleOpenImageModal(selectedIdx)}
+                />
               </div>
               <div className="flex flex-wrap gap-1.5 justify-center">
                 {EDIT_CHIPS.map((chip) => (
@@ -408,6 +490,13 @@ export default function WorkshopEmbed({ onSelectQuestion }: WorkshopEmbedProps) 
           )}
         </div>
       )}
+
+      <ImageSearchModal
+        isOpen={imageModalOpen}
+        onClose={() => { setImageModalOpen(false); setImageModalIdx(null); }}
+        onSelect={(img) => handleImageSelected({ url: img.url, source: img.source, attribution: img.attribution })}
+        initialQuery={imageModalQuery}
+      />
     </div>
   );
 }
