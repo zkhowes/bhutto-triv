@@ -33,6 +33,8 @@ interface RoundControlProps {
       optionB: string | null;
       optionC: string | null;
       optionD: string | null;
+      imageUrl?: string | null;
+      imageAttribution?: string | null;
     } | null;
     answers: Array<{
       id: string;
@@ -128,6 +130,32 @@ export default function RoundControl({
             <p className="text-white font-medium">
               {round.question.questionText}
             </p>
+            {round.question.imageUrl && (
+              <div className="mt-3">
+                <img
+                  src={round.question.imageUrl}
+                  alt="Question image"
+                  className="rounded-xl w-full max-h-64 object-cover"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).parentElement!.style.display = "none";
+                  }}
+                />
+                {round.question.imageAttribution && (() => {
+                  try {
+                    const attr = JSON.parse(round.question!.imageAttribution!);
+                    return (
+                      <p className="text-xs text-[#a0a0b8] mt-1">
+                        Photo by{" "}
+                        <a href={attr.profileUrl} target="_blank" rel="noopener noreferrer" className="underline">
+                          {attr.name}
+                        </a>{" "}
+                        on Unsplash
+                      </p>
+                    );
+                  } catch { return null; }
+                })()}
+              </div>
+            )}
           </div>
           {myAnswer && (
             <div

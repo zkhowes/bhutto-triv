@@ -37,6 +37,8 @@ interface Question {
   optionB: string | null;
   optionC: string | null;
   optionD: string | null;
+  imageUrl: string | null;
+  imageAttribution: string | null;
 }
 
 interface GradingInterfaceProps {
@@ -198,6 +200,32 @@ export default function GradingInterface({
           {question.category}
         </p>
         <p className="text-white font-medium mb-2">{question.questionText}</p>
+        {question.imageUrl && (
+          <div className="mb-3">
+            <img
+              src={question.imageUrl}
+              alt="Question image"
+              className="rounded-xl w-full max-h-64 object-cover"
+              onError={(e) => {
+                (e.target as HTMLImageElement).parentElement!.style.display = "none";
+              }}
+            />
+            {question.imageAttribution && (() => {
+              try {
+                const attr = JSON.parse(question.imageAttribution);
+                return (
+                  <p className="text-xs text-[#a0a0b8] mt-1">
+                    Photo by{" "}
+                    <a href={attr.profileUrl} target="_blank" rel="noopener noreferrer" className="underline">
+                      {attr.name}
+                    </a>{" "}
+                    on Unsplash
+                  </p>
+                );
+              } catch { return null; }
+            })()}
+          </div>
+        )}
         <p className="text-sm text-emerald-400">
           {isPriceIsRight ? "Target: " : "Correct answer: "}
           {question.answerFormat === "multiple_choice"

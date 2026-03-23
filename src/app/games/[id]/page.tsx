@@ -97,6 +97,8 @@ interface RoundData {
     optionD: string | null;
     correctOption: string | null;
     correctAnswer: string | null;
+    imageUrl: string | null;
+    imageAttribution: string | null;
   } | null;
   answers: Array<{
     id: string;

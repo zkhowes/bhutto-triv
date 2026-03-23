@@ -16,6 +16,8 @@ interface AnswerInterfaceProps {
     optionB: string | null;
     optionC: string | null;
     optionD: string | null;
+    imageUrl?: string | null;
+    imageAttribution?: string | null;
   };
   betAmount: number;
   playerPoints: number; // current points before the bet
@@ -243,6 +245,32 @@ export default function AnswerInterface({
 
       {/* Question */}
       <div className="mb-6">
+        {question.imageUrl && (
+          <div className="mb-4">
+            <img
+              src={question.imageUrl}
+              alt="Question image"
+              className="rounded-xl w-full max-h-64 object-cover"
+              onError={(e) => {
+                (e.target as HTMLImageElement).parentElement!.style.display = "none";
+              }}
+            />
+            {question.imageAttribution && (() => {
+              try {
+                const attr = JSON.parse(question.imageAttribution);
+                return (
+                  <p className="text-xs text-[#a0a0b8] mt-1">
+                    Photo by{" "}
+                    <a href={attr.profileUrl} target="_blank" rel="noopener noreferrer" className="underline">
+                      {attr.name}
+                    </a>{" "}
+                    on Unsplash
+                  </p>
+                );
+              } catch { return null; }
+            })()}
+          </div>
+        )}
         <h2 className="text-lg font-semibold text-white leading-relaxed">
           {question.questionText}
         </h2>
