@@ -125,6 +125,8 @@ export async function GET(req: NextRequest) {
         category: q.category,
         answerFormat: q.answerFormat,
         correctAnswer: q.correctAnswer,
+        imageUrl: q.imageUrl ?? null,
+        imageSource: q.imageSource ?? null,
         creator: creator
           ? {
               nickname:

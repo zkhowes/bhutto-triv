@@ -90,6 +90,8 @@ interface QuestionData {
   creator: { nickname: string; email: string } | null;
   league: { id: string; name: string } | null;
   createdAt: string;
+  imageUrl?: string | null;
+  imageSource?: string | null;
   stats: {
     timesAsked: number;
     totalAnswers: number;
@@ -155,6 +157,7 @@ export default function AdminPage() {
   const [filterCategory, setFilterCategory] = useState("");
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
+  const [filterImage, setFilterImage] = useState<"all" | "with" | "without">("all");
 
   // Question details modal state
   const [selectedQuestion, setSelectedQuestion] = useState<QuestionData | null>(
@@ -302,6 +305,26 @@ export default function AdminPage() {
     return () => clearTimeout(timer);
   }, [searchQuery, handleSearch]);
 
+  // Filtered questions by image filter
+  const filteredQuestions = useMemo(() => {
+    if (filterImage === "with") return questions.filter((q) => q.imageUrl);
+    if (filterImage === "without") return questions.filter((q) => !q.imageUrl);
+    return questions;
+  }, [questions, filterImage]);
+
+  // Image stats computed from loaded questions
+  const imageStats = useMemo(() => {
+    const total = questions.length;
+    const withImage = questions.filter((q) => q.imageUrl).length;
+    const sources: Record<string, number> = {};
+    for (const q of questions) {
+      if (q.imageSource) {
+        sources[q.imageSource] = (sources[q.imageSource] || 0) + 1;
+      }
+    }
+    return { total, withImage, sources };
+  }, [questions]);
+
   const handleResultClick = (result: SearchResult) => {
     switch (result.type) {
       case "player":
@@ -339,6 +362,41 @@ export default function AdminPage() {
   const closeQuestionDetails = () => {
     setSelectedQuestion(null);
     setQuestionAnswers([]);
+  };
+
+  const [expandedImageUrl, setExpandedImageUrl] = useState<string | null>(null);
+  const [removingImage, setRemovingImage] = useState(false);
+
+  const handleRemoveImage = async (questionId: string) => {
+    if (!confirm("Remove image from this question? This cannot be undone.")) return;
+    setRemovingImage(true);
+    try {
+      const res = await fetch(`/api/admin/questions/${questionId}/image`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        alert(`Failed: ${data.error || "Unknown error"}`);
+        return;
+      }
+      // Update local state
+      setQuestions((prev) =>
+        prev.map((q) =>
+          q.id === questionId
+            ? { ...q, imageUrl: null, imageSource: null }
+            : q
+        )
+      );
+      if (selectedQuestion?.id === questionId) {
+        setSelectedQuestion((prev) =>
+          prev ? { ...prev, imageUrl: null, imageSource: null } : prev
+        );
+      }
+    } catch {
+      alert("Request failed");
+    } finally {
+      setRemovingImage(false);
+    }
   };
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
@@ -853,6 +911,23 @@ export default function AdminPage() {
                 className="px-3 py-2 bg-[#1e3a5f] border border-[#2a4a6f] rounded-lg text-white text-sm focus:outline-none focus:border-amber-500"
               />
 
+              {/* Image filter pills */}
+              <div className="flex gap-1">
+                {(["all", "with", "without"] as const).map((opt) => (
+                  <button
+                    key={opt}
+                    onClick={() => setFilterImage(opt)}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium transition ${
+                      filterImage === opt
+                        ? "bg-amber-500 text-black"
+                        : "bg-[#1e3a5f] text-[#a0a0b8] hover:bg-[#2a4a6f]"
+                    }`}
+                  >
+                    {opt === "all" ? "All" : opt === "with" ? "With Image" : "Without Image"}
+                  </button>
+                ))}
+              </div>
+
               {(filterLeague ||
                 filterCategory ||
                 filterDateFrom ||
@@ -872,13 +947,42 @@ export default function AdminPage() {
               )}
             </div>
 
+            {/* Image stats summary */}
+            {!questionsLoading && questions.length > 0 && (
+              <div className="mb-4 p-4 bg-[#1e3a5f] rounded-lg border border-[#2a4a6f]">
+                <div className="flex flex-wrap gap-6 text-sm">
+                  <div>
+                    <span className="text-[#a0a0b8]">Questions with images: </span>
+                    <span className="text-white font-medium">
+                      {imageStats.withImage} / {imageStats.total}
+                      {imageStats.total > 0 && (
+                        <span className="text-[#666680] ml-1">
+                          ({Math.round((imageStats.withImage / imageStats.total) * 100)}%)
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                  {Object.entries(imageStats.sources).length > 0 && (
+                    <div className="flex gap-4">
+                      {Object.entries(imageStats.sources).map(([src, count]) => (
+                        <span key={src}>
+                          <span className="text-[#a0a0b8] capitalize">{src}: </span>
+                          <span className="text-white font-medium">{count}</span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {questionsLoading ? (
               <div className="card p-8 text-center">
                 <div className="animate-pulse text-[#a0a0b8]">
                   Loading questions...
                 </div>
               </div>
-            ) : questions.length === 0 ? (
+            ) : filteredQuestions.length === 0 ? (
               <div className="card p-8 text-center text-[#666680]">
                 No questions found
               </div>
@@ -892,6 +996,7 @@ export default function AdminPage() {
                         <th className="table-header p-3 text-left">Category</th>
                         <th className="table-header p-3 text-left">Creator</th>
                         <th className="table-header p-3 text-left">League</th>
+                        <th className="table-header p-3 text-center">Image</th>
                         <th className="table-header p-3 text-center">
                           Accuracy
                         </th>
@@ -904,7 +1009,7 @@ export default function AdminPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {questions.map((q) => (
+                      {filteredQuestions.map((q) => (
                         <tr key={q.id} className="table-row">
                           <td className="p-3 text-white text-sm max-w-md truncate">
                             {q.questionText}
@@ -919,6 +1024,25 @@ export default function AdminPage() {
                           </td>
                           <td className="p-3 text-[#a0a0b8] text-sm">
                             {q.league?.name || "—"}
+                          </td>
+                          <td className="p-3 text-center">
+                            {q.imageUrl ? (
+                              <button
+                                onClick={() => setExpandedImageUrl(q.imageUrl!)}
+                                className="inline-block"
+                              >
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={q.imageUrl}
+                                  alt="Question image"
+                                  width={32}
+                                  height={32}
+                                  className="w-8 h-8 rounded object-cover hover:opacity-80 transition"
+                                />
+                              </button>
+                            ) : (
+                              <span className="text-[#666680] text-sm">—</span>
+                            )}
                           </td>
                           <td className="p-3 text-center text-sm text-[#a0a0b8]">
                             {q.stats.accuracy}%
@@ -1007,6 +1131,33 @@ export default function AdminPage() {
                 <p className="text-sm text-[#a0a0b8]">
                   <strong>Format:</strong> {selectedQuestion.answerFormat}
                 </p>
+                {selectedQuestion.imageUrl && (
+                  <div className="mt-4 flex items-start gap-4">
+                    <button onClick={() => setExpandedImageUrl(selectedQuestion.imageUrl!)}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={selectedQuestion.imageUrl}
+                        alt="Question image"
+                        className="w-24 h-24 rounded object-cover hover:opacity-80 transition"
+                      />
+                    </button>
+                    <div className="flex flex-col gap-2">
+                      {selectedQuestion.imageSource && (
+                        <p className="text-sm text-[#a0a0b8]">
+                          <strong>Image source:</strong>{" "}
+                          <span className="capitalize">{selectedQuestion.imageSource}</span>
+                        </p>
+                      )}
+                      <button
+                        onClick={() => handleRemoveImage(selectedQuestion.id)}
+                        disabled={removingImage}
+                        className="px-3 py-1.5 bg-red-500/20 text-red-400 rounded text-xs hover:bg-red-500/30 transition disabled:opacity-50 disabled:cursor-not-allowed w-fit"
+                      >
+                        {removingImage ? "Removing..." : "Remove Image"}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <h3 className="text-lg font-semibold text-amber-400 mb-3">
@@ -1102,6 +1253,22 @@ export default function AdminPage() {
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Expanded image lightbox */}
+        {expandedImageUrl && (
+          <div
+            className="fixed inset-0 bg-black/90 flex items-center justify-center z-[60] p-4"
+            onClick={() => setExpandedImageUrl(null)}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={expandedImageUrl}
+              alt="Expanded question image"
+              className="max-w-full max-h-[90vh] rounded-lg object-contain"
+              onClick={(e) => e.stopPropagation()}
+            />
           </div>
         )}
 
