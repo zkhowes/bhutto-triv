@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Avatar from "@/components/ui/Avatar";
+import WhatsNewModal from "@/components/ui/WhatsNewModal";
 
 interface Notification {
   id: string;
@@ -184,6 +185,7 @@ export default function NavBar() {
   if (!session?.user) return null;
 
   return (
+    <>
     <nav className="sticky top-0 z-50 bg-[#1a1a2e]/95 backdrop-blur border-b border-[#1e3a5f]">
       <div className="max-w-7xl mx-auto px-4">
         <div className="flex items-center justify-between h-14">
@@ -387,5 +389,7 @@ export default function NavBar() {
         </div>
       </div>
     </nav>
+    <WhatsNewModal />
+    </>
   );
 }
