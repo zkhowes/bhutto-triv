@@ -93,7 +93,7 @@ function fallbackGrading(
 export interface WorkshopVariation {
   category: string;
   questionText: string;
-  answerFormat: "multiple_choice" | "free_text" | "price_is_right";
+  answerFormat: "multiple_choice" | "free_text" | "price_is_right" | "ordering";
   optionA?: string;
   optionB?: string;
   optionC?: string;
@@ -101,6 +101,9 @@ export interface WorkshopVariation {
   correctOption?: string;
   correctAnswer?: string;
   acceptableAnswers?: string[];
+  orderingItems?: string[];
+  orderingCorrectOrder?: number[];
+  orderingDirection?: string;
   difficulty: "easy" | "medium" | "hard";
   hook: string;
   imageSearchTerm?: string;
@@ -120,6 +123,7 @@ Answer formats:
 - "multiple_choice": 4 options (optionA-D), one correctOption (A/B/C/D)
 - "free_text": correctAnswer string + acceptableAnswers array of alternate phrasings
 - "price_is_right": numeric correctAnswer (as string), no acceptableAnswers needed
+- "ordering": 3-4 items in orderingItems array, orderingCorrectOrder array of positions [1,2,3,4] (items entered in correct order so positions match indices+1), plus orderingDirection string (e.g. "most to least", "earliest to latest"). Great for chronological, ranking, or sequential questions.
 
 Default categories: Geography, Sports, Politics, Science, History, Entertainment, Arts & Literature, Food & Drink, Technology, General Knowledge
 
@@ -163,7 +167,7 @@ Return this exact JSON structure:
 Rules:
 - "hook" is a short 5-8 word teaser for each card
 - "imageSearchTerm": a concise, specific search query for an image that enhances the question, or null if no image would add value
-- STRONGLY prefer multiple_choice and price_is_right formats. Only use free_text when the question genuinely requires an open-ended answer (e.g., "Name the country...", "Who said..."). At least 2 of the 3 variations should be multiple_choice or price_is_right.
+- STRONGLY prefer multiple_choice, price_is_right, and ordering formats over free_text. Only use free_text when the question genuinely requires an open-ended answer (e.g., "Name the country...", "Who said..."). At least 2 of the 3 variations should be multiple_choice, price_is_right, or ordering.
 - Each variation should feel genuinely different, not a rewrite
 - Return ONLY valid JSON, no markdown fences, no extra text
 - If the user is having a conversation (not asking for a question), return: {"type": "conversation", "text": "your response here"}
@@ -439,7 +443,7 @@ Respond with a single helpful hint sentence only, no preamble.`,
  * Returns null if free text is the best fit.
  */
 export interface FormatSuggestion {
-  suggestedFormat: "multiple_choice" | "price_is_right";
+  suggestedFormat: "multiple_choice" | "price_is_right" | "ordering";
   message: string;
   options?: {
     optionA: string;
@@ -448,6 +452,8 @@ export interface FormatSuggestion {
     optionD: string;
     correctOption: "A" | "B" | "C" | "D";
   };
+  orderingItems?: string[];
+  orderingDirection?: string;
 }
 
 export async function suggestFormat(
@@ -476,12 +482,15 @@ ${acceptableAnswers.length > 0 ? `Also acceptable: ${acceptableAnswers.join(", "
 Rules:
 - If the answer is a number (year, count, measurement, price, distance, etc.), suggest "price_is_right"
 - If the answer is one of a clear set of options (a person, place, thing where you can generate 3 plausible wrong answers), suggest "multiple_choice" and provide 4 options (A-D) with the correct one marked
+- If the question involves ranking, ordering, chronology, or sequencing (e.g. "which came first", "rank these", "order from biggest to smallest"), suggest "ordering" with 3-4 items and a direction
 - If the question genuinely needs an open-ended text answer (the answer space is too large for MC, and is not numeric), return null
 
 Respond with JSON only. Either:
 {"suggestedFormat": "multiple_choice", "message": "This would work great as multiple choice!", "options": {"optionA": "...", "optionB": "...", "optionC": "...", "optionD": "...", "correctOption": "A"}}
 or:
 {"suggestedFormat": "price_is_right", "message": "That number would make a great Price is Right question!"}
+or:
+{"suggestedFormat": "ordering", "message": "This would make a great ordering question!", "orderingItems": ["item1", "item2", "item3"], "orderingDirection": "earliest to latest"}
 or:
 null`,
         },

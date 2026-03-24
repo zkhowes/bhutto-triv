@@ -179,14 +179,18 @@ export async function GET(
         imageUrl: null,
         imageSource: null,
         imageAttribution: null,
+        orderingItems: null,
+        orderingCorrectOrder: null,
+        orderingDirection: null,
       };
     } else {
-      // Player has bet, show question but hide correct answer
+      // Player has bet, show question but hide correct answer/order
       questionData = {
         ...questionData,
         correctOption: null,
         correctAnswer: null,
         acceptableAnswers: null,
+        orderingCorrectOrder: null,
       };
     }
   }

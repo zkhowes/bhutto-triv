@@ -18,6 +18,8 @@ interface AnswerInterfaceProps {
     optionD: string | null;
     imageUrl?: string | null;
     imageAttribution?: string | null;
+    orderingItems?: string | null;
+    orderingDirection?: string | null;
   };
   betAmount: number;
   playerPoints: number; // current points before the bet
@@ -48,6 +50,7 @@ export default function AnswerInterface({
   const [eliminatedOption, setEliminatedOption] = useState<string | null>(null);
   const [highLowResult, setHighLowResult] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
+  const [firstPlaceItem, setFirstPlaceItem] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [buyingPowerUp, setBuyingPowerUp] = useState(false);
   const [powerUpUsed, setPowerUpUsed] = useState(!!powerUpType);
@@ -56,7 +59,29 @@ export default function AnswerInterface({
 
   const isMultipleChoice = question.answerFormat === "multiple_choice";
   const isPriceIsRight = question.answerFormat === "price_is_right";
-  const isFreeText = !isMultipleChoice && !isPriceIsRight;
+  const isOrdering = question.answerFormat === "ordering";
+  const isFreeText = !isMultipleChoice && !isPriceIsRight && !isOrdering;
+
+  // Ordering state: parse items and shuffle on mount
+  const orderingItemsParsed: string[] = (() => {
+    if (!isOrdering || !question.orderingItems) return [];
+    try { return JSON.parse(question.orderingItems); } catch { return []; }
+  })();
+  const orderingDirection = isOrdering && question.orderingDirection ? question.orderingDirection : "";
+
+  // Shuffled ordering for the player (stable across renders)
+  const [playerOrder, setPlayerOrder] = useState<number[]>([]);
+  useEffect(() => {
+    if (!isOrdering || orderingItemsParsed.length === 0) return;
+    // Create shuffled indices on mount
+    const indices = orderingItemsParsed.map((_, i) => i);
+    for (let i = indices.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [indices[i], indices[j]] = [indices[j], indices[i]];
+    }
+    setPlayerOrder(indices);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOrdering, question.orderingItems]);
 
   const options = [
     { key: "A", text: question.optionA },
@@ -103,6 +128,15 @@ export default function AnswerInterface({
     };
   }, [isAnswerPhase]);
 
+  const moveItem = (fromIdx: number, toIdx: number) => {
+    if (toIdx < 0 || toIdx >= playerOrder.length) return;
+    setPlayerOrder((prev) => {
+      const next = [...prev];
+      [next[fromIdx], next[toIdx]] = [next[toIdx], next[fromIdx]];
+      return next;
+    });
+  };
+
   const handleSubmit = async () => {
     if (isMultipleChoice && !selectedOption) {
       setError("Please select an answer");
@@ -118,6 +152,10 @@ export default function AnswerInterface({
         return;
       }
     }
+    if (isOrdering && playerOrder.length === 0) {
+      setError("Please arrange the items");
+      return;
+    }
     if (questionRating === 0) {
       setError("Please rate the question before submitting");
       return;
@@ -125,6 +163,19 @@ export default function AnswerInterface({
 
     setSubmitting(true);
     setError("");
+
+    // For ordering: convert playerOrder (array of original indices) to position array
+    // playerOrder[i] = original index of item at position i
+    // We need to send: for each original item, what position did the player put it in?
+    // positionArray[originalIndex] = position (1-based)
+    let orderingAnswer: string | undefined;
+    if (isOrdering) {
+      const positionArray = new Array(playerOrder.length);
+      for (let pos = 0; pos < playerOrder.length; pos++) {
+        positionArray[playerOrder[pos]] = pos + 1;
+      }
+      orderingAnswer = JSON.stringify(positionArray);
+    }
 
     try {
       const actAsParam = actAsPlayerId ? `?actAs=${actAsPlayerId}` : "";
@@ -138,7 +189,9 @@ export default function AnswerInterface({
             ? freeTextAnswer.trim()
             : isPriceIsRight
               ? priceAnswer.trim()
-              : undefined,
+              : isOrdering
+                ? orderingAnswer
+                : undefined,
           questionRating,
           cheatSeekerData: {
             tabSwitches: tabSwitches.current,
@@ -171,6 +224,7 @@ export default function AnswerInterface({
         multiple_choice: "elimination",
         free_text: "hint",
         price_is_right: "highlow",
+        ordering: "first_place",
       };
       const type = powerUpTypeForFormat[question.answerFormat];
       if (!type) {
@@ -208,6 +262,7 @@ export default function AnswerInterface({
         setEliminatedOption(result.eliminatedOption as string);
       if (result.direction)
         setHighLowResult(result.direction as string);
+      if (result.item) setFirstPlaceItem(result.item as string);
 
       setPowerUpUsed(true);
     } catch (err) {
@@ -221,6 +276,7 @@ export default function AnswerInterface({
     multiple_choice: "Eliminate a Wrong Answer",
     free_text: "Buy a Hint",
     price_is_right: "Check High/Low",
+    ordering: "Reveal 1st Position",
   };
 
   return (
@@ -333,6 +389,65 @@ export default function AnswerInterface({
             </div>
           )}
         </div>
+      ) : isOrdering ? (
+        <div className="mb-4">
+          <p className="text-sm text-[#a0a0b8] mb-3 font-medium">
+            Order these {orderingDirection ? `from ${orderingDirection}` : ""}:
+          </p>
+          {firstPlaceItem && (
+            <div className="mb-3 p-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-sm text-emerald-300">
+              <span className="font-semibold">1st position: </span>{firstPlaceItem}
+            </div>
+          )}
+          <div className="space-y-2">
+            {playerOrder.map((originalIdx, posIdx) => {
+              const isPinned = firstPlaceItem && orderingItemsParsed[originalIdx] === firstPlaceItem && posIdx === 0;
+              return (
+                <div
+                  key={originalIdx}
+                  className={`flex items-center gap-2 p-3 rounded-lg border transition-all ${
+                    isPinned
+                      ? "border-emerald-500/40 bg-emerald-500/10"
+                      : "border-[#1e3a5f] bg-[#0f0f23]"
+                  }`}
+                >
+                  <span className="w-6 h-6 rounded-full bg-[#1e3a5f] text-[#a0a0b8] flex items-center justify-center text-xs font-bold flex-shrink-0">
+                    {posIdx + 1}
+                  </span>
+                  <span className="flex-1 text-white text-sm">
+                    {orderingItemsParsed[originalIdx]}
+                  </span>
+                  <div className="flex flex-col gap-0.5 flex-shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => moveItem(posIdx, posIdx - 1)}
+                      disabled={posIdx === 0}
+                      className={`w-7 h-7 flex items-center justify-center rounded text-xs ${
+                        posIdx === 0
+                          ? "text-[#444460] cursor-not-allowed"
+                          : "text-[#a0a0b8] hover:bg-[#1e3a5f] hover:text-white"
+                      }`}
+                    >
+                      ▲
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => moveItem(posIdx, posIdx + 1)}
+                      disabled={posIdx === playerOrder.length - 1}
+                      className={`w-7 h-7 flex items-center justify-center rounded text-xs ${
+                        posIdx === playerOrder.length - 1
+                          ? "text-[#444460] cursor-not-allowed"
+                          : "text-[#a0a0b8] hover:bg-[#1e3a5f] hover:text-white"
+                      }`}
+                    >
+                      ▼
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       ) : (
         <div className="mb-4">
           <input
@@ -381,7 +496,7 @@ export default function AnswerInterface({
         </div>
       )}
 
-      {powerUpUsed && !hint && !eliminatedOption && !highLowResult && (
+      {powerUpUsed && !hint && !eliminatedOption && !highLowResult && !firstPlaceItem && (
         <div className="mb-4 text-xs text-[#666680] text-center">
           Power-up used this round
         </div>

@@ -3,13 +3,15 @@
 interface QuestionPreviewCardProps {
   category: string;
   questionText: string;
-  answerFormat: "multiple_choice" | "free_text" | "price_is_right";
+  answerFormat: "multiple_choice" | "free_text" | "price_is_right" | "ordering";
   optionA?: string;
   optionB?: string;
   optionC?: string;
   optionD?: string;
   correctOption?: string;
   correctAnswer?: string;
+  orderingItems?: string[];
+  orderingDirection?: string;
   difficulty: "easy" | "medium" | "hard";
   hook: string;
   selected?: boolean;
@@ -30,6 +32,7 @@ const formatLabels: Record<string, string> = {
   multiple_choice: "MC",
   free_text: "Free Text",
   price_is_right: "PiR",
+  ordering: "Order",
 };
 
 export default function QuestionPreviewCard({
@@ -42,6 +45,8 @@ export default function QuestionPreviewCard({
   optionD,
   correctOption,
   correctAnswer,
+  orderingItems,
+  orderingDirection,
   difficulty,
   hook,
   selected = false,
@@ -168,6 +173,29 @@ export default function QuestionPreviewCard({
           )}
           <p className="mt-1 text-[10px] text-[#666680]">
             Closest without going over wins
+          </p>
+        </div>
+      )}
+
+      {answerFormat === "ordering" && orderingItems && orderingItems.length > 0 && (
+        <div className={compact ? "" : "mb-1"}>
+          {orderingDirection && (
+            <p className="text-[10px] text-[#666680] mb-1">
+              Order: {orderingDirection}
+            </p>
+          )}
+          <div className="space-y-1">
+            {orderingItems.map((item, i) => (
+              <div
+                key={i}
+                className="px-3 py-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/5 text-xs text-emerald-400"
+              >
+                {i + 1}. {item}
+              </div>
+            ))}
+          </div>
+          <p className="mt-1 text-[10px] text-[#666680]">
+            Most correct positions wins
           </p>
         </div>
       )}

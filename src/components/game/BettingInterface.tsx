@@ -22,6 +22,7 @@ const FORMAT_LABELS: Record<string, string> = {
   multiple_choice: "Multiple Choice",
   free_text: "Free Text Answer",
   price_is_right: "Price is Right",
+  ordering: "Ordering",
 };
 
 export default function BettingInterface({

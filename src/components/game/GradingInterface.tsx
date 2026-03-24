@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { determinePirWinners } from "@/lib/scoring";
+import { determinePirWinners, determineOrderingWinners } from "@/lib/scoring";
 import CheatSeekerEye from "./CheatSeekerEye";
 import StarRating from "@/components/ui/StarRating";
 import InfoTooltip from "@/components/ui/InfoTooltip";
@@ -39,6 +39,9 @@ interface Question {
   optionD: string | null;
   imageUrl: string | null;
   imageAttribution: string | null;
+  orderingItems?: string | null;
+  orderingCorrectOrder?: string | null;
+  orderingDirection?: string | null;
 }
 
 interface GradingInterfaceProps {
@@ -59,14 +62,26 @@ export default function GradingInterface({
   onGradingComplete,
 }: GradingInterfaceProps) {
   const isPriceIsRight = question.answerFormat === "price_is_right";
+  const isOrdering = question.answerFormat === "ordering";
 
   // Only show non-at-bat player answers
-  // For Price is Right, isCorrect is null until closeRound, so show all non-absent answers
+  // For Price is Right and Ordering, isCorrect is null until closeRound, so show all non-absent answers
   const playerAnswers = answers.filter(
     (a) =>
       a.leaguePlayerId !== atBatPlayerId &&
-      (isPriceIsRight ? !a.isAbsent : a.isCorrect !== null)
+      ((isPriceIsRight || isOrdering) ? !a.isAbsent : a.isCorrect !== null)
   );
+
+  // Parse ordering data
+  const orderingItems: string[] = useMemo(() => {
+    if (!isOrdering || !question.orderingItems) return [];
+    try { return JSON.parse(question.orderingItems); } catch { return []; }
+  }, [isOrdering, question.orderingItems]);
+
+  const orderingCorrectOrder: number[] = useMemo(() => {
+    if (!isOrdering || !question.orderingCorrectOrder) return [];
+    try { return JSON.parse(question.orderingCorrectOrder); } catch { return []; }
+  }, [isOrdering, question.orderingCorrectOrder]);
 
   // Compute PiR preview grades client-side
   const pirPreview = useMemo<Record<string, boolean>>(() => {
@@ -86,6 +101,23 @@ export default function GradingInterface({
     }
     return preview;
   }, [isPriceIsRight, question.correctAnswer, playerAnswers]);
+
+  // Compute ordering preview grades client-side
+  const orderingPreview = useMemo<Record<string, boolean>>(() => {
+    if (!isOrdering || orderingCorrectOrder.length === 0) return {};
+    const submissions = playerAnswers
+      .filter((a) => a.freeTextAnswer)
+      .map((a) => ({
+        id: a.id,
+        playerOrder: JSON.parse(a.freeTextAnswer!) as number[],
+      }));
+    const { winners } = determineOrderingWinners(orderingCorrectOrder, submissions);
+    const preview: Record<string, boolean> = {};
+    for (const a of playerAnswers) {
+      preview[a.id] = winners.has(a.id);
+    }
+    return preview;
+  }, [isOrdering, orderingCorrectOrder, playerAnswers]);
 
   const [overrides, setOverrides] = useState<Record<string, boolean>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -108,6 +140,7 @@ export default function GradingInterface({
 
   const getOriginalGrade = (answer: Answer): boolean => {
     if (isPriceIsRight) return pirPreview[answer.id] ?? false;
+    if (isOrdering) return orderingPreview[answer.id] ?? false;
     return answer.isCorrect ?? false;
   };
 
@@ -136,6 +169,7 @@ export default function GradingInterface({
       hint: "\uD83D\uDCA1 Hint",
       elimination: "\u2702\uFE0F Elim",
       highlow: "\u2195\uFE0F Hi/Lo",
+      first_place: "\uD83E\uDD47 1st",
     };
     return `${labels[type] ?? type} (${cost}pt)`;
   };
@@ -191,7 +225,9 @@ export default function GradingInterface({
       <p className="text-sm text-[#a0a0b8] mb-4">
         {isPriceIsRight
           ? "Closest guess without going over wins. Review the auto-grades below and override if needed."
-          : "All players have answered. Review the grades below and override if needed."}
+          : isOrdering
+            ? "Most correct positions wins. Review the auto-grades below and override if needed."
+            : "All players have answered. Review the grades below and override if needed."}
       </p>
 
       {/* Question & correct answer */}
@@ -225,12 +261,27 @@ export default function GradingInterface({
             })()}
           </div>
         )}
-        <p className="text-sm text-emerald-400">
-          {isPriceIsRight ? "Target: " : "Correct answer: "}
-          {question.answerFormat === "multiple_choice"
-            ? `${question.correctOption}. ${getOptionText(question.correctOption || "")}`
-            : question.correctAnswer}
-        </p>
+        {isOrdering ? (
+          <div className="text-sm">
+            <p className="text-emerald-400 font-medium mb-1">
+              Correct order ({question.orderingDirection}):
+            </p>
+            <div className="space-y-1">
+              {orderingItems.map((item, i) => (
+                <p key={i} className="text-emerald-400 text-xs">
+                  {i + 1}. {item}
+                </p>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-emerald-400">
+            {isPriceIsRight ? "Target: " : "Correct answer: "}
+            {question.answerFormat === "multiple_choice"
+              ? `${question.correctOption}. ${getOptionText(question.correctOption || "")}`
+              : question.correctAnswer}
+          </p>
+        )}
         {/* Question rating from submitted player ratings */}
         {(() => {
           const ratings = answers
@@ -254,10 +305,37 @@ export default function GradingInterface({
         {playerAnswers.map((answer) => {
           const playerName =
             answer.leaguePlayer.fakeNickname || answer.leaguePlayer.user.nickname;
-          const answerText =
-            question.answerFormat === "multiple_choice"
-              ? `${answer.selectedOption}. ${getOptionText(answer.selectedOption || "")}`
-              : answer.freeTextAnswer || "(no answer)";
+          let answerText: string;
+          if (question.answerFormat === "multiple_choice") {
+            answerText = `${answer.selectedOption}. ${getOptionText(answer.selectedOption || "")}`;
+          } else if (isOrdering && answer.freeTextAnswer) {
+            try {
+              const playerPositions: number[] = JSON.parse(answer.freeTextAnswer);
+              // Show items in the player's order
+              const orderedItems = playerPositions
+                .map((pos, origIdx) => ({ pos, item: orderingItems[origIdx] }))
+                .sort((a, b) => a.pos - b.pos)
+                .map((e) => e.item);
+              answerText = orderedItems.join(" → ");
+            } catch {
+              answerText = answer.freeTextAnswer;
+            }
+          } else {
+            answerText = answer.freeTextAnswer || "(no answer)";
+          }
+
+          // Compute ordering score (correct positions)
+          let orderingScore: number | null = null;
+          if (isOrdering && answer.freeTextAnswer) {
+            try {
+              const playerPositions: number[] = JSON.parse(answer.freeTextAnswer);
+              let correct = 0;
+              for (let i = 0; i < orderingCorrectOrder.length; i++) {
+                if (playerPositions[i] === orderingCorrectOrder[i]) correct++;
+              }
+              orderingScore = correct;
+            } catch { /* ignore */ }
+          }
 
           const grade = getEffectiveGrade(answer);
           const isOverridden = answer.id in overrides;
@@ -299,6 +377,11 @@ export default function GradingInterface({
                     {isPriceIsRight ? "Guess: " : ""}{answerText}
                     {pirIsOver && (
                       <span className="ml-2 text-xs text-red-400">over</span>
+                    )}
+                    {orderingScore !== null && (
+                      <span className="ml-2 text-xs text-[#4fc3f7]">
+                        {orderingScore}/{orderingCorrectOrder.length} correct
+                      </span>
                     )}
                   </p>
                   {answer.gradedBy === "ai" && !isPriceIsRight && (

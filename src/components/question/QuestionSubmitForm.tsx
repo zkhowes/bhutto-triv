@@ -50,6 +50,13 @@ export default function QuestionSubmitForm({
   const [correctOption, setCorrectOption] = useState("");
   const [correctAnswer, setCorrectAnswer] = useState("");
   const [acceptableAnswers, setAcceptableAnswers] = useState("");
+  // Ordering format
+  const [orderingDirection, setOrderingDirection] = useState("");
+  const [orderingItem1, setOrderingItem1] = useState("");
+  const [orderingItem2, setOrderingItem2] = useState("");
+  const [orderingItem3, setOrderingItem3] = useState("");
+  const [orderingItem4, setOrderingItem4] = useState("");
+  const [showFourthItem, setShowFourthItem] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [draftLoaded, setDraftLoaded] = useState(false);
@@ -70,7 +77,7 @@ export default function QuestionSubmitForm({
 
   // Format suggestion
   const [formatSuggestion, setFormatSuggestion] = useState<{
-    suggestedFormat: "multiple_choice" | "price_is_right";
+    suggestedFormat: "multiple_choice" | "price_is_right" | "ordering";
     message: string;
     options?: {
       optionA: string;
@@ -79,6 +86,8 @@ export default function QuestionSubmitForm({
       optionD: string;
       correctOption: string;
     };
+    orderingItems?: string[];
+    orderingDirection?: string;
   } | null>(null);
   const [formatSuggestionLoading, setFormatSuggestionLoading] = useState(false);
   const [formatSuggestionDismissed, setFormatSuggestionDismissed] = useState(false);
@@ -177,6 +186,16 @@ export default function QuestionSubmitForm({
         setError("Provide a valid numeric correct answer");
         return;
       }
+    } else if (answerFormat === "ordering") {
+      if (!orderingDirection.trim()) {
+        setError("Provide a direction (e.g. 'most to least')");
+        return;
+      }
+      const items = [orderingItem1, orderingItem2, orderingItem3, orderingItem4].filter(Boolean);
+      if (items.length < 3) {
+        setError("Provide at least 3 items");
+        return;
+      }
     } else {
       if (!correctAnswer.trim()) {
         setError("Provide the correct answer");
@@ -210,6 +229,11 @@ export default function QuestionSubmitForm({
         body.correctOption = correctOption;
       } else if (answerFormat === "price_is_right") {
         body.correctAnswer = correctAnswer.trim();
+      } else if (answerFormat === "ordering") {
+        const items = [orderingItem1, orderingItem2, orderingItem3, orderingItem4].filter(Boolean);
+        body.orderingItems = items;
+        body.orderingCorrectOrder = items.map((_, i) => i + 1);
+        body.orderingDirection = orderingDirection.trim();
       } else {
         body.correctAnswer = correctAnswer.trim();
         body.acceptableAnswers = acceptableAnswers
@@ -309,6 +333,15 @@ export default function QuestionSubmitForm({
       setCorrectOption(formatSuggestion.options.correctOption);
     } else if (formatSuggestion.suggestedFormat === "price_is_right") {
       setAnswerFormat("price_is_right");
+    } else if (formatSuggestion.suggestedFormat === "ordering") {
+      setAnswerFormat("ordering");
+      const items = (formatSuggestion as { orderingItems?: string[] }).orderingItems || [];
+      setOrderingItem1(items[0] || "");
+      setOrderingItem2(items[1] || "");
+      setOrderingItem3(items[2] || "");
+      setOrderingItem4(items[3] || "");
+      setShowFourthItem(items.length >= 4);
+      setOrderingDirection((formatSuggestion as { orderingDirection?: string }).orderingDirection || "");
     }
     setFormatSuggestion(null);
   };
@@ -347,6 +380,15 @@ export default function QuestionSubmitForm({
                   setOptionC(q.optionC || "");
                   setOptionD(q.optionD || "");
                   setCorrectOption(q.correctOption || "");
+                } else if (q.answerFormat === "ordering") {
+                  const qOrdering = q as typeof q & { orderingItems?: string[]; orderingDirection?: string };
+                  const items = qOrdering.orderingItems || [];
+                  setOrderingItem1(items[0] || "");
+                  setOrderingItem2(items[1] || "");
+                  setOrderingItem3(items[2] || "");
+                  setOrderingItem4(items[3] || "");
+                  setShowFourthItem(items.length >= 4);
+                  setOrderingDirection(qOrdering.orderingDirection || "");
                 } else {
                   setCorrectAnswer(q.correctAnswer || "");
                   if (q.acceptableAnswers?.length) {
@@ -528,6 +570,17 @@ export default function QuestionSubmitForm({
             >
               Price is Right
             </button>
+            <button
+              type="button"
+              onClick={() => { setAnswerFormat("ordering"); setFormatSuggestion(null); setFormatSuggestionDismissed(false); }}
+              className={`flex-1 py-2 px-3 rounded-lg border text-sm ${
+                answerFormat === "ordering"
+                  ? "border-[#e94560] bg-[#e94560]/10 text-white"
+                  : "border-[#1e3a5f] text-[#a0a0b8]"
+              }`}
+            >
+              Ordering
+            </button>
           </div>
         </div>
 
@@ -629,7 +682,7 @@ export default function QuestionSubmitForm({
                     onClick={applyFormatSuggestion}
                     className="btn-primary text-sm flex-1"
                   >
-                    Convert to {formatSuggestion.suggestedFormat === "multiple_choice" ? "Multiple Choice" : "Price is Right"}
+                    Convert to {formatSuggestion.suggestedFormat === "multiple_choice" ? "Multiple Choice" : formatSuggestion.suggestedFormat === "ordering" ? "Ordering" : "Price is Right"}
                   </button>
                   <button
                     type="button"
@@ -663,6 +716,67 @@ export default function QuestionSubmitForm({
             <p className="text-xs text-[#666680]">
               Players guess a number — closest without going over wins. If everyone goes over, nobody wins.
             </p>
+          </div>
+        )}
+
+        {/* Ordering Items */}
+        {answerFormat === "ordering" && (
+          <div className="space-y-3 mb-4">
+            <div>
+              <label className="block text-sm font-medium text-[#a0a0b8] mb-1">
+                Direction *
+              </label>
+              <input
+                type="text"
+                value={orderingDirection}
+                onChange={(e) => setOrderingDirection(e.target.value)}
+                className="input-field"
+                placeholder='e.g. "most to least", "earliest to latest"'
+              />
+            </div>
+            <p className="text-xs text-[#666680]">
+              Enter items in the correct order (1st = position 1).
+            </p>
+            {[
+              { n: 1, value: orderingItem1, setter: setOrderingItem1 },
+              { n: 2, value: orderingItem2, setter: setOrderingItem2 },
+              { n: 3, value: orderingItem3, setter: setOrderingItem3 },
+            ].map((item) => (
+              <div key={item.n} className="flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-[#1e3a5f] text-[#a0a0b8] flex items-center justify-center text-xs font-bold">
+                  {item.n}
+                </span>
+                <input
+                  type="text"
+                  value={item.value}
+                  onChange={(e) => item.setter(e.target.value)}
+                  className="input-field flex-1"
+                  placeholder={`Item ${item.n}`}
+                />
+              </div>
+            ))}
+            {showFourthItem ? (
+              <div className="flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-[#1e3a5f] text-[#a0a0b8] flex items-center justify-center text-xs font-bold">
+                  4
+                </span>
+                <input
+                  type="text"
+                  value={orderingItem4}
+                  onChange={(e) => setOrderingItem4(e.target.value)}
+                  className="input-field flex-1"
+                  placeholder="Item 4"
+                />
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowFourthItem(true)}
+                className="text-sm text-[#4fc3f7] hover:text-white transition-colors font-medium"
+              >
+                + Add 4th item
+              </button>
+            )}
           </div>
         )}
 

@@ -30,7 +30,7 @@ export async function POST(
     );
   }
 
-  if (!Object.values(POWER_UP_TYPE).includes(type as "hint" | "elimination" | "highlow")) {
+  if (!Object.values(POWER_UP_TYPE).includes(type as "hint" | "elimination" | "highlow" | "first_place")) {
     return NextResponse.json({ error: "Invalid power-up type" }, { status: 400 });
   }
 
@@ -132,6 +132,7 @@ export async function POST(
     multiple_choice: POWER_UP_TYPE.ELIMINATION,
     free_text: POWER_UP_TYPE.HINT,
     price_is_right: POWER_UP_TYPE.HIGHLOW,
+    ordering: POWER_UP_TYPE.FIRST_PLACE,
   };
   if (validTypes[question.answerFormat] !== type) {
     return NextResponse.json(
@@ -190,6 +191,14 @@ export async function POST(
     const direction = probeValue > target ? "high" : probeValue < target ? "low" : "exact";
     powerUpData = { probeValue, direction };
     resultForClient = { direction };
+  } else if (type === POWER_UP_TYPE.FIRST_PLACE) {
+    const items: string[] = JSON.parse(question.orderingItems ?? "[]");
+    const correctOrder: number[] = JSON.parse(question.orderingCorrectOrder ?? "[]");
+    // Find which item is in position 1 (correctOrder[i] === 1 means item i is first)
+    const firstItemIndex = correctOrder.indexOf(1);
+    const firstItem = firstItemIndex >= 0 ? items[firstItemIndex] : null;
+    powerUpData = { revealedPosition: 1, item: firstItem };
+    resultForClient = { revealedPosition: 1, item: firstItem };
   }
 
   // Deduct cost from player's points

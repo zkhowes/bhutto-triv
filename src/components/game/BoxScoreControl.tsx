@@ -35,6 +35,8 @@ interface BoxScoreControlProps {
     optionB: string | null;
     optionC: string | null;
     optionD: string | null;
+    orderingItems?: string | null;
+    orderingCorrectOrder?: string | null;
   };
   myPlayerId: string | null;
   defaultOpen?: boolean;
@@ -71,6 +73,17 @@ export default function BoxScoreControl({
       return answer.selectedOption
         ? `${answer.selectedOption}. ${getOptionText(answer.selectedOption)}`
         : "(no answer)";
+    }
+    if (question.answerFormat === "ordering" && answer.freeTextAnswer) {
+      try {
+        const playerPositions: number[] = JSON.parse(answer.freeTextAnswer);
+        const items: string[] = JSON.parse(question.orderingItems ?? "[]");
+        const orderedItems = playerPositions
+          .map((pos, origIdx) => ({ pos, item: items[origIdx] }))
+          .sort((a, b) => a.pos - b.pos)
+          .map((e) => e.item);
+        return orderedItems.join(" → ");
+      } catch { /* fall through */ }
     }
     return answer.freeTextAnswer || "(no answer)";
   };
@@ -205,7 +218,7 @@ export default function BoxScoreControl({
                   )}
                   {answer.powerUpType && (
                     <span className="text-xs text-amber-400">
-                      {answer.powerUpType === "hint" ? "💡" : answer.powerUpType === "elimination" ? "✂️" : "↕️"}
+                      {answer.powerUpType === "hint" ? "💡" : answer.powerUpType === "elimination" ? "✂️" : answer.powerUpType === "first_place" ? "🥇" : "↕️"}
                       {" "}{answer.powerUpType} ({answer.powerUpCost}pt)
                     </span>
                   )}

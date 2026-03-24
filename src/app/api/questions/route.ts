@@ -29,6 +29,9 @@ export async function POST(req: NextRequest) {
     imageUrl,
     imageSource,
     imageAttribution,
+    orderingItems,
+    orderingCorrectOrder,
+    orderingDirection,
   } = body;
 
   if (!roundId || !leaguePlayerId || !category || !questionText || !answerFormat) {
@@ -94,6 +97,9 @@ export async function POST(req: NextRequest) {
       imageUrl,
       imageSource,
       imageAttribution,
+      orderingItems,
+      orderingCorrectOrder,
+      orderingDirection,
       leaguePlayerId,
       creatorUserId: actingUserId,
     });

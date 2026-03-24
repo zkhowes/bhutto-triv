@@ -35,6 +35,9 @@ interface RoundControlProps {
       optionD: string | null;
       imageUrl?: string | null;
       imageAttribution?: string | null;
+      orderingItems?: string | null;
+      orderingCorrectOrder?: string | null;
+      orderingDirection?: string | null;
     } | null;
     answers: Array<{
       id: string;
@@ -190,7 +193,27 @@ export default function RoundControl({
 
         {/* Row 2: Correct answer */}
         <div className="mt-3">
-          {round.question.answerFormat === "price_is_right" ? (
+          {round.question.answerFormat === "ordering" ? (
+            <div>
+              <p className="text-sm text-emerald-400 font-medium mb-1">
+                Correct order ({round.question.orderingDirection}):
+              </p>
+              {(() => {
+                try {
+                  const items: string[] = JSON.parse(round.question!.orderingItems ?? "[]");
+                  return (
+                    <div className="space-y-0.5">
+                      {items.map((item, i) => (
+                        <p key={i} className="text-xs text-emerald-400">
+                          {i + 1}. {item}
+                        </p>
+                      ))}
+                    </div>
+                  );
+                } catch { return null; }
+              })()}
+            </div>
+          ) : round.question.answerFormat === "price_is_right" ? (
             <div>
               <p className="text-sm text-emerald-400">
                 Target: {round.question.correctAnswer}

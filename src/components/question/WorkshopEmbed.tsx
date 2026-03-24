@@ -33,6 +33,8 @@ interface WorkshopEmbedProps {
     correctOption?: string;
     correctAnswer?: string;
     acceptableAnswers?: string[];
+    orderingItems?: string[];
+    orderingDirection?: string;
     imageUrl?: string;
     imageSource?: string;
     imageAttribution?: string;
@@ -62,6 +64,7 @@ const EDIT_CHIPS = [
   "Change to MC",
   "Change to Free Text",
   "Change to PiR",
+  "Change to Ordering",
   "Different Angle",
 ];
 
@@ -201,6 +204,8 @@ export default function WorkshopEmbed({ onSelectQuestion }: WorkshopEmbedProps) 
       correctOption: v.correctOption,
       correctAnswer: v.correctAnswer,
       acceptableAnswers: v.acceptableAnswers,
+      orderingItems: v.orderingItems,
+      orderingDirection: v.orderingDirection,
       imageUrl: img?.url,
       imageSource: img?.source,
       imageAttribution: img?.attribution,
