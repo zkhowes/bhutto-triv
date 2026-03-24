@@ -107,10 +107,16 @@ export default function GradingInterface({
     if (!isOrdering || orderingCorrectOrder.length === 0) return {};
     const submissions = playerAnswers
       .filter((a) => a.freeTextAnswer)
-      .map((a) => ({
-        id: a.id,
-        playerOrder: JSON.parse(a.freeTextAnswer!) as number[],
-      }));
+      .map((a) => {
+        try {
+          return {
+            id: a.id,
+            playerOrder: JSON.parse(a.freeTextAnswer!) as number[],
+          };
+        } catch {
+          return { id: a.id, playerOrder: [] as number[] };
+        }
+      });
     const { winners } = determineOrderingWinners(orderingCorrectOrder, submissions);
     const preview: Record<string, boolean> = {};
     for (const a of playerAnswers) {

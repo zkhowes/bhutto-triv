@@ -498,4 +498,15 @@ describe("determineOrderingWinners", () => {
     expect(scores.get("b")).toBe(0);
     expect(scores.get("c")).toBe(2);
   });
+
+  it("handles mismatched lengths gracefully", () => {
+    const correctOrder = [1, 2, 3, 4];
+    const submissions = [
+      { id: "a1", playerOrder: [1, 2, 3] }, // too short
+      { id: "a2", playerOrder: [1, 2, 3, 4] }, // correct length, all correct
+    ];
+    const { winners, scores } = determineOrderingWinners(correctOrder, submissions);
+    expect(winners.has("a2")).toBe(true);
+    expect(scores.get("a1")).toBe(3); // matches first 3 positions
+  });
 });

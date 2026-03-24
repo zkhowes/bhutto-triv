@@ -180,6 +180,19 @@ export async function submitQuestion(
     throw new Error("Category must be 1-50 characters");
   }
 
+  // Validate ordering format data
+  if (questionData.answerFormat === "ordering") {
+    if (!questionData.orderingItems || questionData.orderingItems.length < 3 || questionData.orderingItems.length > 4) {
+      throw new Error("Ordering questions require 3-4 items");
+    }
+    if (!questionData.orderingCorrectOrder || questionData.orderingCorrectOrder.length !== questionData.orderingItems.length) {
+      throw new Error("Ordering correct order must match number of items");
+    }
+    if (!questionData.orderingDirection || questionData.orderingDirection.trim().length === 0) {
+      throw new Error("Ordering direction is required");
+    }
+  }
+
   const question = await prisma.question.create({
     data: {
       roundId,
