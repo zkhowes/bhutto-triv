@@ -655,11 +655,19 @@ export async function closeRound(roundId: string): Promise<void> {
     if (!existingAnswer) continue;
 
     const blindMultiplier = existingAnswer.isBlindBet ? 2 : 1;
-    const betPointChange = existingAnswer.isAbsent
+    const rawBetPointChange = existingAnswer.isAbsent
       ? existingAnswer.pointsWon
       : existingAnswer.isCorrect
         ? (existingAnswer.betAmount || 0) * blindMultiplier
         : -(existingAnswer.betAmount || 0) * blindMultiplier;
+
+    // Clamp negative betPointChange so player doesn't show losing more than they have
+    const playerState = game.playerStates.find(
+      (ps) => ps.leaguePlayerId === score.leaguePlayerId
+    );
+    const betPointChange = rawBetPointChange < 0 && playerState
+      ? Math.max(rawBetPointChange, -playerState.points)
+      : rawBetPointChange;
 
     await prisma.roundAnswer.update({
       where: { id: existingAnswer.id },
@@ -672,9 +680,6 @@ export async function closeRound(roundId: string): Promise<void> {
     });
 
     // Update player state (F1/season points are calculated at game end, not per round)
-    const playerState = game.playerStates.find(
-      (ps) => ps.leaguePlayerId === score.leaguePlayerId
-    );
     if (playerState) {
       const newPoints = Math.max(0, playerState.points + betPointChange);
       await prisma.gamePlayerState.update({

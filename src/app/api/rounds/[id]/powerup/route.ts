@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { ROUND_STATUS, POWER_UP_TYPE } from "@/lib/constants";
 import { computePowerUpCost } from "@/lib/scoring";
 import { generateHint, eliminateWrongOption } from "@/lib/ai";
+import { resolveTestPlayer } from "@/lib/test-mode";
 
 export async function POST(
   req: NextRequest,
@@ -65,19 +66,15 @@ export async function POST(
   }
 
   // Verify the player is authorized (owns leaguePlayerId or is test-mode commissioner)
-  const url = new URL(req.url);
-  const actAsPlayerId = url.searchParams.get("actAs");
-  const leaguePlayer = await prisma.leaguePlayer.findUnique({
-    where: { id: leaguePlayerId },
+  let leaguePlayer = await prisma.leaguePlayer.findFirst({
+    where: { id: leaguePlayerId, userId: session.user.id },
   });
   if (!leaguePlayer) {
-    return NextResponse.json({ error: "Player not found" }, { status: 404 });
-  }
-  const isAuthorized =
-    leaguePlayer.userId === session.user.id ||
-    (actAsPlayerId === leaguePlayerId && leaguePlayer.userId === session.user.id);
-  if (!isAuthorized) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const testPlayer = await resolveTestPlayer(leaguePlayerId, session.user.id, session.user.isSuperAdmin);
+    if (!testPlayer) {
+      return NextResponse.json({ error: "Player not found" }, { status: 404 });
+    }
+    leaguePlayer = testPlayer as unknown as typeof leaguePlayer;
   }
 
   // Check player's answer (bet must be placed)

@@ -200,7 +200,7 @@ export default function BettingInterface({
             onClick={handleBlindBetClick}
             disabled={placing || betAmount < 1}
             className="px-4 py-3 rounded-lg text-sm font-bold bg-amber-500/20 border border-amber-500/40 text-amber-400 hover:bg-amber-500/30 transition-colors"
-            title="Bet before seeing the category for a 2x multiplier (once per game)"
+            title="Bet before seeing the question for a 2x multiplier (once per game)"
           >
             Blind 2x
           </button>

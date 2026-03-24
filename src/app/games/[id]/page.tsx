@@ -100,6 +100,9 @@ interface RoundData {
     correctAnswer: string | null;
     imageUrl: string | null;
     imageAttribution: string | null;
+    orderingItems: string | null;
+    orderingCorrectOrder: string | null;
+    orderingDirection: string | null;
   } | null;
   answers: Array<{
     id: string;

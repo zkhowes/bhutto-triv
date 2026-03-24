@@ -23,6 +23,9 @@ interface Draft {
   optionD: string | null;
   correctOption: string | null;
   correctAnswer: string | null;
+  orderingItems?: string;
+  orderingCorrectOrder?: string;
+  orderingDirection?: string;
 }
 
 interface CustomCategory {
@@ -113,6 +116,16 @@ export default function QuestionSubmitForm({
             setOptionC(autoSubmitDraft.optionC || "");
             setOptionD(autoSubmitDraft.optionD || "");
             setCorrectOption(autoSubmitDraft.correctOption || "");
+          } else if (autoSubmitDraft.answerFormat === "ordering" && autoSubmitDraft.orderingItems) {
+            const items = JSON.parse(autoSubmitDraft.orderingItems);
+            setOrderingItem1(items[0] || "");
+            setOrderingItem2(items[1] || "");
+            setOrderingItem3(items[2] || "");
+            if (items[3]) {
+              setOrderingItem4(items[3]);
+              setShowFourthItem(true);
+            }
+            setOrderingDirection(autoSubmitDraft.orderingDirection || "");
           } else {
             setCorrectAnswer(autoSubmitDraft.correctAnswer || "");
           }
