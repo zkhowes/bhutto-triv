@@ -209,7 +209,7 @@ Required for development (see `.env.example`):
 
 ## Kanban
 
-> Last updated: 2026-03-24
+> Last updated: 2026-03-24 (gameplay enhancements deploy)
 
 ### Backlog
 - [ ] Replay past questions — *schema has isReplay/originalQuestionId, needs UI + API*
@@ -226,6 +226,8 @@ Required for development (see `.env.example`):
 ### In Progress
 
 ### Done
+- [x] Ordering questions — *new answer format: arrange 3-4 items in correct order, PiR-style competitive grading, First Place power-up, AI workshop support*
+- [x] Blind Bet — *once per game, bet before seeing category for 2x multiplier, visible to all players, cannot use on own at-bat*
 - [x] Soft-deprecate plain text questions — *MC default, AI format advisor suggests MC/PiR with one-click convert, workshop biased toward structured formats, +0.5 quality boost for MC/PiR*
 - [x] Image questions — *optional image attachment via Unsplash/Google search, device upload, or URL paste; AI workshop suggests images; admin moderation; needs prisma db push + env vars*
 - [x] Demo click-through — */demo route, 6-step guided walkthrough with AI workshop, game phases, mock data*
