@@ -509,4 +509,117 @@ describe("determineOrderingWinners", () => {
     expect(winners.has("a2")).toBe(true);
     expect(scores.get("a1")).toBe(3); // matches first 3 positions
   });
+
+  it("single player all correct → wins", () => {
+    const { winners, scores } = determineOrderingWinners(
+      [1, 2, 3],
+      [{ id: "solo", playerOrder: [1, 2, 3] }]
+    );
+    expect(winners.size).toBe(1);
+    expect(winners.has("solo")).toBe(true);
+    expect(scores.get("solo")).toBe(3);
+  });
+
+  it("single player with 2 correct → wins (meets minimum)", () => {
+    const { winners } = determineOrderingWinners(
+      [1, 2, 3],
+      [{ id: "solo", playerOrder: [1, 2, 1] }] // 2 correct (pos 0,1)
+    );
+    expect(winners.size).toBe(1);
+    expect(winners.has("solo")).toBe(true);
+  });
+
+  it("single player with 1 correct → nobody wins", () => {
+    const { winners } = determineOrderingWinners(
+      [1, 2, 3],
+      [{ id: "solo", playerOrder: [3, 2, 1] }] // 1 correct (pos 1)
+    );
+    expect(winners.size).toBe(0);
+  });
+
+  it("single player all wrong → nobody wins", () => {
+    const { winners, scores } = determineOrderingWinners(
+      [1, 2, 3],
+      [{ id: "solo", playerOrder: [3, 1, 2] }] // 0 correct
+    );
+    expect(winners.size).toBe(0);
+    expect(scores.get("solo")).toBe(0);
+  });
+
+  it("everyone gets exactly 2 correct → everyone wins", () => {
+    const { winners } = determineOrderingWinners(
+      [1, 2, 3, 4],
+      [
+        { id: "a", playerOrder: [1, 2, 4, 3] }, // 2 correct (pos 0,1)
+        { id: "b", playerOrder: [1, 3, 2, 4] }, // 2 correct (pos 0,3)
+        { id: "c", playerOrder: [4, 2, 3, 1] }, // 2 correct (pos 1,2)
+      ]
+    );
+    expect(winners.size).toBe(3);
+    expect(winners.has("a")).toBe(true);
+    expect(winners.has("b")).toBe(true);
+    expect(winners.has("c")).toBe(true);
+  });
+
+  it("complete reversal of 4 items → 0 correct, nobody wins", () => {
+    const { winners, scores } = determineOrderingWinners(
+      [1, 2, 3, 4],
+      [
+        { id: "a", playerOrder: [4, 3, 2, 1] }, // 0 correct
+        { id: "b", playerOrder: [4, 3, 2, 1] }, // 0 correct
+      ]
+    );
+    expect(winners.size).toBe(0);
+    expect(scores.get("a")).toBe(0);
+    expect(scores.get("b")).toBe(0);
+  });
+
+  it("mix of all-correct and partial → only all-correct win", () => {
+    const { winners, scores } = determineOrderingWinners(
+      [1, 2, 3],
+      [
+        { id: "a", playerOrder: [1, 2, 3] }, // 3 correct
+        { id: "b", playerOrder: [1, 2, 1] }, // 2 correct
+        { id: "c", playerOrder: [1, 2, 3] }, // 3 correct
+      ]
+    );
+    expect(winners.size).toBe(2);
+    expect(winners.has("a")).toBe(true);
+    expect(winners.has("c")).toBe(true);
+    expect(winners.has("b")).toBe(false);
+    expect(scores.get("b")).toBe(2);
+  });
+
+  it("one player at 3, others at 2 → only the 3 wins", () => {
+    const { winners } = determineOrderingWinners(
+      [1, 2, 3, 4],
+      [
+        { id: "a", playerOrder: [1, 2, 3, 1] }, // 3 correct (pos 0,1,2)
+        { id: "b", playerOrder: [1, 2, 4, 3] }, // 2 correct (pos 0,1)
+        { id: "c", playerOrder: [1, 3, 2, 4] }, // 2 correct (pos 0,3)
+      ]
+    );
+    expect(winners.size).toBe(1);
+    expect(winners.has("a")).toBe(true);
+  });
+
+  it("many players, varied scores, correct winner selection", () => {
+    const { winners, scores } = determineOrderingWinners(
+      [1, 2, 3, 4],
+      [
+        { id: "p1", playerOrder: [2, 1, 3, 4] }, // 2 correct (pos 2,3)
+        { id: "p2", playerOrder: [1, 2, 4, 3] }, // 2 correct (pos 0,1)
+        { id: "p3", playerOrder: [4, 3, 2, 1] }, // 0 correct
+        { id: "p4", playerOrder: [1, 2, 3, 1] }, // 3 correct (pos 0,1,2)
+        { id: "p5", playerOrder: [3, 2, 1, 4] }, // 2 correct (pos 1,3)
+      ]
+    );
+    expect(winners.size).toBe(1);
+    expect(winners.has("p4")).toBe(true);
+    expect(scores.get("p1")).toBe(2);
+    expect(scores.get("p2")).toBe(2);
+    expect(scores.get("p3")).toBe(0);
+    expect(scores.get("p4")).toBe(3);
+    expect(scores.get("p5")).toBe(2);
+  });
 });
