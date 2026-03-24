@@ -191,6 +191,7 @@ model GamePlayerState {
   skipCount      Int     @default(0) // Cumulative skips this game
   isEliminated   Boolean @default(false)
   flagUsed       Boolean @default(false) // One challenge flag per game
+  blindBetUsed   Boolean @default(false) // One blind bet per game
 
   game         Game         @relation(fields: [gameId], references: [id], onDelete: Cascade)
   leaguePlayer LeaguePlayer @relation(fields: [leaguePlayerId], references: [id], onDelete: Cascade)
@@ -274,6 +275,11 @@ model Question {
   isReplay           Boolean @default(false)
   originalQuestionId String?
 
+  // Ordering format
+  orderingItems        String?   // JSON: ["Brazil","India","China","USA"]
+  orderingCorrectOrder String?   // JSON: [1,2,3,4] (correct position per item)
+  orderingDirection    String?   // e.g. "most to least", "earliest to latest"
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -299,6 +305,9 @@ model QuestionDraft {
   imageUrl         String?
   imageSource      String?
   imageAttribution String?
+  orderingItems        String?
+  orderingCorrectOrder String?
+  orderingDirection    String?
   useOnNextRound    Boolean @default(false)
   leagueId          String? // If associated with specific league
 
@@ -351,6 +360,7 @@ model RoundAnswer {
 
   // Absentee
   isAbsent Boolean @default(false)
+  isBlindBet     Boolean @default(false) // Whether this bet was placed blind (2x multiplier)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

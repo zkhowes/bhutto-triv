@@ -47,12 +47,14 @@ export const ANSWER_FORMAT = {
   MULTIPLE_CHOICE: "multiple_choice",
   FREE_TEXT: "free_text",
   PRICE_IS_RIGHT: "price_is_right",
+  ORDERING: "ordering",
 } as const;
 
 export const POWER_UP_TYPE = {
   HINT: "hint",
   ELIMINATION: "elimination",
   HIGHLOW: "highlow",
+  FIRST_PLACE: "first_place",
 } as const;
 
 export const ROUND_STATUS = {
