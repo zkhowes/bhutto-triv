@@ -68,6 +68,21 @@ export default function QuestionSubmitForm({
   } | null>(null);
   const [difficultyLoading, setDifficultyLoading] = useState(false);
 
+  // Format suggestion
+  const [formatSuggestion, setFormatSuggestion] = useState<{
+    suggestedFormat: "multiple_choice" | "price_is_right";
+    message: string;
+    options?: {
+      optionA: string;
+      optionB: string;
+      optionC: string;
+      optionD: string;
+      correctOption: string;
+    };
+  } | null>(null);
+  const [formatSuggestionLoading, setFormatSuggestionLoading] = useState(false);
+  const [formatSuggestionDismissed, setFormatSuggestionDismissed] = useState(false);
+
   // Load auto-submit draft
   useEffect(() => {
     if (draftLoaded) return;
@@ -256,6 +271,48 @@ export default function QuestionSubmitForm({
     }
   };
 
+  const fetchFormatSuggestion = async () => {
+    if (answerFormat !== "free_text" || !questionText.trim() || !correctAnswer.trim()) return;
+    setFormatSuggestionLoading(true);
+    setFormatSuggestion(null);
+    setFormatSuggestionDismissed(false);
+    try {
+      const res = await fetch("/api/questions/suggest-format", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          questionText: questionText.trim(),
+          correctAnswer: correctAnswer.trim(),
+          acceptableAnswers: acceptableAnswers
+            .split(",")
+            .map((a) => a.trim())
+            .filter(Boolean),
+        }),
+      });
+      const data = await res.json();
+      if (data.suggestion) setFormatSuggestion(data.suggestion);
+    } catch {
+      // Silently fail — suggestion is optional
+    } finally {
+      setFormatSuggestionLoading(false);
+    }
+  };
+
+  const applyFormatSuggestion = () => {
+    if (!formatSuggestion) return;
+    if (formatSuggestion.suggestedFormat === "multiple_choice" && formatSuggestion.options) {
+      setAnswerFormat("multiple_choice");
+      setOptionA(formatSuggestion.options.optionA);
+      setOptionB(formatSuggestion.options.optionB);
+      setOptionC(formatSuggestion.options.optionC);
+      setOptionD(formatSuggestion.options.optionD);
+      setCorrectOption(formatSuggestion.options.correctOption);
+    } else if (formatSuggestion.suggestedFormat === "price_is_right") {
+      setAnswerFormat("price_is_right");
+    }
+    setFormatSuggestion(null);
+  };
+
   const canCheckDifficulty = category && questionText.trim().length > 10;
 
   return (
@@ -440,7 +497,7 @@ export default function QuestionSubmitForm({
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={() => setAnswerFormat("multiple_choice")}
+              onClick={() => { setAnswerFormat("multiple_choice"); setFormatSuggestion(null); setFormatSuggestionDismissed(false); }}
               className={`flex-1 py-2 px-3 rounded-lg border text-sm ${
                 answerFormat === "multiple_choice"
                   ? "border-[#e94560] bg-[#e94560]/10 text-white"
@@ -451,7 +508,7 @@ export default function QuestionSubmitForm({
             </button>
             <button
               type="button"
-              onClick={() => setAnswerFormat("free_text")}
+              onClick={() => { setAnswerFormat("free_text"); setFormatSuggestion(null); setFormatSuggestionDismissed(false); }}
               className={`flex-1 py-2 px-3 rounded-lg border text-sm ${
                 answerFormat === "free_text"
                   ? "border-[#e94560] bg-[#e94560]/10 text-white"
@@ -462,7 +519,7 @@ export default function QuestionSubmitForm({
             </button>
             <button
               type="button"
-              onClick={() => setAnswerFormat("price_is_right")}
+              onClick={() => { setAnswerFormat("price_is_right"); setFormatSuggestion(null); setFormatSuggestionDismissed(false); }}
               className={`flex-1 py-2 px-3 rounded-lg border text-sm ${
                 answerFormat === "price_is_right"
                   ? "border-[#e94560] bg-[#e94560]/10 text-white"
@@ -537,6 +594,53 @@ export default function QuestionSubmitForm({
                 placeholder="alt answer 1, alt answer 2"
               />
             </div>
+          </div>
+        )}
+
+        {/* Format Suggestion */}
+        {answerFormat === "free_text" && correctAnswer.trim() && questionText.trim() && (
+          <div className="mb-4">
+            {!formatSuggestion && !formatSuggestionDismissed && (
+              <button
+                type="button"
+                onClick={fetchFormatSuggestion}
+                disabled={formatSuggestionLoading}
+                className="btn-secondary text-sm w-full"
+              >
+                {formatSuggestionLoading ? "Checking..." : "Suggest Better Format"}
+              </button>
+            )}
+            {formatSuggestion && !formatSuggestionDismissed && (
+              <div className="p-3 rounded-lg border border-[#4fc3f7]/30 bg-[#4fc3f7]/10 text-sm">
+                <p className="text-[#4fc3f7] font-medium mb-2">
+                  {formatSuggestion.message}
+                </p>
+                {formatSuggestion.suggestedFormat === "multiple_choice" && formatSuggestion.options && (
+                  <div className="text-[#a0a0b8] text-xs mb-2 space-y-1">
+                    <p>A: {formatSuggestion.options.optionA}</p>
+                    <p>B: {formatSuggestion.options.optionB}</p>
+                    <p>C: {formatSuggestion.options.optionC}</p>
+                    <p>D: {formatSuggestion.options.optionD}</p>
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={applyFormatSuggestion}
+                    className="btn-primary text-sm flex-1"
+                  >
+                    Convert to {formatSuggestion.suggestedFormat === "multiple_choice" ? "Multiple Choice" : "Price is Right"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormatSuggestionDismissed(true)}
+                    className="btn-secondary text-sm"
+                  >
+                    Keep Free Text
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
