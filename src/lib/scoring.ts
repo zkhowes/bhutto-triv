@@ -202,6 +202,56 @@ export function determinePirWinners(
 }
 
 /**
+ * Determine Ordering question winners.
+ * Rules:
+ *   1. Score = number of items in correct position.
+ *   2. All-correct players win.
+ *   3. If nobody all-correct, player(s) with most correct positions win (min 2 to win).
+ *   4. Ties: all tying players win.
+ *   5. Everyone below 2 correct: nobody wins.
+ * Returns the Set of winner answer IDs and a map of scores.
+ */
+export function determineOrderingWinners(
+  correctOrder: number[],
+  submissions: Array<{ id: string; playerOrder: number[] }>
+): { winners: Set<string>; scores: Map<string, number> } {
+  const scores = new Map<string, number>();
+  const winners = new Set<string>();
+
+  if (correctOrder.length === 0 || submissions.length === 0) {
+    return { winners, scores };
+  }
+
+  // Score each submission: count items in correct position
+  for (const sub of submissions) {
+    let correct = 0;
+    for (let i = 0; i < correctOrder.length; i++) {
+      if (sub.playerOrder[i] === correctOrder[i]) correct++;
+    }
+    scores.set(sub.id, correct);
+  }
+
+  const totalItems = correctOrder.length;
+  const allCorrectSubs = submissions.filter(s => scores.get(s.id) === totalItems);
+
+  if (allCorrectSubs.length > 0) {
+    // All-correct players win
+    allCorrectSubs.forEach(s => winners.add(s.id));
+  } else {
+    // Find max score, must be >= 2
+    const maxScore = Math.max(...Array.from(scores.values()));
+    if (maxScore >= 2) {
+      submissions
+        .filter(s => scores.get(s.id) === maxScore)
+        .forEach(s => winners.add(s.id));
+    }
+    // If maxScore < 2, nobody wins (empty set)
+  }
+
+  return { winners, scores };
+}
+
+/**
  * Calculate absentee penalty for missing a bet/answer
  */
 export function calculateAbsenteePenalty(

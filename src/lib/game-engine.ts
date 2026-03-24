@@ -11,7 +11,7 @@ import {
   MIN_PLAYERS_FOR_FLAG,
   isDefaultCategory,
 } from "./constants";
-import { scoreRound, calculateAbsenteePenalty, getF1PointsForPlacement, determinePirWinners } from "./scoring";
+import { scoreRound, calculateAbsenteePenalty, getF1PointsForPlacement, determinePirWinners, determineOrderingWinners } from "./scoring";
 import {
   notifyAtBat,
   notifyNewQuestion,
@@ -158,6 +158,9 @@ export async function submitQuestion(
     imageUrl?: string;
     imageSource?: string;
     imageAttribution?: string;
+    orderingItems?: string[];
+    orderingCorrectOrder?: number[];
+    orderingDirection?: string;
   }
 ): Promise<string> {
   const round = await prisma.round.findUnique({
@@ -197,6 +200,9 @@ export async function submitQuestion(
       imageUrl: questionData.imageUrl || null,
       imageSource: questionData.imageSource || null,
       imageAttribution: questionData.imageAttribution || null,
+      orderingItems: questionData.orderingItems ? JSON.stringify(questionData.orderingItems) : null,
+      orderingCorrectOrder: questionData.orderingCorrectOrder ? JSON.stringify(questionData.orderingCorrectOrder) : null,
+      orderingDirection: questionData.orderingDirection || null,
     },
   });
 
@@ -335,6 +341,10 @@ export async function submitAnswer(
     gradedBy = "auto";
   } else if (question.answerFormat === "price_is_right") {
     // Grading deferred to closeRound (needs all answers to determine closest-without-going-over)
+    isCorrect = null;
+    gradedBy = null;
+  } else if (question.answerFormat === "ordering") {
+    // Grading deferred to closeRound (needs all answers to determine competitive winners)
     isCorrect = null;
     gradedBy = null;
   } else {
@@ -549,6 +559,38 @@ export async function closeRound(roundId: string): Promise<void> {
       });
       allAnswers.splice(0, allAnswers.length, ...refreshed);
     }
+  }
+
+  // Ordering: determine winners (most correct positions) before scoring
+  if (round.question?.answerFormat === "ordering") {
+    const correctOrder: number[] = JSON.parse(round.question.orderingCorrectOrder ?? "[]");
+    const submissions = allAnswers
+      .filter((a) => !a.isAbsent && a.freeTextAnswer)
+      .map((a) => ({
+        id: a.id,
+        playerOrder: JSON.parse(a.freeTextAnswer!) as number[],
+      }));
+
+    const { winners } = determineOrderingWinners(correctOrder, submissions);
+
+    for (const answer of allAnswers) {
+      if (answer.isAbsent) continue;
+      if (answer.gradedBy && answer.gradedBy !== "auto") continue;
+      await prisma.roundAnswer.update({
+        where: { id: answer.id },
+        data: {
+          isCorrect: winners.has(answer.id),
+          gradedBy: "auto",
+        },
+      });
+    }
+
+    // Refresh allAnswers after updating isCorrect
+    const refreshed = await prisma.roundAnswer.findMany({
+      where: { roundId },
+      include: { leaguePlayer: { include: { user: true } } },
+    });
+    allAnswers.splice(0, allAnswers.length, ...refreshed);
   }
 
   // Score the round

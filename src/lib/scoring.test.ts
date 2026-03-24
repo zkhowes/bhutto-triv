@@ -4,6 +4,7 @@ import {
   scoreRound,
   computePowerUpCost,
   determinePirWinners,
+  determineOrderingWinners,
   calculateAbsenteePenalty,
   computeQuestionComposite,
 } from "./scoring";
@@ -395,5 +396,106 @@ describe("computeQuestionComposite", () => {
     // composite = 3.0 * 0.7 + 4.4 * 0.3 = 2.1 + 1.32 = 3.42 → 3.4
     const result = computeQuestionComposite(3.0, "free_text", makeAnswers(3, 5), "answer");
     expect(result).toBe(3.4);
+  });
+});
+
+describe("determineOrderingWinners", () => {
+  it("all players correct → all win", () => {
+    const { winners, scores } = determineOrderingWinners(
+      [1, 2, 3],
+      [
+        { id: "a", playerOrder: [1, 2, 3] },
+        { id: "b", playerOrder: [1, 2, 3] },
+      ]
+    );
+    expect(winners.size).toBe(2);
+    expect(winners.has("a")).toBe(true);
+    expect(winners.has("b")).toBe(true);
+    expect(scores.get("a")).toBe(3);
+    expect(scores.get("b")).toBe(3);
+  });
+
+  it("one player has most correct (>= 2) → that player wins", () => {
+    const { winners, scores } = determineOrderingWinners(
+      [1, 2, 3, 4],
+      [
+        { id: "a", playerOrder: [1, 2, 4, 3] }, // 2 correct (pos 0,1)
+        { id: "b", playerOrder: [1, 3, 2, 4] }, // 2 correct (pos 0,3)
+        { id: "c", playerOrder: [1, 2, 3, 1] }, // 3 correct (pos 0,1,2)
+      ]
+    );
+    expect(winners.size).toBe(1);
+    expect(winners.has("c")).toBe(true);
+    expect(scores.get("c")).toBe(3);
+  });
+
+  it("tie for most correct (>= 2) → all tied players win", () => {
+    const { winners } = determineOrderingWinners(
+      [1, 2, 3],
+      [
+        { id: "a", playerOrder: [1, 2, 1] }, // 2 correct (pos 0,1)
+        { id: "b", playerOrder: [1, 3, 3] }, // 2 correct (pos 0,2)
+        { id: "c", playerOrder: [3, 2, 1] }, // 1 correct (pos 1)
+      ]
+    );
+    expect(winners.size).toBe(2);
+    expect(winners.has("a")).toBe(true);
+    expect(winners.has("b")).toBe(true);
+    expect(winners.has("c")).toBe(false);
+  });
+
+  it("nobody has >= 2 correct → nobody wins", () => {
+    const { winners } = determineOrderingWinners(
+      [1, 2, 3],
+      [
+        { id: "a", playerOrder: [3, 1, 2] }, // 0 correct
+        { id: "b", playerOrder: [2, 1, 3] }, // 1 correct (pos 2)
+      ]
+    );
+    expect(winners.size).toBe(0);
+  });
+
+  it("empty submissions → nobody wins", () => {
+    const { winners, scores } = determineOrderingWinners([1, 2, 3], []);
+    expect(winners.size).toBe(0);
+    expect(scores.size).toBe(0);
+  });
+
+  it("empty correct order → nobody wins", () => {
+    const { winners } = determineOrderingWinners(
+      [],
+      [{ id: "a", playerOrder: [1, 2, 3] }]
+    );
+    expect(winners.size).toBe(0);
+  });
+
+  it("3-item ordering (minimum)", () => {
+    const { winners, scores } = determineOrderingWinners(
+      [1, 2, 3],
+      [
+        { id: "a", playerOrder: [1, 2, 3] }, // 3 correct → wins
+        { id: "b", playerOrder: [3, 2, 1] }, // 1 correct (pos 1)
+      ]
+    );
+    expect(winners.size).toBe(1);
+    expect(winners.has("a")).toBe(true);
+    expect(scores.get("a")).toBe(3);
+    expect(scores.get("b")).toBe(1);
+  });
+
+  it("4-item ordering (maximum)", () => {
+    const { winners, scores } = determineOrderingWinners(
+      [1, 2, 3, 4],
+      [
+        { id: "a", playerOrder: [1, 2, 3, 4] }, // 4 correct → wins
+        { id: "b", playerOrder: [4, 3, 2, 1] }, // 0 correct
+        { id: "c", playerOrder: [1, 2, 4, 3] }, // 2 correct (pos 0,1)
+      ]
+    );
+    expect(winners.size).toBe(1);
+    expect(winners.has("a")).toBe(true);
+    expect(scores.get("a")).toBe(4);
+    expect(scores.get("b")).toBe(0);
+    expect(scores.get("c")).toBe(2);
   });
 });
