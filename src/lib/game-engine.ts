@@ -241,7 +241,8 @@ export async function placeBet(
   roundId: string,
   leaguePlayerId: string,
   userId: string,
-  betAmount: number
+  betAmount: number,
+  isBlindBet: boolean = false
 ): Promise<string> {
   const round = await prisma.round.findUnique({
     where: { id: roundId },
@@ -270,6 +271,20 @@ export async function placeBet(
   if (!playerState) throw new Error("Player not in this game");
   if (playerState.isEliminated)
     throw new Error("Player is eliminated from this game");
+
+  // Blind bet validation
+  if (isBlindBet) {
+    if (round.status !== ROUND_STATUS.QUESTION_SUBMITTED) {
+      throw new Error("Blind bet can only be placed before category is revealed");
+    }
+    if (round.atBatPlayerId === leaguePlayerId) {
+      throw new Error("Cannot blind bet on your own at-bat round");
+    }
+    if (playerState.blindBetUsed) {
+      throw new Error("Blind bet already used this game");
+    }
+  }
+
   if (betAmount < 1 || betAmount > playerState.points) {
     throw new Error(
       `Bet must be between 1 and ${playerState.points}`
@@ -292,6 +307,7 @@ export async function placeBet(
     update: {
       betAmount,
       betPlacedAt: new Date(),
+      isBlindBet,
     },
     create: {
       roundId,
@@ -300,8 +316,17 @@ export async function placeBet(
       userId,
       betAmount,
       betPlacedAt: new Date(),
+      isBlindBet,
     },
   });
+
+  // Mark blind bet as used on the player's game state
+  if (isBlindBet) {
+    await prisma.gamePlayerState.update({
+      where: { id: playerState.id },
+      data: { blindBetUsed: true },
+    });
+  }
 
   return answer.id;
 }
@@ -616,11 +641,12 @@ export async function closeRound(roundId: string): Promise<void> {
     );
     if (!existingAnswer) continue;
 
+    const blindMultiplier = existingAnswer.isBlindBet ? 2 : 1;
     const betPointChange = existingAnswer.isAbsent
       ? existingAnswer.pointsWon
       : existingAnswer.isCorrect
-        ? existingAnswer.betAmount || 0
-        : -(existingAnswer.betAmount || 0);
+        ? (existingAnswer.betAmount || 0) * blindMultiplier
+        : -(existingAnswer.betAmount || 0) * blindMultiplier;
 
     await prisma.roundAnswer.update({
       where: { id: existingAnswer.id },

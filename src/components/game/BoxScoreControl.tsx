@@ -20,6 +20,7 @@ interface BoxScoreControlProps {
     powerUpType: string | null;
     powerUpCost: number;
     cheatSeekerData: string | null;
+    isBlindBet?: boolean;
     answeredAt?: string | null;
     leaguePlayer: {
       id: string;
@@ -196,6 +197,9 @@ export default function BoxScoreControl({
 
                 {/* Indicators row */}
                 <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                  {answer.isBlindBet && (
+                    <span className="text-xs text-amber-400 font-bold bg-amber-400/15 rounded px-1.5 py-0.5">BLIND 2x</span>
+                  )}
                   {answer.fastestLap && (
                     <span className="text-xs text-purple-400 font-semibold">⚡ Fastest</span>
                   )}

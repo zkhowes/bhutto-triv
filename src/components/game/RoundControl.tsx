@@ -44,6 +44,7 @@ interface RoundControlProps {
       placement: number | null;
       fastestLap: boolean;
       isAbsent: boolean;
+      isBlindBet?: boolean;
       freeTextAnswer: string | null;
       questionRating: number | null;
       leaguePlayer: {
@@ -180,6 +181,9 @@ export default function RoundControl({
                   </span>
                 )}
               </p>
+              {myAnswer.isBlindBet && (
+                <p className="text-xs text-amber-400 font-bold mt-0.5">BLIND 2x</p>
+              )}
             </div>
           )}
         </div>

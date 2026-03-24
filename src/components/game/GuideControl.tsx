@@ -50,6 +50,7 @@ interface RoundData {
     powerUpData: string | null;
     cheatSeekerData: string | null;
     questionRating: number | null;
+    isBlindBet?: boolean;
     leaguePlayer: {
       id: string;
       fakeNickname: string | null;
@@ -62,6 +63,7 @@ interface PlayerState {
   leaguePlayerId: string;
   points: number;
   isEliminated: boolean;
+  blindBetUsed?: boolean;
 }
 
 // League mode props
@@ -340,6 +342,9 @@ export default function GuideControl(props: GuideControlProps) {
           answerDeadline={answerDeadline}
           atBatAvgRating={round.atBatAvgRating}
           onBetPlaced={onRefresh}
+          roundStatus={round.status}
+          blindBetUsed={myPlayerState.blindBetUsed ?? false}
+          isAtBat={isAtBat}
         />
       </div>
     );

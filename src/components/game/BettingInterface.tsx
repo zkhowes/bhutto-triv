@@ -13,6 +13,9 @@ interface BettingInterfaceProps {
   answerDeadline?: string | null;
   atBatAvgRating?: number | null;
   onBetPlaced: () => void;
+  roundStatus?: string;
+  blindBetUsed?: boolean;
+  isAtBat?: boolean;
 }
 
 const FORMAT_LABELS: Record<string, string> = {
@@ -30,12 +33,23 @@ export default function BettingInterface({
   answerDeadline,
   atBatAvgRating,
   onBetPlaced,
+  roundStatus,
+  blindBetUsed = false,
+  isAtBat = false,
 }: BettingInterfaceProps) {
   const [betAmount, setBetAmount] = useState(1);
   const [placing, setPlacing] = useState(false);
   const [error, setError] = useState("");
+  const [blindBetActive, setBlindBetActive] = useState(false);
+  const [showBlindConfirm, setShowBlindConfirm] = useState(false);
 
-  const handlePlaceBet = async () => {
+  const canBlindBet =
+    roundStatus === "question_submitted" &&
+    !blindBetUsed &&
+    !isAtBat &&
+    !blindBetActive;
+
+  const handlePlaceBet = async (useBlindBet = false) => {
     if (betAmount < 1 || betAmount > maxPoints) return;
     setPlacing(true);
     setError("");
@@ -44,7 +58,11 @@ export default function BettingInterface({
       const res = await fetch(`/api/rounds/${roundId}/bet`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ betAmount, leaguePlayerId }),
+        body: JSON.stringify({
+          betAmount,
+          leaguePlayerId,
+          isBlindBet: useBlindBet,
+        }),
       });
 
       if (!res.ok) {
@@ -52,12 +70,25 @@ export default function BettingInterface({
         throw new Error(data.error || "Failed to place bet");
       }
 
+      if (useBlindBet) {
+        setBlindBetActive(true);
+      }
       onBetPlaced();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to place bet");
     } finally {
       setPlacing(false);
+      setShowBlindConfirm(false);
     }
+  };
+
+  const handleBlindBetClick = () => {
+    if (betAmount < 1 || betAmount > maxPoints) return;
+    setShowBlindConfirm(true);
+  };
+
+  const handleBlindBetConfirm = () => {
+    handlePlaceBet(true);
   };
 
   return (
@@ -117,21 +148,63 @@ export default function BettingInterface({
         </div>
       )}
 
-      <button
-        onClick={handlePlaceBet}
-        disabled={placing || betAmount < 1}
-        className={`w-full text-lg font-bold py-3 rounded-lg transition-colors ${
-          betAmount === maxPoints
-            ? "btn-gold"
-            : "btn-primary"
-        }`}
-      >
-        {placing
-          ? "Placing Bet..."
-          : betAmount === maxPoints
-            ? `Go All In! Bet ${betAmount} point${betAmount === 1 ? "" : "s"}`
-            : `Bet ${betAmount} point${betAmount === 1 ? "" : "s"}`}
-      </button>
+      {/* Blind bet confirmation */}
+      {showBlindConfirm && (
+        <div className="mb-4 p-4 rounded-lg bg-amber-500/10 border border-amber-500/30">
+          <p className="text-sm text-amber-400 font-bold mb-1">
+            Go Blind?
+          </p>
+          <p className="text-xs text-[#a0a0b8] mb-3">
+            Your bet of {betAmount} point{betAmount === 1 ? "" : "s"} will be doubled -- win or lose!
+            This can only be used once per game.
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={handleBlindBetConfirm}
+              disabled={placing}
+              className="btn-gold text-sm flex-1"
+            >
+              {placing ? "Placing..." : `Confirm Blind Bet (${betAmount} x2)`}
+            </button>
+            <button
+              onClick={() => setShowBlindConfirm(false)}
+              disabled={placing}
+              className="btn-secondary text-sm"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="flex gap-2">
+        <button
+          onClick={() => handlePlaceBet(false)}
+          disabled={placing || betAmount < 1 || showBlindConfirm}
+          className={`flex-1 text-lg font-bold py-3 rounded-lg transition-colors ${
+            betAmount === maxPoints
+              ? "btn-gold"
+              : "btn-primary"
+          }`}
+        >
+          {placing && !showBlindConfirm
+            ? "Placing Bet..."
+            : betAmount === maxPoints
+              ? `Go All In! Bet ${betAmount} point${betAmount === 1 ? "" : "s"}`
+              : `Bet ${betAmount} point${betAmount === 1 ? "" : "s"}`}
+        </button>
+
+        {canBlindBet && !showBlindConfirm && (
+          <button
+            onClick={handleBlindBetClick}
+            disabled={placing || betAmount < 1}
+            className="px-4 py-3 rounded-lg text-sm font-bold bg-amber-500/20 border border-amber-500/40 text-amber-400 hover:bg-amber-500/30 transition-colors"
+            title="Bet before seeing the category for a 2x multiplier (once per game)"
+          >
+            Blind 2x
+          </button>
+        )}
+      </div>
 
       <p className="text-center text-xs text-[#666680] mt-3">
         Bet is locked once placed. Question revealed after betting.

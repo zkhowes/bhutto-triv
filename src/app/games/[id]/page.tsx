@@ -62,6 +62,7 @@ interface GameData {
     points: number;
     totalF1Points: number;
     isEliminated: boolean;
+    blindBetUsed: boolean;
     leaguePlayer: {
       id: string;
       fakeNickname: string | null;
@@ -121,6 +122,7 @@ interface RoundData {
     powerUpData: string | null;
     cheatSeekerData: string | null;
     questionRating: number | null;
+    isBlindBet: boolean;
     leaguePlayer: {
       id: string;
       fakeNickname: string | null;
@@ -356,8 +358,8 @@ export default function GamePage() {
     const answer = currentRoundData.answers.find((a) => a.leaguePlayerId === leaguePlayerId);
     if (!answer) return "Not bet";
     if (answer.isAbsent) return "Missed";
-    if (answer.answeredAt) return "Answered";
-    if (answer.betPlacedAt) return `Bet: ${answer.betAmount}`;
+    if (answer.answeredAt) return answer.isBlindBet ? `Answered (BLIND 2x)` : "Answered";
+    if (answer.betPlacedAt) return answer.isBlindBet ? `Bet: ${answer.betAmount} (BLIND 2x)` : `Bet: ${answer.betAmount}`;
     return "Not bet";
   };
 
@@ -512,7 +514,7 @@ export default function GamePage() {
           mode="game"
           round={guideRoundData || null}
           myPlayerId={myPlayerId}
-          myPlayerState={myPlayerState ? { leaguePlayerId: myPlayerState.leaguePlayerId, points: myPlayerState.points, isEliminated: myPlayerState.isEliminated } : null}
+          myPlayerState={myPlayerState ? { leaguePlayerId: myPlayerState.leaguePlayerId, points: myPlayerState.points, isEliminated: myPlayerState.isEliminated, blindBetUsed: myPlayerState.blindBetUsed } : null}
           allPlayerStates={game.playerStates.map((ps) => ({ leaguePlayerId: ps.leaguePlayerId, points: ps.points, isEliminated: ps.isEliminated }))}
           isCommissioner={isCommissioner}
           leagueId={league.id}

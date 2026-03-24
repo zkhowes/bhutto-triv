@@ -14,7 +14,7 @@ export async function POST(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { betAmount, leaguePlayerId } = await req.json();
+  const { betAmount, leaguePlayerId, isBlindBet } = await req.json();
   const roundId = params.id;
 
   if (!betAmount || betAmount < 1) {
@@ -46,7 +46,8 @@ export async function POST(
       roundId,
       leaguePlayerId,
       player!.userId,
-      betAmount
+      betAmount,
+      !!isBlindBet
     );
     return NextResponse.json({ answerId });
   } catch (error) {

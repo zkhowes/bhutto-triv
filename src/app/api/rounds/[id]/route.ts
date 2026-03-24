@@ -139,6 +139,7 @@ export async function GET(
       betPlacedAt: answer.betPlacedAt,
       answeredAt: answer.answeredAt,
       isAbsent: answer.isAbsent,
+      isBlindBet: answer.isBlindBet,
       // Hide these until graded
       selectedOption: null,
       freeTextAnswer: null,
