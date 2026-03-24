@@ -224,7 +224,9 @@ export function computeQuestionComposite(
   correctAnswer: string | null
 ): number | null {
   if (avgRating === null) return null;
-  if (answers.length < 3) return avgRating;
+  // Slight quality boost for MC and PiR formats to incentivize structured questions
+  const formatBoost = answerFormat !== "free_text" ? 0.5 : 0;
+  if (answers.length < 3) return Math.round(Math.min(5, avgRating + formatBoost) * 10) / 10;
 
   let difficultyScore: number | null = null;
 
@@ -246,8 +248,9 @@ export function computeQuestionComposite(
   }
 
   if (difficultyScore !== null) {
-    return Math.round((avgRating * 0.7 + Math.max(0, difficultyScore) * 0.3) * 10) / 10;
+    const raw = avgRating * 0.7 + Math.max(0, difficultyScore) * 0.3 + formatBoost;
+    return Math.round(Math.min(5, raw) * 10) / 10;
   }
-  return avgRating;
+  return Math.round(Math.min(5, avgRating + formatBoost) * 10) / 10;
 }
 

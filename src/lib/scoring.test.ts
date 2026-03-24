@@ -267,7 +267,8 @@ describe("computeQuestionComposite", () => {
   });
 
   it("returns avgRating only for 2 answerers (no difficulty penalty)", () => {
-    expect(computeQuestionComposite(3.5, "multiple_choice", makeAnswers(1, 2), "B")).toBe(3.5);
+    // MC gets +0.5 format boost → 3.5 + 0.5 = 4.0
+    expect(computeQuestionComposite(3.5, "multiple_choice", makeAnswers(1, 2), "B")).toBe(4.0);
   });
 
   it("returns avgRating for 0 answerers", () => {
@@ -300,9 +301,9 @@ describe("computeQuestionComposite", () => {
   it("difficulty score floors at 0 (very skewed success rate)", () => {
     // 1/3 correct → successRate = 0.333
     // difficultyScore = 5 - |0.333 - 0.5| * 6 = 5 - 1.0 = 4.0
-    // composite = 5.0 * 0.7 + 4.0 * 0.3 = 3.5 + 1.2 = 4.7
+    // composite = 5.0 * 0.7 + 4.0 * 0.3 + 0.5 (MC boost) = 3.5 + 1.2 + 0.5 = 5.2 → capped at 5.0
     const result = computeQuestionComposite(5.0, "multiple_choice", makeAnswers(1, 3), "A");
-    expect(result).toBe(4.7);
+    expect(result).toBe(5.0);
   });
 
   it("low subjective rating with perfect difficulty still capped by rating weight", () => {
@@ -318,36 +319,38 @@ describe("computeQuestionComposite", () => {
     // Target = 100, threshold = 25
     // Guesses: 80 (within), 90 (within), 130 (over by 30, outside), 50 (under by 50, outside)
     // closenessRate = 2/4 = 0.5 → difficultyScore = 5.0
-    // composite = 4.0 * 0.7 + 5.0 * 0.3 = 4.3
+    // composite = 4.0 * 0.7 + 5.0 * 0.3 + 0.5 (PiR boost) = 2.8 + 1.5 + 0.5 = 4.8
     const answers = [
       { isCorrect: null, freeTextAnswer: "80" },
       { isCorrect: null, freeTextAnswer: "90" },
       { isCorrect: null, freeTextAnswer: "130" },
       { isCorrect: null, freeTextAnswer: "50" },
     ];
-    expect(computeQuestionComposite(4.0, "price_is_right", answers, "100")).toBe(4.3);
+    expect(computeQuestionComposite(4.0, "price_is_right", answers, "100")).toBe(4.8);
   });
 
   it("PIR: all guesses close → penalizes difficulty (too easy to estimate)", () => {
     // Target = 100, threshold = 25. All within → closenessRate = 1.0
     // difficultyScore = 5 - 0.5 * 6 = 2.0
+    // composite = 4.0 * 0.7 + 2.0 * 0.3 + 0.5 (PiR boost) = 2.8 + 0.6 + 0.5 = 3.9
     const answers = [
       { isCorrect: null, freeTextAnswer: "95" },
       { isCorrect: null, freeTextAnswer: "100" },
       { isCorrect: null, freeTextAnswer: "105" },
     ];
-    expect(computeQuestionComposite(4.0, "price_is_right", answers, "100")).toBe(3.4);
+    expect(computeQuestionComposite(4.0, "price_is_right", answers, "100")).toBe(3.9);
   });
 
   it("PIR: no guesses close → penalizes difficulty (too hard to estimate)", () => {
     // Target = 100, threshold = 25. None within → closenessRate = 0.0
     // difficultyScore = 5 - 0.5 * 6 = 2.0
+    // composite = 4.0 * 0.7 + 2.0 * 0.3 + 0.5 (PiR boost) = 2.8 + 0.6 + 0.5 = 3.9
     const answers = [
       { isCorrect: null, freeTextAnswer: "10" },
       { isCorrect: null, freeTextAnswer: "200" },
       { isCorrect: null, freeTextAnswer: "500" },
     ];
-    expect(computeQuestionComposite(4.0, "price_is_right", answers, "100")).toBe(3.4);
+    expect(computeQuestionComposite(4.0, "price_is_right", answers, "100")).toBe(3.9);
   });
 
   it("PIR: target = 0 uses minimum threshold of 1", () => {
@@ -365,21 +368,23 @@ describe("computeQuestionComposite", () => {
   });
 
   it("PIR: NaN correctAnswer returns avgRating only", () => {
+    // PiR boost still applies even when difficulty can't be computed → 3.0 + 0.5 = 3.5
     const answers = [
       { isCorrect: null, freeTextAnswer: "50" },
       { isCorrect: null, freeTextAnswer: "60" },
       { isCorrect: null, freeTextAnswer: "70" },
     ];
-    expect(computeQuestionComposite(3.0, "price_is_right", answers, "not a number")).toBe(3.0);
+    expect(computeQuestionComposite(3.0, "price_is_right", answers, "not a number")).toBe(3.5);
   });
 
   it("PIR: null correctAnswer returns avgRating only", () => {
+    // PiR boost still applies even when difficulty can't be computed → 3.0 + 0.5 = 3.5
     const answers = [
       { isCorrect: null, freeTextAnswer: "50" },
       { isCorrect: null, freeTextAnswer: "60" },
       { isCorrect: null, freeTextAnswer: "70" },
     ];
-    expect(computeQuestionComposite(3.0, "price_is_right", answers, null)).toBe(3.0);
+    expect(computeQuestionComposite(3.0, "price_is_right", answers, null)).toBe(3.5);
   });
 
   // --- Rounding ---
