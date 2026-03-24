@@ -209,10 +209,9 @@ Required for development (see `.env.example`):
 
 ## Kanban
 
-> Last updated: 2026-03-23
+> Last updated: 2026-03-24
 
 ### Backlog
-- [ ] Improve or deprecate plain text questions for improved game play
 - [ ] Replay past questions — *schema has isReplay/originalQuestionId, needs UI + API*
 - [ ] View-only public round dashboard — *currently requires auth, no anonymous mode*
 - [ ] "Go back to previous player" commissioner control
@@ -227,6 +226,7 @@ Required for development (see `.env.example`):
 ### In Progress
 
 ### Done
+- [x] Soft-deprecate plain text questions — *MC default, AI format advisor suggests MC/PiR with one-click convert, workshop biased toward structured formats, +0.5 quality boost for MC/PiR*
 - [x] Image questions — *optional image attachment via Unsplash/Google search, device upload, or URL paste; AI workshop suggests images; admin moderation; needs prisma db push + env vars*
 - [x] Demo click-through — */demo route, 6-step guided walkthrough with AI workshop, game phases, mock data*
 - [x] Branding/lore section — *"The Order of Bhutto" monks mythology on landing page*
