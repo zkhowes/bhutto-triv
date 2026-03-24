@@ -163,7 +163,7 @@ Return this exact JSON structure:
 Rules:
 - "hook" is a short 5-8 word teaser for each card
 - "imageSearchTerm": a concise, specific search query for an image that enhances the question, or null if no image would add value
-- Mix up the answer formats across the 3 variations
+- STRONGLY prefer multiple_choice and price_is_right formats. Only use free_text when the question genuinely requires an open-ended answer (e.g., "Name the country...", "Who said..."). At least 2 of the 3 variations should be multiple_choice or price_is_right.
 - Each variation should feel genuinely different, not a rewrite
 - Return ONLY valid JSON, no markdown fences, no extra text
 - If the user is having a conversation (not asking for a question), return: {"type": "conversation", "text": "your response here"}
