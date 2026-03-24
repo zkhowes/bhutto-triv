@@ -143,13 +143,14 @@ Return this exact JSON structure:
       "hook": "A tricky one about..."
     },
     {
-      "category": "Science",
+      "category": "History",
       "questionText": "...",
-      "answerFormat": "free_text",
-      "correctAnswer": "...",
-      "acceptableAnswers": ["alt1", "alt2"],
+      "answerFormat": "ordering",
+      "orderingItems": ["item1", "item2", "item3", "item4"],
+      "orderingCorrectOrder": [1, 2, 3, 4],
+      "orderingDirection": "earliest to latest",
       "difficulty": "hard",
-      "hook": "Test your knowledge of...",
+      "hook": "Put these in order...",
       "imageSearchTerm": null
     },
     {

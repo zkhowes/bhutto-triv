@@ -76,6 +76,7 @@ export default function LeagueDetailPage() {
   const [advancing, setAdvancing] = useState(false);
   const [advanceMessage, setAdvanceMessage] = useState("");
   const [activeTestPlayerId, setActiveTestPlayerId] = useState<string | null>(null);
+  const [inviteCopied, setInviteCopied] = useState<"code" | "link" | null>(null);
 
   const fetchLeague = useCallback(async () => {
     try {
@@ -211,6 +212,61 @@ export default function LeagueDetailPage() {
           leagueId={leagueId}
           leagueName={league.name}
         />
+
+        {/* Invite Players — shown until the first game starts */}
+        {!currentGame && league.type !== "test" && (
+          <div className="card p-5 mb-6 border border-[#e94560]/30 bg-gradient-to-br from-[#e94560]/5 to-[#1a1a2e]">
+            <h2 className="text-lg font-bold text-white mb-1">Invite Players</h2>
+            <p className="text-sm text-[#a0a0b8] mb-4">
+              Share the code or link below to invite players to {league.name}.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="flex-1 flex items-center gap-2 bg-[#0f0f23] rounded-lg px-4 py-3">
+                <span className="text-xs text-[#666680] uppercase tracking-wider">Code</span>
+                <span className="font-mono text-white text-lg tracking-widest flex-1 text-center select-all">
+                  {league.inviteCode}
+                </span>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(league.inviteCode);
+                    setInviteCopied("code");
+                    setTimeout(() => setInviteCopied(null), 2000);
+                  }}
+                  className="text-xs text-[#a0a0b8] hover:text-white transition-colors"
+                >
+                  {inviteCopied === "code" ? (
+                    <span className="text-emerald-400">Copied!</span>
+                  ) : (
+                    "Copy"
+                  )}
+                </button>
+              </div>
+              <button
+                onClick={() => {
+                  const url = `${window.location.origin}/leagues/join/${league.inviteCode}`;
+                  navigator.clipboard.writeText(url);
+                  setInviteCopied("link");
+                  setTimeout(() => setInviteCopied(null), 2000);
+                }}
+                className="btn-primary text-sm flex items-center justify-center gap-2"
+              >
+                {inviteCopied === "link" ? (
+                  <span className="text-emerald-400">Link Copied!</span>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                    </svg>
+                    Copy Invite Link
+                  </>
+                )}
+              </button>
+            </div>
+            <p className="text-xs text-[#666680] mt-3">
+              {league.players.length} / {league.maxPlayers} players joined
+            </p>
+          </div>
+        )}
 
         {/* Completed Season - Champion Display */}
         {currentSeason?.status === "completed" && league.seasonStandings.length > 0 && (
@@ -414,9 +470,9 @@ export default function LeagueDetailPage() {
                   </button>
                 )}
                 {!hasEnoughPlayers && (
-                  <div className="card p-4 mb-4 text-center text-[#a0a0b8]">
-                    Need at least 2 players to start. Share the invite code!
-                  </div>
+                  <p className="text-sm text-[#666680] text-center mb-4">
+                    Need at least 2 players to start a season.
+                  </p>
                 )}
               </>
             )}
