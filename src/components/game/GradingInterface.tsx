@@ -218,8 +218,7 @@ export default function GradingInterface({
                     Photo by{" "}
                     <a href={attr.profileUrl} target="_blank" rel="noopener noreferrer" className="underline">
                       {attr.name}
-                    </a>{" "}
-                    on Unsplash
+                    </a>
                   </p>
                 );
               } catch { return null; }

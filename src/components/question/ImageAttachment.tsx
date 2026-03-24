@@ -149,7 +149,7 @@ export default function ImageAttachment({
                   rel="noopener noreferrer"
                   className="text-[11px] text-[#4a6fa5] hover:text-[#4a9eff] transition-colors duration-150 truncate block"
                 >
-                  Photo by {parsedAttribution.name} on Unsplash
+                  Photo by {parsedAttribution.name}
                 </a>
               ) : (
                 <span className="text-[11px] text-[#4a6fa5] truncate block">

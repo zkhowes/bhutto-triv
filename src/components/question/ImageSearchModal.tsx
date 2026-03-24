@@ -31,8 +31,7 @@ export default function ImageSearchModal({
   initialQuery,
 }: ImageSearchModalProps) {
   const [query, setQuery] = useState(initialQuery);
-  const [activeSource, setActiveSource] = useState<"unsplash" | "google">("unsplash");
-  const [availableSources, setAvailableSources] = useState<("unsplash" | "google")[]>([]);
+  const [searchAvailable, setSearchAvailable] = useState(false);
   const [sourcesLoaded, setSourcesLoaded] = useState(false);
   const [results, setResults] = useState<ImageResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -58,23 +57,20 @@ export default function ImageSearchModal({
       .then((r) => r.json())
       .then((data: { sources: ("unsplash" | "google")[] }) => {
         const srcs = data.sources ?? [];
-        setAvailableSources(srcs);
-        if (srcs.length > 0 && !srcs.includes(activeSource)) {
-          setActiveSource(srcs[0]);
-        }
+        setSearchAvailable(srcs.includes("unsplash"));
         setSourcesLoaded(true);
       })
       .catch(() => {
-        setAvailableSources([]);
+        setSearchAvailable(false);
         setSourcesLoaded(true);
       });
-  }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   // Run initial search when sources load and we have a query
   useEffect(() => {
     if (!sourcesLoaded || !isOpen) return;
-    if (availableSources.length > 0 && query.trim()) {
-      runSearch(activeSource, query.trim());
+    if (searchAvailable && query.trim()) {
+      runSearch("unsplash", query.trim());
     }
   }, [sourcesLoaded, isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -121,15 +117,8 @@ export default function ImageSearchModal({
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!query.trim() || availableSources.length === 0) return;
-    runSearch(activeSource, query);
-  };
-
-  const handleSourceSwitch = (src: "unsplash" | "google") => {
-    setActiveSource(src);
-    if (query.trim()) {
-      runSearch(src, query);
-    }
+    if (!query.trim() || !searchAvailable) return;
+    runSearch("unsplash", query);
   };
 
   const handleImageSelect = (result: ImageResult, source: "unsplash" | "google") => {
@@ -206,11 +195,6 @@ export default function ImageSearchModal({
 
   if (!isOpen) return null;
 
-  const sourceLabel: Record<"unsplash" | "google", string> = {
-    unsplash: "Unsplash",
-    google: "Web Search",
-  };
-
   return (
     <>
       {/* Backdrop */}
@@ -264,7 +248,7 @@ export default function ImageSearchModal({
               />
               <button
                 type="submit"
-                disabled={searchLoading || !query.trim() || availableSources.length === 0}
+                disabled={searchLoading || !query.trim() || !searchAvailable}
                 className="
                   px-4 py-2.5 bg-[#4a9eff] text-white text-sm font-medium rounded-lg
                   hover:bg-[#3a8eef] disabled:opacity-50 disabled:cursor-not-allowed
@@ -275,32 +259,9 @@ export default function ImageSearchModal({
               </button>
             </form>
 
-            {/* Source tabs */}
-            {sourcesLoaded && availableSources.length > 1 && (
-              <div className="flex gap-1 mt-2.5">
-                {availableSources.map((src) => (
-                  <button
-                    key={src}
-                    type="button"
-                    onClick={() => handleSourceSwitch(src)}
-                    className={`
-                      px-3 py-1.5 rounded-md text-xs font-medium transition-colors
-                      ${
-                        activeSource === src
-                          ? "bg-[#1e3a5f] text-[#4a9eff] border border-[#4a9eff]/40"
-                          : "text-[#a0a0b8] hover:text-white hover:bg-[#1a1a2e]"
-                      }
-                    `}
-                  >
-                    {sourceLabel[src]}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {sourcesLoaded && availableSources.length === 0 && (
+            {sourcesLoaded && !searchAvailable && (
               <p className="text-xs text-[#666680] mt-2">
-                No image search sources configured. Use upload or URL paste below.
+                Image search is unavailable. Use upload or URL paste below.
               </p>
             )}
           </div>
@@ -332,7 +293,7 @@ export default function ImageSearchModal({
                         <button
                           key={idx}
                           type="button"
-                          onClick={() => handleImageSelect(result, activeSource)}
+                          onClick={() => handleImageSelect(result, "unsplash")}
                           className={`
                             group relative rounded-lg overflow-hidden border-2 transition-all
                             aspect-square focus:outline-none
@@ -366,8 +327,8 @@ export default function ImageSearchModal({
                               </div>
                             </div>
                           )}
-                          {/* Unsplash attribution */}
-                          {activeSource === "unsplash" && result.attribution && (
+                          {/* Attribution overlay */}
+                          {result.attribution && (
                             <div className="
                               absolute bottom-0 left-0 right-0 px-2 py-1
                               bg-gradient-to-t from-black/80 to-transparent
@@ -539,9 +500,7 @@ export default function ImageSearchModal({
                     ? "Uploaded image"
                     : selected.source === "url"
                     ? "Pasted URL"
-                    : selected.source === "unsplash"
-                    ? "Unsplash photo"
-                    : "Web image"}
+                    : "Search result"}
                 </span>
               </div>
             ) : (
