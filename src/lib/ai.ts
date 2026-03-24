@@ -435,6 +435,71 @@ Respond with a single helpful hint sentence only, no preamble.`,
 }
 
 /**
+ * Suggest a better answer format for a free-text question.
+ * Returns null if free text is the best fit.
+ */
+export interface FormatSuggestion {
+  suggestedFormat: "multiple_choice" | "price_is_right";
+  message: string;
+  options?: {
+    optionA: string;
+    optionB: string;
+    optionC: string;
+    optionD: string;
+    correctOption: "A" | "B" | "C" | "D";
+  };
+}
+
+export async function suggestFormat(
+  questionText: string,
+  correctAnswer: string,
+  acceptableAnswers: string[]
+): Promise<FormatSuggestion | null> {
+  if (!process.env.ANTHROPIC_API_KEY) return null;
+
+  try {
+    const anthropic = getClient();
+    const response = await anthropic.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 500,
+      messages: [
+        {
+          role: "user",
+          content: `You are helping a trivia game question submitter pick the best answer format.
+
+The submitter wrote a free-text question. Analyze whether it would work better as multiple choice or Price is Right.
+
+Question: ${questionText}
+Correct answer: ${correctAnswer}
+${acceptableAnswers.length > 0 ? `Also acceptable: ${acceptableAnswers.join(", ")}` : ""}
+
+Rules:
+- If the answer is a number (year, count, measurement, price, distance, etc.), suggest "price_is_right"
+- If the answer is one of a clear set of options (a person, place, thing where you can generate 3 plausible wrong answers), suggest "multiple_choice" and provide 4 options (A-D) with the correct one marked
+- If the question genuinely needs an open-ended text answer (the answer space is too large for MC, and is not numeric), return null
+
+Respond with JSON only. Either:
+{"suggestedFormat": "multiple_choice", "message": "This would work great as multiple choice!", "options": {"optionA": "...", "optionB": "...", "optionC": "...", "optionD": "...", "correctOption": "A"}}
+or:
+{"suggestedFormat": "price_is_right", "message": "That number would make a great Price is Right question!"}
+or:
+null`,
+        },
+      ],
+    });
+
+    const text = response.content[0].type === "text" ? response.content[0].text : "";
+    const trimmed = text.trim();
+    if (trimmed === "null" || trimmed === "") return null;
+    const parsed = JSON.parse(trimmed);
+    if (!parsed || !parsed.suggestedFormat) return null;
+    return parsed as FormatSuggestion;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * For a multiple choice question, identify a wrong option to eliminate as a helpful hint
  */
 export async function eliminateWrongOption(
