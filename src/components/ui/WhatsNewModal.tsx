@@ -55,14 +55,14 @@ export default function WhatsNewModal() {
       onClick={dismiss}
     >
       <div
-        className="bg-[#0f0f23] border border-[#1e3a5f] rounded-xl max-w-md w-full p-6 shadow-2xl"
+        className="bg-[#0f0f23] border border-[#1e3a5f] rounded-xl max-w-md w-full p-6 shadow-2xl max-h-[85vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-bold text-white mb-4">
+        <h2 className="text-lg font-bold text-white mb-4 shrink-0">
           What&apos;s New in Bhutto Wisdom
         </h2>
 
-        <ul className="space-y-3">
+        <ul className="space-y-3 overflow-y-auto min-h-0 flex-1">
           {FEATURES.map((f) => (
             <li key={f.title}>
               <p className="text-sm font-bold text-white">{f.title}</p>
@@ -73,7 +73,7 @@ export default function WhatsNewModal() {
 
         <button
           onClick={dismiss}
-          className="mt-5 w-full py-2 rounded-lg font-semibold text-sm text-black bg-[#fbbf24] hover:bg-[#f59e0b] transition-colors"
+          className="mt-5 w-full py-2 rounded-lg font-semibold text-sm text-black bg-[#fbbf24] hover:bg-[#f59e0b] transition-colors shrink-0"
         >
           Got it
         </button>
