@@ -43,12 +43,17 @@ export default function BettingInterface({
   const [error, setError] = useState("");
   const [blindBetActive, setBlindBetActive] = useState(false);
   const [showBlindConfirm, setShowBlindConfirm] = useState(false);
+  const [categoryRevealed, setCategoryRevealed] = useState(false);
 
   const canBlindBet =
     roundStatus === "question_submitted" &&
     !blindBetUsed &&
     !isAtBat &&
     !blindBetActive;
+
+  // Hide category when blind bet is still available (not used, not at-bat, pre-category-reveal status)
+  const showCategory =
+    blindBetUsed || isAtBat || categoryRevealed || roundStatus !== "question_submitted";
 
   const handlePlaceBet = async (useBlindBet = false) => {
     if (betAmount < 1 || betAmount > maxPoints) return;
@@ -98,13 +103,24 @@ export default function BettingInterface({
         <p className="text-xs text-[#a0a0b8] uppercase tracking-wider">
           Category
         </p>
-        <p className="text-2xl font-bold text-[#fbbf24] mt-1">{category}</p>
-        {answerFormat && (
-          <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium bg-[#1e3a5f] text-[#a0a0b8]">
-            {FORMAT_LABELS[answerFormat] ?? answerFormat}
-          </span>
+        {showCategory ? (
+          <>
+            <p className="text-2xl font-bold text-[#fbbf24] mt-1">{category}</p>
+            {answerFormat && (
+              <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium bg-[#1e3a5f] text-[#a0a0b8]">
+                {FORMAT_LABELS[answerFormat] ?? answerFormat}
+              </span>
+            )}
+          </>
+        ) : (
+          <div className="mt-2 px-4 py-3 rounded-lg bg-[#1a1a2e] border border-amber-500/30">
+            <p className="text-lg font-bold text-[#666680]">???</p>
+            <p className="text-xs text-amber-400/70 mt-1">
+              Category hidden — blind bet or reveal below
+            </p>
+          </div>
         )}
-        {atBatAvgRating != null && (
+        {showCategory && atBatAvgRating != null && (
           <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#fbbf24]/10 border border-[#fbbf24]/20">
             <span className="text-xs text-[#a0a0b8] font-medium">Players question ratings:</span>
             <span className="text-sm text-[#fbbf24] font-bold">{atBatAvgRating.toFixed(1)}</span>
@@ -178,34 +194,42 @@ export default function BettingInterface({
         </div>
       )}
 
-      <div className="flex gap-2">
-        <button
-          onClick={() => handlePlaceBet(false)}
-          disabled={placing || betAmount < 1 || showBlindConfirm}
-          className={`flex-1 text-lg font-bold py-3 rounded-lg transition-colors ${
-            betAmount === maxPoints
-              ? "btn-gold"
-              : "btn-primary"
-          }`}
-        >
-          {placing && !showBlindConfirm
-            ? "Placing Bet..."
-            : betAmount === maxPoints
-              ? `Go All In! Bet ${betAmount} point${betAmount === 1 ? "" : "s"}`
-              : `Bet ${betAmount} point${betAmount === 1 ? "" : "s"}`}
-        </button>
-
-        {canBlindBet && !showBlindConfirm && (
+      {canBlindBet && !showBlindConfirm ? (
+        <div className="flex gap-2">
           <button
             onClick={handleBlindBetClick}
             disabled={placing || betAmount < 1}
-            className="px-4 py-3 rounded-lg text-sm font-bold bg-amber-500/20 border border-amber-500/40 text-amber-400 hover:bg-amber-500/30 transition-colors"
-            title="Bet before seeing the question for a 2x multiplier (once per game)"
+            className="flex-1 text-lg font-bold py-3 rounded-lg transition-colors bg-amber-500/20 border border-amber-500/40 text-amber-400 hover:bg-amber-500/30"
           >
-            Blind 2x
+            Blind Bet {betAmount} point{betAmount === 1 ? "" : "s"} (2x)
           </button>
-        )}
-      </div>
+          <button
+            onClick={() => setCategoryRevealed(true)}
+            disabled={placing}
+            className="px-4 py-3 rounded-lg text-sm font-bold btn-secondary"
+          >
+            Reveal Category
+          </button>
+        </div>
+      ) : (
+        <div className="flex gap-2">
+          <button
+            onClick={() => handlePlaceBet(false)}
+            disabled={placing || betAmount < 1 || showBlindConfirm}
+            className={`flex-1 text-lg font-bold py-3 rounded-lg transition-colors ${
+              betAmount === maxPoints
+                ? "btn-gold"
+                : "btn-primary"
+            }`}
+          >
+            {placing && !showBlindConfirm
+              ? "Placing Bet..."
+              : betAmount === maxPoints
+                ? `Go All In! Bet ${betAmount} point${betAmount === 1 ? "" : "s"}`
+                : `Bet ${betAmount} point${betAmount === 1 ? "" : "s"}`}
+          </button>
+        </div>
+      )}
 
       <p className="text-center text-xs text-[#666680] mt-3">
         Bet is locked once placed. Question revealed after betting.
