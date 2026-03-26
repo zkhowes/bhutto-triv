@@ -702,10 +702,24 @@ export async function closeRound(roundId: string): Promise<void> {
     if (roundWithQuestion?.question) {
       const { generateFunFact } = await import("./ai");
       const q = roundWithQuestion.question;
-      const correctAnswerText = q.correctAnswer
-        || (q.correctOption
-          ? `${q.correctOption}. ${q.correctOption === "A" ? q.optionA : q.correctOption === "B" ? q.optionB : q.correctOption === "C" ? q.optionC : q.correctOption === "D" ? q.optionD : q.correctOption}`
-          : "");
+      let correctAnswerText = "";
+      if (q.orderingItems && q.orderingDirection) {
+        try {
+          const items = JSON.parse(q.orderingItems) as string[];
+          const order = q.orderingCorrectOrder ? JSON.parse(q.orderingCorrectOrder) as number[] : items.map((_, i) => i + 1);
+          const sorted = order.map((pos, idx) => ({ pos, item: items[idx] })).sort((a, b) => a.pos - b.pos).map(e => e.item);
+          correctAnswerText = `Correct order (${q.orderingDirection}): ${sorted.join(", ")}`;
+        } catch {
+          correctAnswerText = q.orderingItems;
+        }
+      } else if (q.correctAnswer) {
+        correctAnswerText = q.correctAnswer;
+      } else if (q.correctOption) {
+        correctAnswerText = `${q.correctOption}. ${q.correctOption === "A" ? q.optionA : q.correctOption === "B" ? q.optionB : q.correctOption === "C" ? q.optionC : q.correctOption === "D" ? q.optionD : q.correctOption}`;
+      } else {
+        // Fallback for unknown future formats — give the AI whatever we have
+        correctAnswerText = q.questionText;
+      }
       funFact = await generateFunFact(
         q.questionText,
         correctAnswerText,
