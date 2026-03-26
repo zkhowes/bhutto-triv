@@ -42,6 +42,13 @@ export async function POST(req: NextRequest) {
       acceptableAnswers: body.acceptableAnswers
         ? JSON.stringify(body.acceptableAnswers)
         : null,
+      orderingItems: body.orderingItems
+        ? JSON.stringify(body.orderingItems)
+        : null,
+      orderingCorrectOrder: body.orderingCorrectOrder
+        ? JSON.stringify(body.orderingCorrectOrder)
+        : null,
+      orderingDirection: body.orderingDirection || null,
       useOnNextRound: body.useOnNextRound || false,
       leagueId: body.leagueId,
       imageUrl: body.imageUrl || null,
@@ -83,7 +90,7 @@ export async function PUT(req: NextRequest) {
 
   // Build update payload only from keys actually sent
   const data: Record<string, unknown> = {};
-  const fields = ["category", "questionText", "answerFormat", "optionA", "optionB", "optionC", "optionD", "correctOption", "correctAnswer", "useOnNextRound", "imageUrl", "imageSource", "imageAttribution"];
+  const fields = ["category", "questionText", "answerFormat", "optionA", "optionB", "optionC", "optionD", "correctOption", "correctAnswer", "useOnNextRound", "imageUrl", "imageSource", "imageAttribution", "orderingDirection"];
   for (const field of fields) {
     if (field in updateData) {
       data[field] = updateData[field];
@@ -92,6 +99,16 @@ export async function PUT(req: NextRequest) {
   if ("acceptableAnswers" in updateData) {
     data.acceptableAnswers = updateData.acceptableAnswers
       ? JSON.stringify(updateData.acceptableAnswers)
+      : null;
+  }
+  if ("orderingItems" in updateData) {
+    data.orderingItems = updateData.orderingItems
+      ? JSON.stringify(updateData.orderingItems)
+      : null;
+  }
+  if ("orderingCorrectOrder" in updateData) {
+    data.orderingCorrectOrder = updateData.orderingCorrectOrder
+      ? JSON.stringify(updateData.orderingCorrectOrder)
       : null;
   }
 

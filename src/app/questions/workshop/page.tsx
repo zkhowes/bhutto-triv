@@ -31,6 +31,9 @@ interface Draft {
   correctOption: string | null;
   correctAnswer: string | null;
   acceptableAnswers: string | null;
+  orderingItems: string | null;
+  orderingCorrectOrder: string | null;
+  orderingDirection: string | null;
   useOnNextRound: boolean;
   updatedAt: string;
 }
@@ -100,6 +103,7 @@ const EDIT_CHIPS = [
   "Change to MC",
   "Change to Free Text",
   "Change to PiR",
+  "Change to Ordering",
   "Different Angle",
 ];
 
@@ -115,6 +119,21 @@ function draftToVariation(draft: Draft): WorkshopVariation {
       // ignore
     }
   }
+  let orderingItems: string[] | undefined;
+  if (draft.orderingItems) {
+    try {
+      const arr = JSON.parse(draft.orderingItems);
+      if (Array.isArray(arr)) orderingItems = arr;
+    } catch { /* ignore */ }
+  }
+  let orderingCorrectOrder: number[] | undefined;
+  if (draft.orderingCorrectOrder) {
+    try {
+      const arr = JSON.parse(draft.orderingCorrectOrder);
+      if (Array.isArray(arr)) orderingCorrectOrder = arr;
+    } catch { /* ignore */ }
+  }
+
   return {
     category: draft.category || "General Knowledge",
     questionText: draft.questionText || "",
@@ -126,6 +145,9 @@ function draftToVariation(draft: Draft): WorkshopVariation {
     correctOption: draft.correctOption || undefined,
     correctAnswer: draft.correctAnswer || undefined,
     acceptableAnswers,
+    orderingItems,
+    orderingCorrectOrder,
+    orderingDirection: draft.orderingDirection || undefined,
     difficulty: "medium",
     hook: "",
   };
@@ -346,11 +368,23 @@ export default function WorkshopPage() {
         body.optionC = v.optionC;
         body.optionD = v.optionD;
         body.correctOption = v.correctOption;
+      } else if (v.answerFormat === "ordering") {
+        body.orderingItems = v.orderingItems;
+        body.orderingCorrectOrder = v.orderingCorrectOrder;
+        body.orderingDirection = v.orderingDirection;
       } else {
         body.correctAnswer = v.correctAnswer;
         if (v.acceptableAnswers?.length) {
           body.acceptableAnswers = v.acceptableAnswers;
         }
+      }
+
+      // Include image if selected
+      const img = cardImages[selectedIdx];
+      if (img) {
+        body.imageUrl = img.url;
+        body.imageSource = img.source;
+        body.imageAttribution = img.attribution;
       }
 
       await fetch("/api/questions/drafts", {
@@ -453,6 +487,10 @@ export default function WorkshopPage() {
         body.optionC = v.optionC;
         body.optionD = v.optionD;
         body.correctOption = v.correctOption;
+      } else if (v.answerFormat === "ordering") {
+        body.orderingItems = v.orderingItems;
+        body.orderingCorrectOrder = v.orderingCorrectOrder;
+        body.orderingDirection = v.orderingDirection;
       } else {
         body.correctAnswer = v.correctAnswer;
         if (v.acceptableAnswers?.length) {
@@ -556,7 +594,7 @@ export default function WorkshopPage() {
                     if (e.key === "Enter") handlePrompt(input);
                   }}
                   className="input-field flex-1"
-                  placeholder="What kind of question do you want?"
+                  placeholder={conversationText ? "Give more direction..." : "What kind of question do you want?"}
                 />
                 <button
                   onClick={() => handlePrompt(input)}
@@ -567,17 +605,19 @@ export default function WorkshopPage() {
                 </button>
               </div>
 
-              <div className="flex flex-wrap gap-2">
-                {SUGGESTION_CHIPS.map((chip) => (
-                  <button
-                    key={chip}
-                    onClick={() => handlePrompt(chip)}
-                    className="text-xs px-3 py-1.5 rounded-full bg-[#1e3a5f] text-[#a0a0b8] hover:text-white hover:bg-[#254a73] transition-all"
-                  >
-                    {chip}
-                  </button>
-                ))}
-              </div>
+              {!conversationText && (
+                <div className="flex flex-wrap gap-2">
+                  {SUGGESTION_CHIPS.map((chip) => (
+                    <button
+                      key={chip}
+                      onClick={() => handlePrompt(chip)}
+                      className="text-xs px-3 py-1.5 rounded-full bg-[#1e3a5f] text-[#a0a0b8] hover:text-white hover:bg-[#254a73] transition-all"
+                    >
+                      {chip}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -619,6 +659,8 @@ export default function WorkshopPage() {
                     optionD={v.optionD}
                     correctOption={v.correctOption}
                     correctAnswer={v.correctAnswer}
+                    orderingItems={v.orderingItems}
+                    orderingDirection={v.orderingDirection}
                     difficulty={v.difficulty}
                     hook={v.hook}
                     compact
@@ -669,6 +711,8 @@ export default function WorkshopPage() {
                       optionD={v.optionD}
                       correctOption={v.correctOption}
                       correctAnswer={v.correctAnswer}
+                      orderingItems={v.orderingItems}
+                      orderingDirection={v.orderingDirection}
                       difficulty={v.difficulty}
                       hook={v.hook}
                       selected={i === selectedIdx}
@@ -836,6 +880,8 @@ export default function WorkshopPage() {
                         optionD={draft.optionD || undefined}
                         correctOption={draft.correctOption || undefined}
                         correctAnswer={draft.correctAnswer || undefined}
+                        orderingItems={draft.orderingItems ? (() => { try { return JSON.parse(draft.orderingItems!); } catch { return undefined; } })() : undefined}
+                        orderingDirection={draft.orderingDirection || undefined}
                         difficulty="medium"
                         hook=""
                         compact
@@ -962,6 +1008,8 @@ export default function WorkshopPage() {
                                     optionD={v.optionD}
                                     correctOption={v.correctOption}
                                     correctAnswer={v.correctAnswer}
+                                    orderingItems={v.orderingItems}
+                                    orderingDirection={v.orderingDirection}
                                     difficulty={v.difficulty}
                                     hook={v.hook}
                                     selected={draftSelectedIdx === i}
@@ -1067,13 +1115,6 @@ export default function WorkshopPage() {
                             className="text-xs px-2 py-1 rounded bg-[#1e3a5f] text-[#a0a0b8] hover:text-white transition-colors"
                           >
                             {isExpanded ? "Hide Answers" : "Player Answers"}
-                          </button>
-                          <button
-                            onClick={() => savePastToBank(pq)}
-                            disabled={savingPastId === pq.roundId}
-                            className="text-xs px-2 py-1 rounded bg-[#1e3a5f] text-[#a0a0b8] hover:text-white transition-colors"
-                          >
-                            {savingPastId === pq.roundId ? "Saving..." : "Save to Bank"}
                           </button>
                         </div>
                       </div>
