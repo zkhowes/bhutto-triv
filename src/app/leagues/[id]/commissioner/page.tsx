@@ -69,6 +69,8 @@ export default function CommissionerPage() {
   );
   const [transferTo, setTransferTo] = useState("");
   const [inviteCopied, setInviteCopied] = useState(false);
+  const [addingTestPlayers, setAddingTestPlayers] = useState(false);
+  const [testPlayerCount, setTestPlayerCount] = useState(1);
 
   const fetchLeague = useCallback(async () => {
     try {
@@ -119,6 +121,25 @@ export default function CommissionerPage() {
       body: JSON.stringify({ playerId, action: "unpause" }),
     });
     await fetchLeague();
+  };
+
+  const addTestPlayers = async () => {
+    setAddingTestPlayers(true);
+    try {
+      const res = await fetch(`/api/leagues/${leagueId}/test-players`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ count: testPlayerCount }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || "Failed to add test players");
+        return;
+      }
+      await fetchLeague();
+    } finally {
+      setAddingTestPlayers(false);
+    }
   };
 
   const transferCommissioner = async () => {
@@ -314,6 +335,32 @@ export default function CommissionerPage() {
                 </button>
               </div>
             </div>
+
+            {league.type === "test" && league.players.length < 10 && (
+              <div className="card p-4">
+                <h2 className="text-sm font-semibold text-purple-400 uppercase tracking-wider mb-3">
+                  Add Test Players
+                </h2>
+                <div className="flex items-center gap-3">
+                  <label className="text-sm text-[#a0a0b8]">Count:</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={10 - league.players.length}
+                    value={testPlayerCount}
+                    onChange={(e) => setTestPlayerCount(Math.max(1, Math.min(10 - league.players.length, Number(e.target.value))))}
+                    className="input-field w-20"
+                  />
+                  <button
+                    onClick={addTestPlayers}
+                    disabled={addingTestPlayers}
+                    className="btn-secondary text-sm"
+                  >
+                    {addingTestPlayers ? "Adding..." : "Add Fake Players"}
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="card p-5">
               <h2 className="text-sm font-semibold text-[#a0a0b8] uppercase tracking-wider mb-3">

@@ -61,11 +61,15 @@ export default function CreateLeaguePage() {
 
       // Auto-populate fake players for test leagues
       if (type === "test") {
-        await fetch(`/api/leagues/${league.id}/test-players`, {
+        const testRes = await fetch(`/api/leagues/${league.id}/test-players`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ count: maxPlayers - 1 }),
         });
+        if (!testRes.ok) {
+          const testData = await testRes.json();
+          console.error("Failed to add test players:", testData.error);
+        }
       }
 
       router.push(`/leagues/${league.id}`);
