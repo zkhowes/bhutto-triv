@@ -58,6 +58,16 @@ export default function CreateLeaguePage() {
       }
 
       const league = await res.json();
+
+      // Auto-populate fake players for test leagues
+      if (type === "test") {
+        await fetch(`/api/leagues/${league.id}/test-players`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ count: maxPlayers - 1 }),
+        });
+      }
+
       router.push(`/leagues/${league.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create league");
