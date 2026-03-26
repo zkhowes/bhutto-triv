@@ -81,6 +81,7 @@ interface RoundData {
   onDeckPlayerId: string | null;
   inTheHolePlayerId: string | null;
   atBatAvgRating?: number | null;
+  atBatSuccessRate?: number | null;
   atBatRatingCount?: number;
   questionScore?: {
     avgRating: number | null;

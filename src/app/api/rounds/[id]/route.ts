@@ -195,9 +195,10 @@ export async function GET(
     }
   }
 
-  // Compute at-bat player's historical avg question rating (cross-league via userId)
+  // Compute at-bat player's historical avg question rating + success rate (cross-league via userId)
   let atBatAvgRating: number | null = null;
   let atBatRatingCount = 0;
+  let atBatSuccessRate: number | null = null;
   if (round.atBatPlayerId) {
     // Look up the at-bat player's userId to aggregate cross-league
     const atBatPlayer = await prisma.leaguePlayer.findUnique({
@@ -223,6 +224,34 @@ export async function GET(
       atBatRatingCount = ratingAgg._count.questionComposite;
       if (atBatRatingCount >= 1) {
         atBatAvgRating = ratingAgg._avg.questionComposite;
+      }
+
+      // Compute success rate: % of non-absent answers to this player's questions that were correct
+      const answerStats = await prisma.roundAnswer.aggregate({
+        where: {
+          round: {
+            status: "graded",
+            atBatPlayerId: { in: playerIds },
+          },
+          leaguePlayerId: { notIn: playerIds }, // exclude at-bat player's own answers
+          isAbsent: false,
+          isCorrect: { not: null },
+        },
+        _count: { isCorrect: true },
+      });
+      const correctCount = await prisma.roundAnswer.count({
+        where: {
+          round: {
+            status: "graded",
+            atBatPlayerId: { in: playerIds },
+          },
+          leaguePlayerId: { notIn: playerIds },
+          isAbsent: false,
+          isCorrect: true,
+        },
+      });
+      if (answerStats._count.isCorrect > 0) {
+        atBatSuccessRate = correctCount / answerStats._count.isCorrect;
       }
     }
   }
@@ -286,6 +315,7 @@ export async function GET(
     answers: processedAnswers,
     atBatAvgRating,
     atBatRatingCount,
+    atBatSuccessRate,
     questionScore,
     flagReview: flagReview || null,
     flagUsed: currentPlayerState?.flagUsed ?? false,

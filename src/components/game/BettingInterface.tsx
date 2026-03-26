@@ -12,6 +12,7 @@ interface BettingInterfaceProps {
   answerFormat?: string | null;
   answerDeadline?: string | null;
   atBatAvgRating?: number | null;
+  atBatSuccessRate?: number | null;
   onBetPlaced: () => void;
   roundStatus?: string;
   blindBetUsed?: boolean;
@@ -33,6 +34,7 @@ export default function BettingInterface({
   answerFormat,
   answerDeadline,
   atBatAvgRating,
+  atBatSuccessRate,
   onBetPlaced,
   roundStatus,
   blindBetUsed = false,
@@ -120,12 +122,22 @@ export default function BettingInterface({
             </p>
           </div>
         )}
-        {showCategory && atBatAvgRating != null && (
-          <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#fbbf24]/10 border border-[#fbbf24]/20">
-            <span className="text-xs text-[#a0a0b8] font-medium">Players question ratings:</span>
-            <span className="text-sm text-[#fbbf24] font-bold">{atBatAvgRating.toFixed(1)}</span>
-            <span className="text-xs text-[#666680]">/ 5</span>
-            <InfoTooltip text="Average rating from players who have rated this question submitter's previous questions." />
+        {showCategory && (atBatAvgRating != null || atBatSuccessRate != null) && (
+          <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#fbbf24]/10 border border-[#fbbf24]/20 flex-wrap">
+            <span className="text-xs text-[#a0a0b8] font-medium">Question submitter stats:</span>
+            {atBatAvgRating != null && (
+              <>
+                <span className="text-sm text-[#fbbf24] font-bold">{atBatAvgRating.toFixed(1)}</span>
+                <span className="text-xs text-[#666680]">/ 5</span>
+              </>
+            )}
+            {atBatAvgRating != null && atBatSuccessRate != null && (
+              <span className="text-xs text-[#666680]">|</span>
+            )}
+            {atBatSuccessRate != null && (
+              <span className="text-sm text-[#a0a0b8] font-bold">{Math.round(atBatSuccessRate * 100)}% correct</span>
+            )}
+            <InfoTooltip text="Star rating: average from players who rated this submitter's questions. Success %: how often players answer their questions correctly." />
           </div>
         )}
         {answerDeadline && (

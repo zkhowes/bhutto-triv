@@ -15,6 +15,7 @@ interface RoundData {
   categoryRevealAt: string | null;
   atBatPlayerId: string | null;
   atBatAvgRating?: number | null;
+  atBatSuccessRate?: number | null;
   question: {
     id: string;
     category: string;
@@ -344,6 +345,7 @@ export default function GuideControl(props: GuideControlProps) {
           answerFormat={round.question.answerFormat}
           answerDeadline={answerDeadline}
           atBatAvgRating={round.atBatAvgRating}
+          atBatSuccessRate={round.atBatSuccessRate}
           onBetPlaced={onRefresh}
           roundStatus={round.status}
           blindBetUsed={myPlayerState.blindBetUsed ?? false}

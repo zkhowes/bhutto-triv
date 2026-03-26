@@ -38,6 +38,8 @@ interface AdminData {
     leagueCount: number;
     createdAt: string;
     lastLogin: string | null;
+    questionSuccessRate: number | null;
+    questionAnswerCount: number;
   }>;
   commissioners: Array<{
     id: string;
@@ -684,6 +686,7 @@ export default function AdminPage() {
                   <th className="table-header p-3 text-left">Player</th>
                   <th className="table-header p-3 text-left">Email</th>
                   <th className="table-header p-3 text-center">Leagues</th>
+                  <th className="table-header p-3 text-center">Q Success %</th>
                   <th className="table-header p-3 text-right">Joined</th>
                   <th className="table-header p-3 text-right">Last Login</th>
                 </tr>
@@ -697,6 +700,15 @@ export default function AdminPage() {
                     <td className="p-3 text-[#a0a0b8] text-sm">{p.email}</td>
                     <td className="p-3 text-center text-sm text-[#a0a0b8]">
                       {p.leagueCount}
+                    </td>
+                    <td className="p-3 text-center text-sm text-[#a0a0b8]">
+                      {p.questionSuccessRate != null ? (
+                        <span title={`${p.questionAnswerCount} answers to their questions`}>
+                          {p.questionSuccessRate}%
+                        </span>
+                      ) : (
+                        <span className="text-[#666680]">—</span>
+                      )}
                     </td>
                     <td className="p-3 text-right text-sm text-[#666680]">
                       {new Date(p.createdAt).toLocaleDateString()}

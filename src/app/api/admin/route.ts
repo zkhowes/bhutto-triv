@@ -149,6 +149,47 @@ export async function GET() {
     }),
   ]);
 
+  // Compute per-player question success rates (how often others answer their questions correctly)
+  const playerIds = recentPlayers.map((p) => p.id);
+  const playerLeaguePlayers = await prisma.leaguePlayer.findMany({
+    where: { userId: { in: playerIds } },
+    select: { id: true, userId: true },
+  });
+  const playerIdsByUserId = new Map<string, string[]>();
+  playerLeaguePlayers.forEach((lp) => {
+    const existing = playerIdsByUserId.get(lp.userId) || [];
+    existing.push(lp.id);
+    playerIdsByUserId.set(lp.userId, existing);
+  });
+
+  // Batch query: total answers and correct answers to each player's questions
+  const playerQuestionStats = await Promise.all(
+    playerIds.map(async (userId) => {
+      const lpIds = playerIdsByUserId.get(userId) || [];
+      if (lpIds.length === 0) return { userId, totalAnswers: 0, correctAnswers: 0 };
+      const [totalAnswers, correctAnswers] = await Promise.all([
+        prisma.roundAnswer.count({
+          where: {
+            round: { status: "graded", atBatPlayerId: { in: lpIds } },
+            leaguePlayerId: { notIn: lpIds },
+            isAbsent: false,
+            isCorrect: { not: null },
+          },
+        }),
+        prisma.roundAnswer.count({
+          where: {
+            round: { status: "graded", atBatPlayerId: { in: lpIds } },
+            leaguePlayerId: { notIn: lpIds },
+            isAbsent: false,
+            isCorrect: true,
+          },
+        }),
+      ]);
+      return { userId, totalAnswers, correctAnswers };
+    })
+  );
+  const questionStatsMap = new Map(playerQuestionStats.map((s) => [s.userId, s]));
+
   // Calculate average league size
   const allLeagueSizes = await prisma.league.findMany({
     where: { isActive: true },
@@ -220,14 +261,21 @@ export async function GET() {
       createdAt: l.createdAt,
       isActive: l.isActive,
     })),
-    recentPlayers: recentPlayers.map((p) => ({
-      id: p.id,
-      nickname: p.nickname,
-      email: p.email,
-      leagueCount: p._count.leaguePlayers,
-      createdAt: p.createdAt,
-      lastLogin: p.lastLoginAt,
-    })),
+    recentPlayers: recentPlayers.map((p) => {
+      const stats = questionStatsMap.get(p.id);
+      return {
+        id: p.id,
+        nickname: p.nickname,
+        email: p.email,
+        leagueCount: p._count.leaguePlayers,
+        createdAt: p.createdAt,
+        lastLogin: p.lastLoginAt,
+        questionSuccessRate: stats && stats.totalAnswers > 0
+          ? Math.round((stats.correctAnswers / stats.totalAnswers) * 100)
+          : null,
+        questionAnswerCount: stats?.totalAnswers ?? 0,
+      };
+    }),
     commissioners: Array.from(commissionersByUser.values()).map((c) => ({
       id: c.user.id,
       nickname: c.user.nickname,
