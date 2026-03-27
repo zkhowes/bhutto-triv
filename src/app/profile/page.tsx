@@ -1,8 +1,8 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
-import { useState, useEffect, useRef } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useState, useEffect, useRef, Suspense } from "react";
 import NavBar from "@/components/layout/NavBar";
 import Avatar from "@/components/ui/Avatar";
 
@@ -24,8 +24,18 @@ const TIMEZONES = [
 ];
 
 export default function ProfilePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-pulse text-[#e94560]">Loading...</div></div>}>
+      <ProfilePageContent />
+    </Suspense>
+  );
+}
+
+function ProfilePageContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const returnTo = searchParams.get("returnTo");
   const [nickname, setNickname] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [timezone, setTimezone] = useState("America/Los_Angeles");
@@ -135,7 +145,7 @@ export default function ProfilePage() {
         throw new Error("Failed to save profile");
       }
 
-      router.push("/dashboard");
+      router.push(returnTo || "/dashboard");
     } catch {
       setError("Failed to save profile. Please try again.");
     } finally {

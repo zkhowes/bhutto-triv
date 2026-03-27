@@ -26,6 +26,7 @@ interface GameData {
   totalRounds: number;
   myRole: string | null;
   myPlayerId: string | null;
+  canJoinLate: boolean;
   previousGameLastRoundId: string | null;
   season: {
     id: string;
@@ -389,7 +390,8 @@ export default function GamePage() {
 
     const data: Array<Record<string, number | string>> = [];
     const cumulative: Record<string, number> = {};
-    playerNames.forEach((n) => (cumulative[n] = STARTING_POINTS));
+    const eliminated: Record<string, boolean> = {};
+    playerNames.forEach((n) => { cumulative[n] = STARTING_POINTS; eliminated[n] = false; });
 
     // Starting point
     const startPoint: Record<string, number | string> = { round: "Start" };
@@ -402,9 +404,15 @@ export default function GamePage() {
       const point: Record<string, number | string> = { round: r.number };
       for (const ps of game.playerStates) {
         const name = ps.leaguePlayer.fakeNickname || ps.leaguePlayer.user.nickname;
+        // Once eliminated (hit 0), freeze the line at 0
+        if (eliminated[name]) {
+          point[name] = 0;
+          continue;
+        }
         const answer = rd.answers.find((a) => a.leaguePlayerId === ps.leaguePlayerId);
         cumulative[name] = Math.max(0, (cumulative[name] || STARTING_POINTS) + (answer?.pointsWon || 0) - (answer?.powerUpCost || 0));
         point[name] = cumulative[name];
+        if (cumulative[name] === 0) eliminated[name] = true;
       }
       data.push(point);
     }
@@ -486,6 +494,36 @@ export default function GamePage() {
             >
               &larr; League
             </Link>
+          </div>
+        )}
+
+        {/* Late Join Banner */}
+        {game.canJoinLate && !myPlayerState && (
+          <div className="card p-4 mb-4 border-amber-500/30 bg-amber-500/5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-white">Game in progress</p>
+                <p className="text-xs text-[#a0a0b8]">Jump in now — you can still join until the first round is graded.</p>
+              </div>
+              <button
+                onClick={async () => {
+                  try {
+                    const res = await fetch(`/api/games/${game.id}/join`, { method: "POST" });
+                    if (res.ok) {
+                      fetchGame();
+                    } else {
+                      const data = await res.json();
+                      alert(data.error || "Failed to join game");
+                    }
+                  } catch {
+                    alert("Failed to join game");
+                  }
+                }}
+                className="btn-primary text-sm whitespace-nowrap"
+              >
+                Join Game
+              </button>
+            </div>
           </div>
         )}
 
@@ -581,6 +619,7 @@ export default function GamePage() {
           <div className="mb-6">
             <BoxScoreControl
               answers={currentRoundData.answers}
+              eliminatedPlayerIds={new Set(game.playerStates.filter((ps) => ps.isEliminated).map((ps) => ps.leaguePlayerId))}
               question={currentRoundData.question}
               myPlayerId={myPlayerId}
               categoryRevealAt={currentRoundData.categoryRevealAt}
@@ -634,7 +673,7 @@ export default function GamePage() {
                           size="sm"
                         />
                         <span
-                          className="text-sm font-medium"
+                          className="text-sm sm:text-base font-medium"
                           style={chartInfo.playerColorMap[ps.leaguePlayerId] ? { color: chartInfo.playerColorMap[ps.leaguePlayerId] } : { color: "white" }}
                         >
                           {ps.leaguePlayer.fakeNickname || ps.leaguePlayer.user.nickname}
@@ -652,7 +691,7 @@ export default function GamePage() {
                       </td>
                     )}
                     <td className="py-3 text-right">
-                      <span className="font-mono font-bold text-[#fbbf24]">
+                      <span className="font-mono font-bold text-[#fbbf24] text-base">
                         {ps.points}
                       </span>
                     </td>

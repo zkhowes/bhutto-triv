@@ -115,5 +115,15 @@ export async function GET(
     previousGameLastRoundId = prevGame?.rounds[0]?.id ?? null;
   }
 
-  return NextResponse.json({ ...game, myRole, myPlayerId, previousGameLastRoundId });
+  // Check if current user can late-join this game
+  let canJoinLate = false;
+  if (myPlayerId && game.status === "active") {
+    const isInGame = game.playerStates.some((ps) => ps.leaguePlayerId === myPlayerId);
+    if (!isInGame) {
+      const hasGradedRound = game.rounds.some((r) => r.status === "graded");
+      canJoinLate = !hasGradedRound;
+    }
+  }
+
+  return NextResponse.json({ ...game, myRole, myPlayerId, canJoinLate, previousGameLastRoundId });
 }

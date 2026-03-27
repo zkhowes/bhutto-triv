@@ -154,7 +154,7 @@ async function getRoundContext(roundId: string) {
       game: {
         include: {
           playerStates: { include: { leaguePlayer: { include: { user: { select: { id: true, phoneNumber: true } } } } } },
-          season: { include: { league: { select: { id: true, notificationMode: true } } } },
+          season: { include: { league: { select: { id: true, name: true, notificationMode: true } } } },
         },
       },
     },
@@ -173,7 +173,9 @@ export async function notifyAtBat(roundId: string): Promise<void> {
     const round = await getRoundContext(roundId);
     if (!round?.atBatPlayerId) return;
 
-    const leagueId = round.game.season.league.id;
+    const league = round.game.season.league;
+    const leagueId = league.id;
+    const ln = league.name;
     const player = await getPlayerInfo(round.atBatPlayerId);
     if (!player || !player.isActive || player.isFake) return;
 
@@ -183,7 +185,7 @@ export async function notifyAtBat(roundId: string): Promise<void> {
       gameId: round.gameId,
       roundId,
       type: "at_bat",
-      title: "You're up – time to submit a question",
+      title: `${ln}: You're up – submit a question`,
       message: "It's your turn to submit today's trivia question. Get creative!",
       destinationUrl: `/games/${round.gameId}?round=${roundId}`,
       phoneNumber: player.phoneNumber,
@@ -203,7 +205,9 @@ export async function notifyNewQuestion(roundId: string): Promise<void> {
     const round = await getRoundContext(roundId);
     if (!round) return;
 
-    const leagueId = round.game.season.league.id;
+    const league = round.game.season.league;
+    const leagueId = league.id;
+    const ln = league.name;
 
     // All active, non-at-bat players
     const recipients = round.game.playerStates.filter(
@@ -220,7 +224,7 @@ export async function notifyNewQuestion(roundId: string): Promise<void> {
         gameId: round.gameId,
         roundId,
         type: "new_question",
-        title: "New question is ready – get your bets in",
+        title: `${ln}: New question – get your bets in`,
         message: "A new trivia question has been submitted. Place your bet and answer before the deadline!",
         destinationUrl: `/games/${round.gameId}?round=${roundId}`,
         phoneNumber: ps.leaguePlayer.user.phoneNumber ?? undefined,
@@ -241,7 +245,9 @@ export async function notifyAllAnswersIn(roundId: string): Promise<void> {
     const round = await getRoundContext(roundId);
     if (!round?.atBatPlayerId) return;
 
-    const leagueId = round.game.season.league.id;
+    const league = round.game.season.league;
+    const leagueId = league.id;
+    const ln = league.name;
     const player = await getPlayerInfo(round.atBatPlayerId);
     if (!player || !player.isActive || player.isFake) return;
 
@@ -251,7 +257,7 @@ export async function notifyAllAnswersIn(roundId: string): Promise<void> {
       gameId: round.gameId,
       roundId,
       type: "all_answers_in",
-      title: "All questions submitted – time to grade",
+      title: `${ln}: All answers in – time to grade`,
       message: "All players have answered. Review and validate the AI grades for your question.",
       destinationUrl: `/games/${round.gameId}?round=${roundId}`,
       phoneNumber: player.phoneNumber,
@@ -271,7 +277,9 @@ export async function notifyOnDeck(roundId: string): Promise<void> {
     const round = await getRoundContext(roundId);
     if (!round?.onDeckPlayerId) return;
 
-    const leagueId = round.game.season.league.id;
+    const league = round.game.season.league;
+    const leagueId = league.id;
+    const ln = league.name;
     const player = await getPlayerInfo(round.onDeckPlayerId);
     if (!player || !player.isActive || player.isFake) return;
 
@@ -281,7 +289,7 @@ export async function notifyOnDeck(roundId: string): Promise<void> {
       gameId: round.gameId,
       roundId,
       type: "on_deck",
-      title: "You're on deck – start preparing a question",
+      title: `${ln}: You're on deck – prepare a question`,
       message: "You're up next! Start working on your trivia question. You can queue one in advance if needed.",
       destinationUrl: `/games/${round.gameId}?round=${roundId}`,
       phoneNumber: player.phoneNumber,
@@ -301,7 +309,9 @@ export async function notifyRoundResults(roundId: string): Promise<void> {
     const round = await getRoundContext(roundId);
     if (!round) return;
 
-    const leagueId = round.game.season.league.id;
+    const league = round.game.season.league;
+    const leagueId = league.id;
+    const ln = league.name;
 
     const recipients = round.game.playerStates.filter(
       (ps) => !ps.leaguePlayer.isFake && ps.leaguePlayer.isActive
@@ -314,7 +324,7 @@ export async function notifyRoundResults(roundId: string): Promise<void> {
         gameId: round.gameId,
         roundId,
         type: "round_results",
-        title: "Round results are in!",
+        title: `${ln}: Round results are in!`,
         message: "The round has been scored. Check how you placed!",
         destinationUrl: `/games/${round.gameId}?round=${roundId}`,
         phoneNumber: ps.leaguePlayer.user.phoneNumber ?? undefined,
@@ -351,7 +361,9 @@ export async function notifyAboutToBeSkipped(
     const round = await getRoundContext(roundId);
     if (!round) return;
 
-    const leagueId = round.game.season.league.id;
+    const league = round.game.season.league;
+    const leagueId = league.id;
+    const ln = league.name;
 
     await createNotification({
       userId: player.userId,
@@ -359,7 +371,7 @@ export async function notifyAboutToBeSkipped(
       gameId: round.gameId,
       roundId,
       type: "about_to_be_skipped",
-      title: "You're about to be skipped – get your bet in soon",
+      title: `${ln}: You're about to be skipped!`,
       message: "The deadline is approaching! You're the last player without a bet and answer. Act now to avoid being skipped.",
       destinationUrl: `/games/${round.gameId}?round=${roundId}`,
       phoneNumber: player.phoneNumber,
@@ -382,7 +394,9 @@ export async function notifyRoundClosedByCommissioner(
     const round = await getRoundContext(roundId);
     if (!round) return;
 
-    const leagueId = round.game.season.league.id;
+    const league = round.game.season.league;
+    const leagueId = league.id;
+    const ln = league.name;
 
     // Find the commissioner's userId
     const commissioner = await prisma.leaguePlayer.findFirst({
@@ -421,7 +435,7 @@ export async function notifyRoundClosedByCommissioner(
         gameId: round.gameId,
         roundId,
         type: "round_closed_by_commissioner",
-        title: `Commissioner closed round ${round.number}`,
+        title: `${ln}: Commissioner closed round ${round.number}`,
         message: `Commissioner closed round ${round.number}.${absentText} New question time!`,
         destinationUrl,
         phoneNumber: ps.leaguePlayer.user.phoneNumber ?? undefined,
@@ -446,7 +460,9 @@ export async function notifyFlagThrown(
     const round = await getRoundContext(roundId);
     if (!round) return;
 
-    const leagueId = round.game.season.league.id;
+    const league = round.game.season.league;
+    const leagueId = league.id;
+    const ln = league.name;
 
     const recipients = round.game.playerStates.filter(
       (ps) =>
@@ -462,7 +478,7 @@ export async function notifyFlagThrown(
         gameId: round.gameId,
         roundId,
         type: "flag_thrown",
-        title: `Flag thrown on Round ${round.number}!`,
+        title: `${ln}: Flag thrown on Round ${round.number}!`,
         message: `${flaggerName} is contesting the round. Cast your vote!`,
         destinationUrl: `/games/${round.gameId}?round=${roundId}`,
         phoneNumber: ps.leaguePlayer.user.phoneNumber ?? undefined,
@@ -487,11 +503,13 @@ export async function notifyFlagResolved(
     const round = await getRoundContext(roundId);
     if (!round) return;
 
-    const leagueId = round.game.season.league.id;
+    const league = round.game.season.league;
+    const leagueId = league.id;
+    const ln = league.name;
 
     const title = outcome === "agreed"
-      ? `Round ${round.number} thrown out`
-      : `Flag denied on Round ${round.number}`;
+      ? `${ln}: Round ${round.number} thrown out`
+      : `${ln}: Flag denied on Round ${round.number}`;
     const message = outcome === "agreed"
       ? `Round ${round.number} has been thrown out. Scores reversed.`
       : `${relevantPlayerName}'s flag was denied. They lose half their points.`;

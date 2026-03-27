@@ -19,6 +19,8 @@
     background-color: var(--bg-primary);
     color: var(--text-primary);
     font-family: system-ui, -apple-system, sans-serif;
+    font-size: 16px;
+    -webkit-text-size-adjust: 100%;
   }
 }
 
@@ -32,11 +34,11 @@
   }
 
   .btn-primary {
-    @apply bg-[#e94560] hover:bg-[#d63851] text-white font-semibold py-2.5 px-5 rounded-lg transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply bg-[#e94560] hover:bg-[#d63851] text-white font-semibold py-3 px-5 rounded-lg transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-base;
   }
 
   .btn-secondary {
-    @apply bg-[#1e3a5f] hover:bg-[#254a73] text-white font-semibold py-2.5 px-5 rounded-lg transition-all duration-200 border border-[#2a5a8f] active:scale-95;
+    @apply bg-[#1e3a5f] hover:bg-[#254a73] text-white font-semibold py-3 px-5 rounded-lg transition-all duration-200 border border-[#2a5a8f] active:scale-95 text-base;
   }
 
   .btn-gold {
@@ -48,7 +50,7 @@
   }
 
   .input-field {
-    @apply w-full bg-[#0f0f23] border border-[#1e3a5f] rounded-lg px-4 py-2.5 text-white placeholder-[#666680] focus:outline-none focus:border-[#e94560] focus:ring-1 focus:ring-[#e94560] transition-all;
+    @apply w-full bg-[#0f0f23] border border-[#1e3a5f] rounded-lg px-4 py-3 text-white placeholder-[#666680] focus:outline-none focus:border-[#e94560] focus:ring-1 focus:ring-[#e94560] transition-all text-base;
   }
 
   .badge {

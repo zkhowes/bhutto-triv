@@ -29,7 +29,10 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/");
-  }, [status, router]);
+    if (status === "authenticated" && session?.user && !session.user.profileComplete) {
+      router.push("/profile");
+    }
+  }, [status, session, router]);
 
   useEffect(() => {
     if (session?.user) {

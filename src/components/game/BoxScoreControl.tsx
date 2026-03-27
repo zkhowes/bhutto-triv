@@ -28,6 +28,7 @@ interface BoxScoreControlProps {
       user: { id: string; nickname: string; avatarUrl: string | null; image: string | null };
     };
   }>;
+  eliminatedPlayerIds?: Set<string>;
   question: {
     answerFormat: string;
     correctAnswer: string | null;
@@ -45,6 +46,7 @@ interface BoxScoreControlProps {
 
 export default function BoxScoreControl({
   answers,
+  eliminatedPlayerIds,
   question,
   myPlayerId,
   defaultOpen = false,
@@ -67,8 +69,14 @@ export default function BoxScoreControl({
     return map[key] || key;
   };
 
+  const isPlayerEliminated = (leaguePlayerId: string): boolean =>
+    eliminatedPlayerIds?.has(leaguePlayerId) ?? false;
+
+  const getAbsentLabel = (answer: typeof answers[0]): string =>
+    isPlayerEliminated(answer.leaguePlayerId) ? "Busted" : "Absent";
+
   const getAnswerDisplay = (answer: typeof answers[0]): string => {
-    if (answer.isAbsent) return "Absent";
+    if (answer.isAbsent) return getAbsentLabel(answer);
     if (question.answerFormat === "multiple_choice") {
       return answer.selectedOption
         ? `${answer.selectedOption}. ${getOptionText(answer.selectedOption)}`
@@ -167,7 +175,7 @@ export default function BoxScoreControl({
                       name={name}
                       size="sm"
                     />
-                    <span className="text-sm font-semibold text-white truncate">
+                    <span className="text-sm sm:text-base font-semibold text-white truncate">
                       {name}
                       {isMe && <span className="text-xs text-[#e94560] ml-1">(you)</span>}
                     </span>
@@ -192,7 +200,7 @@ export default function BoxScoreControl({
                     </span>
                     {/* Result badge */}
                     {answer.isAbsent ? (
-                      <span className="badge-absent text-xs">Absent</span>
+                      <span className="badge-absent text-xs">{getAbsentLabel(answer)}</span>
                     ) : answer.isCorrect ? (
                       <span className="badge-correct text-xs">&#10003; Right</span>
                     ) : (

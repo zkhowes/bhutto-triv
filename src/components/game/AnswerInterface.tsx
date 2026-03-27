@@ -326,9 +326,25 @@ export default function AnswerInterface({
             })()}
           </div>
         )}
-        <h2 className="text-lg font-semibold text-white leading-relaxed">
+        <h2 className="text-lg sm:text-xl font-semibold text-white leading-relaxed">
           {question.questionText}
         </h2>
+        {isPriceIsRight && (
+          <div className="mt-3 flex items-center gap-2">
+            <span className="text-xs font-bold text-amber-400 bg-amber-400/15 rounded px-2 py-1 uppercase tracking-wide">
+              Price is Right
+            </span>
+            <span className="text-xs text-[#a0a0b8]">Closest without going over wins</span>
+          </div>
+        )}
+        {isOrdering && (
+          <div className="mt-3 flex items-center gap-2">
+            <span className="text-xs font-bold text-purple-400 bg-purple-400/15 rounded px-2 py-1 uppercase tracking-wide">
+              Ordering
+            </span>
+            <span className="text-xs text-[#a0a0b8]">Arrange items in the correct order</span>
+          </div>
+        )}
       </div>
 
       {/* Answer input */}
@@ -341,7 +357,7 @@ export default function AnswerInterface({
                 key={opt.key}
                 onClick={() => !isEliminated && setSelectedOption(opt.key)}
                 disabled={isEliminated}
-                className={`w-full text-left p-4 rounded-lg border transition-all ${
+                className={`w-full text-left p-4 rounded-lg border transition-all text-base ${
                   isEliminated
                     ? "border-[#1e3a5f] bg-[#0a0a1a] text-[#444460] line-through opacity-50 cursor-not-allowed"
                     : selectedOption === opt.key
@@ -360,6 +376,7 @@ export default function AnswerInterface({
         </div>
       ) : isPriceIsRight ? (
         <div className="mb-4">
+          <label className="block text-sm font-medium text-amber-400 mb-2">Your guess (closest without going over wins)</label>
           <input
             type="number"
             value={priceAnswer}

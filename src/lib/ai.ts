@@ -584,9 +584,9 @@ export async function assessQuestionDifficulty(
     correctOption?: string;
     options?: { optionA?: string; optionB?: string; optionC?: string; optionD?: string };
   }
-): Promise<{ difficulty: "easy" | "medium" | "hard"; reasoning: string }> {
+): Promise<{ difficulty: "easy" | "medium" | "hard"; reasoning: string; categoryMismatch: boolean; categoryNote: string }> {
   if (!process.env.ANTHROPIC_API_KEY) {
-    return { difficulty: "medium", reasoning: "AI not configured" };
+    return { difficulty: "medium", reasoning: "AI not configured", categoryMismatch: false, categoryNote: "" };
   }
 
   try {
@@ -630,12 +630,10 @@ Assess whether this question is easy, medium, or hard relative to typical trivia
 - The league's historical performance in this category
 - For numeric/price-is-right questions: how likely players are to know the right ballpark
 
+Also check if the stated category fits the question content. If the question doesn't match the category (e.g. a beer question categorized as "Geography"), flag it.
+
 Respond with ONLY a JSON object, no other text:
-{"difficulty": "easy", "reasoning": "..."}
-or
-{"difficulty": "medium", "reasoning": "..."}
-or
-{"difficulty": "hard", "reasoning": "..."}`,
+{"difficulty": "easy"|"medium"|"hard", "reasoning": "...", "categoryMismatch": false, "categoryNote": ""}`,
         },
       ],
     });
@@ -645,16 +643,22 @@ or
     // Extract JSON from response (handle potential markdown wrapping)
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      return { difficulty: "medium", reasoning: "Could not parse AI response" };
+      return { difficulty: "medium", reasoning: "Could not parse AI response", categoryMismatch: false, categoryNote: "" };
     }
     const parsed = JSON.parse(jsonMatch[0]);
+    let reasoning = parsed.reasoning || "";
+    if (parsed.categoryMismatch && parsed.categoryNote) {
+      reasoning = `Category check: ${parsed.categoryNote}. ${reasoning}`;
+    }
     return {
       difficulty: parsed.difficulty,
-      reasoning: parsed.reasoning,
+      reasoning,
+      categoryMismatch: !!parsed.categoryMismatch,
+      categoryNote: parsed.categoryNote || "",
     };
   } catch (e) {
     console.error("Difficulty assessment error:", e);
-    return { difficulty: "medium", reasoning: "Could not assess difficulty" };
+    return { difficulty: "medium", reasoning: "Could not assess difficulty", categoryMismatch: false, categoryNote: "" };
   }
 }
 

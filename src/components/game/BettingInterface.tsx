@@ -103,7 +103,7 @@ export default function BettingInterface({
   return (
     <div className="card p-6">
       <div className="text-center mb-6">
-        <p className="text-xs text-[#a0a0b8] uppercase tracking-wider">
+        <p className="text-sm text-[#a0a0b8] uppercase tracking-wider">
           Category
         </p>
         {showCategory ? (
@@ -146,7 +146,7 @@ export default function BettingInterface({
             <CountdownTimer deadlineTime={answerDeadline} />
           </div>
         )}
-        <p className="text-sm text-[#a0a0b8] mt-2">
+        <p className="text-base text-[#a0a0b8] mt-2">
           Place your bet to see the question
         </p>
       </div>
@@ -154,8 +154,8 @@ export default function BettingInterface({
       {maxPoints > 1 && (
         <div className="mb-6">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-sm text-[#a0a0b8]">1</span>
-            <span className="text-sm text-[#a0a0b8]">
+            <span className="text-base text-[#a0a0b8]">1</span>
+            <span className="text-base text-[#a0a0b8]">
               Available: <span className="text-white font-bold">{maxPoints}</span>
             </span>
           </div>

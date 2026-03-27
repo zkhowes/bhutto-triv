@@ -40,9 +40,16 @@ function timeAgo(dateStr: string): string {
 }
 
 export default function NavBar() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const router = useRouter();
   const pathname = usePathname();
+
+  // Redirect to profile setup if user is authenticated but profile incomplete
+  useEffect(() => {
+    if (status === "authenticated" && session?.user && !session.user.profileComplete && pathname !== "/profile") {
+      router.push("/profile");
+    }
+  }, [status, session, pathname, router]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);

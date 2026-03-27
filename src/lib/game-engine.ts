@@ -138,6 +138,56 @@ export async function initializeGame(
 }
 
 /**
+ * Add a late joiner to an active game.
+ * Allowed until the first round is graded.
+ * The player gets starting points and can bet/answer but doesn't bat.
+ */
+export async function addLateJoiner(
+  gameId: string,
+  leaguePlayerId: string
+): Promise<void> {
+  const game = await prisma.game.findUnique({
+    where: { id: gameId },
+    include: {
+      rounds: { orderBy: { number: "asc" } },
+      playerStates: true,
+    },
+  });
+
+  if (!game) throw new Error("Game not found");
+  if (game.status !== GAME_STATUS.ACTIVE) throw new Error("Game is not active");
+
+  // Check if any round has been graded — if so, too late
+  const hasGradedRound = game.rounds.some((r) => r.status === "graded");
+  if (hasGradedRound) throw new Error("Cannot join after first round is graded");
+
+  // Check player isn't already in the game
+  const alreadyIn = game.playerStates.some((ps) => ps.leaguePlayerId === leaguePlayerId);
+  if (alreadyIn) throw new Error("Player is already in this game");
+
+  // Add player state with starting points
+  await prisma.gamePlayerState.create({
+    data: {
+      gameId,
+      leaguePlayerId,
+      points: STARTING_POINTS,
+      totalF1Points: 0,
+      skipCount: 0,
+    },
+  });
+
+  // Add batting order entry at the end (won't bat in current game's existing rounds)
+  const maxPosition = game.playerStates.length;
+  await prisma.battingOrderEntry.create({
+    data: {
+      gameId,
+      leaguePlayerId,
+      position: maxPosition,
+    },
+  });
+}
+
+/**
  * Submit a question for the current round
  */
 export async function submitQuestion(

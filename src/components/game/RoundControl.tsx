@@ -128,10 +128,10 @@ export default function RoundControl({
         {/* Row 1: Category + question + my result badge */}
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
-            <p className="text-xs text-[#a0a0b8] uppercase tracking-wider mb-1">
+            <p className="text-sm text-[#a0a0b8] uppercase tracking-wider mb-1">
               {round.question.category}
             </p>
-            <p className="text-white font-medium">
+            <p className="text-white font-medium text-base sm:text-lg leading-relaxed">
               {round.question.questionText}
             </p>
             {round.question.imageUrl && (
@@ -169,13 +169,13 @@ export default function RoundControl({
               }`}
             >
               <p
-                className={`text-sm font-bold ${
+                className={`text-base font-bold ${
                   myAnswer.isCorrect ? "text-emerald-400" : "text-red-400"
                 }`}
               >
                 {myAnswer.isCorrect ? "Correct!" : "Incorrect"}
               </p>
-              <p className="text-xs text-[#a0a0b8]">
+              <p className="text-sm text-[#a0a0b8]">
                 {myAnswer.pointsWon > 0 ? "+" : ""}
                 {myAnswer.pointsWon} pts &middot; #{myAnswer.placement}
                 {myAnswer.fastestLap && (
@@ -305,7 +305,7 @@ export default function RoundControl({
             <p className="text-xs font-bold text-purple-400 uppercase tracking-wider mb-1">
               Did You Know?
             </p>
-            <p className="text-sm text-[#e8e8e8]">{round.funFact}</p>
+            <p className="text-base text-[#e8e8e8] leading-relaxed">{round.funFact}</p>
           </div>
         )}
 

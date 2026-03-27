@@ -14,6 +14,11 @@ export default function JoinLeaguePage() {
 
   useEffect(() => {
     if (session?.user && code) {
+      // If profile is incomplete, redirect to profile setup first with a return URL
+      if (!session.user.profileComplete) {
+        router.push(`/profile?returnTo=/leagues/join/${code}`);
+        return;
+      }
       setJoining(true);
       fetch("/api/leagues/join", {
         method: "POST",
@@ -23,7 +28,7 @@ export default function JoinLeaguePage() {
         .then((r) => r.json())
         .then((data) => {
           if (data.leagueId) {
-            router.push(`/leagues/${data.leagueId}`);
+            router.push(`/dashboard`);
           } else {
             setError(data.error || "Failed to join");
             setJoining(false);

@@ -75,6 +75,8 @@ export default function QuestionSubmitForm({
   const [difficultyResult, setDifficultyResult] = useState<{
     difficulty: "easy" | "medium" | "hard";
     reasoning: string;
+    categoryMismatch?: boolean;
+    categoryNote?: string;
   } | null>(null);
   const [difficultyLoading, setDifficultyLoading] = useState(false);
 
@@ -177,6 +179,14 @@ export default function QuestionSubmitForm({
   };
 
   const handleSubmit = async () => {
+    // Auto-commit pending custom category input
+    if (showNewCategoryInput && newCategoryInput.trim()) {
+      handleNewCategorySubmit();
+    }
+    if (!category && !newCategoryInput.trim()) {
+      setError("Select a category");
+      return;
+    }
     if (!category) {
       setError("Select a category");
       return;
@@ -500,6 +510,9 @@ export default function QuestionSubmitForm({
                     setNewCategoryInput("");
                   }
                 }}
+                onBlur={() => {
+                  if (newCategoryInput.trim()) handleNewCategorySubmit();
+                }}
                 className="input-field flex-1 text-sm"
                 placeholder="Category name (max 50 chars)"
                 maxLength={50}
@@ -821,22 +834,30 @@ export default function QuestionSubmitForm({
               {difficultyLoading ? "Checking..." : "Check Difficulty"}
             </button>
             {difficultyResult && (
-              <div
-                className={`mt-2 p-3 rounded-lg border text-sm ${
-                  difficultyResult.difficulty === "easy"
-                    ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
-                    : difficultyResult.difficulty === "hard"
-                      ? "bg-red-500/10 border-red-500/30 text-red-400"
-                      : "bg-amber-500/10 border-amber-500/30 text-amber-400"
-                }`}
-              >
-                <span className="font-bold uppercase">
-                  {difficultyResult.difficulty}
-                </span>
-                <span className="text-[#a0a0b8] ml-2">
-                  {difficultyResult.reasoning}
-                </span>
-              </div>
+              <>
+                {difficultyResult.categoryMismatch && difficultyResult.categoryNote && (
+                  <div className="mt-2 p-3 rounded-lg border text-sm bg-amber-500/10 border-amber-500/30 text-amber-300">
+                    <span className="font-bold">Category check:</span>{" "}
+                    That doesn&apos;t look quite right — {difficultyResult.categoryNote}
+                  </div>
+                )}
+                <div
+                  className={`mt-2 p-3 rounded-lg border text-sm ${
+                    difficultyResult.difficulty === "easy"
+                      ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                      : difficultyResult.difficulty === "hard"
+                        ? "bg-red-500/10 border-red-500/30 text-red-400"
+                        : "bg-amber-500/10 border-amber-500/30 text-amber-400"
+                  }`}
+                >
+                  <span className="font-bold uppercase">
+                    {difficultyResult.difficulty}
+                  </span>
+                  <span className="text-[#a0a0b8] ml-2">
+                    {difficultyResult.reasoning}
+                  </span>
+                </div>
+              </>
             )}
           </div>
         )}
