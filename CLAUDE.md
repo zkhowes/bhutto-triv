@@ -209,7 +209,7 @@ Required for development (see `.env.example`):
 
 ## Kanban
 
-> Last updated: 2026-03-24 (whats new popup deploy)
+> Last updated: 2026-03-27 (Triangle Fellas launch feedback)
 
 ### Backlog
 - [ ] Replay past questions — *schema has isReplay/originalQuestionId, needs UI + API*
@@ -226,6 +226,7 @@ Required for development (see `.env.example`):
 ### In Progress
 
 ### Done
+- [x] Triangle Fellas launch fixes — *11 fixes: invite flow, late joiners, busted label, graph freeze, SMS league name, category deselect, AI category check, PiR UX, tooltip overflow, text accessibility*
 - [x] What's New popup — *shows 5 recent features to existing users on first visit after release, tracked via lastSeenWhatsNew DB field, new users excluded*
 - [x] Ordering questions — *new answer format: arrange 3-4 items in correct order, PiR-style competitive grading, First Place power-up, AI workshop support*
 - [x] Blind Bet — *once per game, bet before seeing category for 2x multiplier, visible to all players, cannot use on own at-bat*
