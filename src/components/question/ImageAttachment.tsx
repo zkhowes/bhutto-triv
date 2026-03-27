@@ -97,7 +97,7 @@ export default function ImageAttachment({
             </span>
           </div>
 
-          <span className="flex-shrink-0 text-[10px] font-semibold tracking-widest text-[#4a6fa5] bg-[#0f1a2e] border border-[#1e3a5f] rounded px-2 py-0.5 uppercase">
+          <span className="flex-shrink-0 text-xs font-semibold tracking-widest text-[#4a6fa5] bg-[#0f1a2e] border border-[#1e3a5f] rounded px-2 py-0.5 uppercase">
             Optional
           </span>
         </button>
@@ -147,12 +147,12 @@ export default function ImageAttachment({
                   href={parsedAttribution.profileUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[11px] text-[#4a6fa5] hover:text-[#4a9eff] transition-colors duration-150 truncate block"
+                  className="text-xs text-[#4a6fa5] hover:text-[#4a9eff] transition-colors duration-150 truncate block"
                 >
                   Photo by {parsedAttribution.name}
                 </a>
               ) : (
-                <span className="text-[11px] text-[#4a6fa5] truncate block">
+                <span className="text-xs text-[#4a6fa5] truncate block">
                   {imageSource || "Image attached"}
                 </span>
               )}

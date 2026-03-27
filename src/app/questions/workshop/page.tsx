@@ -890,7 +890,7 @@ export default function WorkshopPage() {
                       {/* Overlay badges and actions */}
                       <div className="absolute top-3 right-3 flex items-center gap-1.5">
                         {draft.useOnNextRound && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#e94560]/20 text-[#e94560]">
+                          <span className="text-xs px-1.5 py-0.5 rounded-full bg-[#e94560]/20 text-[#e94560]">
                             Auto ON
                           </span>
                         )}
@@ -1050,10 +1050,10 @@ export default function WorkshopPage() {
                     <div className="card p-4">
                       {/* Header badges */}
                       <div className="flex items-center gap-2 mb-2">
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 font-bold uppercase">
+                        <span className="text-xs px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 font-bold uppercase">
                           Past
                         </span>
-                        <span className="text-[10px] text-[#666680]">
+                        <span className="text-xs text-[#666680]">
                           {pq.leagueName} &middot; S{pq.seasonNumber}G{pq.gameNumber}R{pq.roundNumber}
                         </span>
                         {pq.avgRating != null && (

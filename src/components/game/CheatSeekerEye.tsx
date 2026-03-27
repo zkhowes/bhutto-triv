@@ -101,15 +101,15 @@ export default function CheatSeekerEye({
             <span className={`text-xs font-bold ${adjustedHeat.color}`}>
               {adjustedHeat.label} {adjustedHeat.label === "On Fire" ? "\uD83D\uDD25" : ""}
             </span>
-            <span className="text-[10px] text-[#666680]">score: {adjustedHeat.score}</span>
+            <span className="text-xs text-[#666680]">score: {adjustedHeat.score}</span>
           </div>
 
           {/* Stats grid */}
           <div className="space-y-1">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] text-[#a0a0b8]">Tab switches</span>
+              <span className="text-xs text-[#a0a0b8]">Tab switches</span>
               <span
-                className={`text-[10px] font-mono ${
+                className={`text-xs font-mono ${
                   data.tabSwitches > 0 ? "text-amber-400" : "text-[#666680]"
                 }`}
               >
@@ -117,9 +117,9 @@ export default function CheatSeekerEye({
               </span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-[10px] text-[#a0a0b8]">Window blurs</span>
+              <span className="text-xs text-[#a0a0b8]">Window blurs</span>
               <span
-                className={`text-[10px] font-mono ${
+                className={`text-xs font-mono ${
                   data.blurCount > 0 ? "text-amber-400" : "text-[#666680]"
                 }`}
               >
@@ -127,9 +127,9 @@ export default function CheatSeekerEye({
               </span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-[10px] text-[#a0a0b8]">Time away</span>
+              <span className="text-xs text-[#a0a0b8]">Time away</span>
               <span
-                className={`text-[10px] font-mono ${
+                className={`text-xs font-mono ${
                   data.timeAway > 10000 ? "text-amber-400" : "text-[#666680]"
                 }`}
               >
@@ -139,9 +139,9 @@ export default function CheatSeekerEye({
               </span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-[10px] text-[#a0a0b8]">Paste detected</span>
+              <span className="text-xs text-[#a0a0b8]">Paste detected</span>
               <span
-                className={`text-[10px] font-mono ${
+                className={`text-xs font-mono ${
                   data.pasteDetected ? "text-red-400" : "text-[#666680]"
                 }`}
               >
@@ -150,8 +150,8 @@ export default function CheatSeekerEye({
             </div>
             {answerTimeSeconds != null && (
               <div className="flex items-center justify-between pt-1 border-t border-[#1e3a5f]">
-                <span className="text-[10px] text-[#a0a0b8]">Answer time</span>
-                <span className={`text-[10px] font-mono ${answerTimeSlow > 0 ? "text-amber-400" : "text-purple-400"}`}>
+                <span className="text-xs text-[#a0a0b8]">Answer time</span>
+                <span className={`text-xs font-mono ${answerTimeSlow > 0 ? "text-amber-400" : "text-purple-400"}`}>
                   {answerTimeSeconds}s
                   {medianAnswerTimeSeconds != null && medianAnswerTimeSeconds > 0 && (
                     <span className="text-[#666680] ml-1">

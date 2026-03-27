@@ -102,7 +102,7 @@ export default function GameControl({
 
       {/* Round indicator circles */}
       <div className="mb-4">
-        <p className="text-[10px] text-[#e94560] uppercase tracking-wider font-bold mb-2 text-center">
+        <p className="text-xs text-[#e94560] uppercase tracking-wider font-bold mb-2 text-center">
           Rounds
         </p>
         <div className="flex flex-wrap gap-1.5 justify-center">
@@ -159,7 +159,7 @@ export default function GameControl({
       {/* Play Control */}
       {mode === "league" && topPlayers && topPlayers.length > 0 && (
         <div className="border-t border-[#1e3a5f] pt-3">
-          <p className="text-[10px] text-[#e94560] uppercase tracking-wider font-bold mb-2 text-center">
+          <p className="text-xs text-[#e94560] uppercase tracking-wider font-bold mb-2 text-center">
             Top 3
           </p>
           <div className="max-w-[220px] mx-auto space-y-1.5">

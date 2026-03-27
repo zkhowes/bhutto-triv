@@ -271,14 +271,14 @@ export default function RoundControl({
         {/* Retroactive rating fallback (for players who didn't rate during answer) */}
         {canRate && !existingRating && (
           <div className="mt-2 flex items-center gap-2">
-            <span className="text-[10px] text-[#666680] uppercase tracking-wider">Rate Question:</span>
+            <span className="text-xs text-[#666680] uppercase tracking-wider">Rate Question:</span>
             <StarRating
               value={existingRating || 0}
               size="sm"
               onChange={handleRate}
             />
             {ratingSubmitting && (
-              <span className="text-[10px] text-[#666680]">saving...</span>
+              <span className="text-xs text-[#666680]">saving...</span>
             )}
           </div>
         )}

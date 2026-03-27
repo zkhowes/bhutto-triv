@@ -295,14 +295,14 @@ export default function GradingInterface({
             .map((a) => a.questionRating!);
           if (ratings.length === 0) return (
             <div className="mt-2 flex items-center gap-2">
-              <span className="text-[10px] text-[#666680] uppercase tracking-wider">Question Rating:</span>
+              <span className="text-xs text-[#666680] uppercase tracking-wider">Question Rating:</span>
               <span className="text-xs text-[#666680]">No ratings yet</span>
             </div>
           );
           const avg = ratings.reduce((s, r) => s + r, 0) / ratings.length;
           return (
             <div className="mt-2 flex items-center gap-2">
-              <span className="text-[10px] text-[#666680] uppercase tracking-wider">Question Rating:</span>
+              <span className="text-xs text-[#666680] uppercase tracking-wider">Question Rating:</span>
               <StarRating value={avg} size="sm" showLabel />
               <span className="text-xs text-[#666680]">({ratings.length} rated)</span>
               <InfoTooltip text="Question rating combines player star ratings with difficulty balance (~50% correct is ideal)." />

@@ -34,7 +34,7 @@ export default function InfoTooltip({ text }: InfoTooltipProps) {
         onMouseLeave={() => setShowTooltip(false)}
         onClick={toggle}
       >
-        <span className="w-5 h-5 rounded-full bg-[#1e3a5f] text-[#a0a0b8] text-[11px] font-bold flex items-center justify-center cursor-help">
+        <span className="w-5 h-5 rounded-full bg-[#1e3a5f] text-[#a0a0b8] text-xs font-bold flex items-center justify-center cursor-help">
           i
         </span>
       </span>

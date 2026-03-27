@@ -200,7 +200,7 @@ export default function NavBar() {
             <span className="text-[#e94560]">BW</span>
             <span className="hidden sm:inline text-white">Bhutto Wisdom</span>
             {session.user.isSuperAdmin && (
-              <span className="text-[10px] font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded ml-2">
+              <span className="text-xs font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded ml-2">
                 SA
               </span>
             )}
@@ -208,7 +208,7 @@ export default function NavBar() {
           {shortSha && (
             <Link
               href="/version"
-              className="text-[10px] font-mono text-[#606080] hover:text-[#a0a0b8] transition-colors ml-1"
+              className="text-xs font-mono text-[#606080] hover:text-[#a0a0b8] transition-colors ml-1"
             >
               {shortSha}
             </Link>

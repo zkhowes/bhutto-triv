@@ -163,10 +163,10 @@ function StepWorkshop({ onNext }: { onNext: () => void }) {
                   className="text-left rounded-lg border border-[#1e3a5f] bg-[#16162a] p-3 hover:border-[#e94560] transition-all"
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] text-[#666680] uppercase">
+                    <span className="text-xs text-[#666680] uppercase">
                       {v.category}
                     </span>
-                    <span className={`text-[10px] font-medium ${difficultyColor(v.difficulty)}`}>
+                    <span className={`text-xs font-medium ${difficultyColor(v.difficulty)}`}>
                       {v.difficulty}
                     </span>
                   </div>
@@ -213,10 +213,10 @@ function StepWorkshop({ onNext }: { onNext: () => void }) {
                   }`}
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] text-[#666680] uppercase">
+                    <span className="text-xs text-[#666680] uppercase">
                       {v.category}
                     </span>
-                    <span className={`text-[10px] font-medium ${difficultyColor(v.difficulty)}`}>
+                    <span className={`text-xs font-medium ${difficultyColor(v.difficulty)}`}>
                       {v.difficulty}
                     </span>
                   </div>
@@ -540,7 +540,7 @@ function StepResults({ onNext }: { onNext: () => void }) {
                 <td className="py-3 px-4">
                   <div className="flex items-center gap-2">
                     <div
-                      className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white"
+                      className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white"
                       style={{ backgroundColor: r.color }}
                     >
                       {r.nickname[0]}
@@ -553,7 +553,7 @@ function StepResults({ onNext }: { onNext: () => void }) {
                       {r.nickname}
                     </span>
                     {r.fastestLap && (
-                      <span className="text-[10px] text-[#fbbf24]" title="Fastest Lap">
+                      <span className="text-xs text-[#fbbf24]" title="Fastest Lap">
                         FL
                       </span>
                     )}

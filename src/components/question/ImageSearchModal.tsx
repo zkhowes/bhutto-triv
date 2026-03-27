@@ -332,7 +332,7 @@ export default function ImageSearchModal({
                             <div className="
                               absolute bottom-0 left-0 right-0 px-2 py-1
                               bg-gradient-to-t from-black/80 to-transparent
-                              text-[10px] text-white/80 truncate
+                              text-xs text-white/80 truncate
                               opacity-0 group-hover:opacity-100 transition-opacity
                             ">
                               Photo by {result.attribution.name}

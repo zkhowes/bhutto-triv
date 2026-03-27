@@ -85,11 +85,11 @@ export default function QuestionPreviewCard({
           {category}
         </span>
         <span
-          className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${difficultyColors[difficulty]}`}
+          className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${difficultyColors[difficulty]}`}
         >
           {difficulty}
         </span>
-        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#1e3a5f] text-[#a0a0b8]">
+        <span className="text-xs px-1.5 py-0.5 rounded-full bg-[#1e3a5f] text-[#a0a0b8]">
           {formatLabels[answerFormat] || answerFormat}
         </span>
       </div>
@@ -171,7 +171,7 @@ export default function QuestionPreviewCard({
               Answer: {correctAnswer}
             </p>
           )}
-          <p className="mt-1 text-[10px] text-[#666680]">
+          <p className="mt-1 text-xs text-[#666680]">
             Closest without going over wins
           </p>
         </div>
@@ -180,7 +180,7 @@ export default function QuestionPreviewCard({
       {answerFormat === "ordering" && orderingItems && orderingItems.length > 0 && (
         <div className={compact ? "" : "mb-1"}>
           {orderingDirection && (
-            <p className="text-[10px] text-[#666680] mb-1">
+            <p className="text-xs text-[#666680] mb-1">
               Order: {orderingDirection}
             </p>
           )}
@@ -194,7 +194,7 @@ export default function QuestionPreviewCard({
               </div>
             ))}
           </div>
-          <p className="mt-1 text-[10px] text-[#666680]">
+          <p className="mt-1 text-xs text-[#666680]">
             Most correct positions wins
           </p>
         </div>
