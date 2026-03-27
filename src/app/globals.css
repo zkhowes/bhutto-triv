@@ -122,27 +122,31 @@
   }
 }
 
-/* Mobile accessibility: bump small text sizes for readability on phones.
-   text-xs (12px → 14px), text-sm (14px → 16px) on screens < 640px.
+/* Mobile accessibility: aggressively bump text for readability on phones.
+   Minimum readable size on mobile is ~15px for body text.
+   text-xs (12px → 16px), text-sm (14px → 17px) on screens < 640px.
    Desktop stays at Tailwind defaults. */
 @media (max-width: 639px) {
-  .text-xs {
-    font-size: 0.875rem !important;
-    line-height: 1.25rem !important;
+  html {
+    font-size: 18px;
   }
-  .text-sm {
+  .text-xs, .text-\[10px\], .text-\[11px\] {
     font-size: 1rem !important;
     line-height: 1.5rem !important;
   }
+  .text-sm {
+    font-size: 1.0625rem !important;
+    line-height: 1.625rem !important;
+  }
   .table-header {
-    font-size: 0.875rem !important;
+    font-size: 1rem !important;
   }
   .badge, .badge-correct, .badge-incorrect, .badge-pending, .badge-absent {
-    font-size: 0.875rem !important;
-    padding: 0.25rem 0.75rem !important;
+    font-size: 1rem !important;
+    padding: 0.375rem 0.875rem !important;
   }
   .stat-label {
-    font-size: 0.875rem !important;
+    font-size: 1rem !important;
   }
 }
 
