@@ -196,10 +196,12 @@ export async function GET(
   }
 
   // Compute at-bat player's historical avg question rating + success rate (cross-league via userId)
+  // Only compute during betting phases when this info is shown to players
+  const isBettingPhase = round.status === "question_submitted" || round.status === "category_revealed";
   let atBatAvgRating: number | null = null;
   let atBatRatingCount = 0;
   let atBatSuccessRate: number | null = null;
-  if (round.atBatPlayerId) {
+  if (isBettingPhase && round.atBatPlayerId) {
     // Look up the at-bat player's userId to aggregate cross-league
     const atBatPlayer = await prisma.leaguePlayer.findUnique({
       where: { id: round.atBatPlayerId },
@@ -320,6 +322,6 @@ export async function GET(
     flagReview: flagReview || null,
     flagUsed: currentPlayerState?.flagUsed ?? false,
     flagWindowOpen: !laterGradedRound,
-    activePlayerCount: round.game.playerStates.filter((ps) => !ps.isEliminated).length,
+    activePlayerCount: round.game.playerStates.filter((ps) => !ps.leaguePlayer.isPaused).length,
   });
 }

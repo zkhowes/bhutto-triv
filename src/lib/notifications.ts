@@ -213,8 +213,8 @@ export async function notifyNewQuestion(roundId: string): Promise<void> {
         ps.leaguePlayer.isActive
     );
 
-    for (const ps of recipients) {
-      await createNotification({
+    await Promise.all(recipients.map((ps) =>
+      createNotification({
         userId: ps.leaguePlayer.userId,
         leagueId,
         gameId: round.gameId,
@@ -224,8 +224,8 @@ export async function notifyNewQuestion(roundId: string): Promise<void> {
         message: "A new trivia question has been submitted. Place your bet and answer before the deadline!",
         destinationUrl: `/games/${round.gameId}?round=${roundId}`,
         phoneNumber: ps.leaguePlayer.user.phoneNumber ?? undefined,
-      });
-    }
+      })
+    ));
   } catch (err) {
     console.error("[Notifications] notifyNewQuestion failed:", err);
   }
@@ -307,8 +307,8 @@ export async function notifyRoundResults(roundId: string): Promise<void> {
       (ps) => !ps.leaguePlayer.isFake && ps.leaguePlayer.isActive
     );
 
-    for (const ps of recipients) {
-      await createNotification({
+    await Promise.all(recipients.map((ps) =>
+      createNotification({
         userId: ps.leaguePlayer.userId,
         leagueId,
         gameId: round.gameId,
@@ -318,8 +318,8 @@ export async function notifyRoundResults(roundId: string): Promise<void> {
         message: "The round has been scored. Check how you placed!",
         destinationUrl: `/games/${round.gameId}?round=${roundId}`,
         phoneNumber: ps.leaguePlayer.user.phoneNumber ?? undefined,
-      });
-    }
+      })
+    ));
   } catch (err) {
     console.error("[Notifications] notifyRoundResults failed:", err);
   }
@@ -414,8 +414,8 @@ export async function notifyRoundClosedByCommissioner(
         ps.leaguePlayer.isActive
     );
 
-    for (const ps of recipients) {
-      await createNotification({
+    await Promise.all(recipients.map((ps) =>
+      createNotification({
         userId: ps.leaguePlayer.userId,
         leagueId,
         gameId: round.gameId,
@@ -425,8 +425,8 @@ export async function notifyRoundClosedByCommissioner(
         message: `Commissioner closed round ${round.number}.${absentText} New question time!`,
         destinationUrl,
         phoneNumber: ps.leaguePlayer.user.phoneNumber ?? undefined,
-      });
-    }
+      })
+    ));
   } catch (err) {
     console.error("[Notifications] notifyRoundClosedByCommissioner failed:", err);
   }
@@ -455,8 +455,8 @@ export async function notifyFlagThrown(
         ps.leaguePlayer.isActive
     );
 
-    for (const ps of recipients) {
-      await createNotification({
+    await Promise.all(recipients.map((ps) =>
+      createNotification({
         userId: ps.leaguePlayer.userId,
         leagueId,
         gameId: round.gameId,
@@ -466,8 +466,8 @@ export async function notifyFlagThrown(
         message: `${flaggerName} is contesting the round. Cast your vote!`,
         destinationUrl: `/games/${round.gameId}?round=${roundId}`,
         phoneNumber: ps.leaguePlayer.user.phoneNumber ?? undefined,
-      });
-    }
+      })
+    ));
   } catch (err) {
     console.error("[Notifications] notifyFlagThrown failed:", err);
   }
@@ -500,8 +500,8 @@ export async function notifyFlagResolved(
       (ps) => !ps.leaguePlayer.isFake && ps.leaguePlayer.isActive
     );
 
-    for (const ps of recipients) {
-      await createNotification({
+    await Promise.all(recipients.map((ps) =>
+      createNotification({
         userId: ps.leaguePlayer.userId,
         leagueId,
         gameId: round.gameId,
@@ -511,8 +511,8 @@ export async function notifyFlagResolved(
         message,
         destinationUrl: `/games/${round.gameId}?round=${roundId}`,
         phoneNumber: ps.leaguePlayer.user.phoneNumber ?? undefined,
-      });
-    }
+      })
+    ));
   } catch (err) {
     console.error("[Notifications] notifyFlagResolved failed:", err);
   }

@@ -128,10 +128,10 @@ export async function initializeGame(
     if (i === 0) firstRoundId = round.id;
   }
 
-  // Notify the first at-bat and on-deck players
+  // Notify the first at-bat and on-deck players (fire-and-forget)
   if (firstRoundId) {
-    await notifyAtBat(firstRoundId);
-    await notifyOnDeck(firstRoundId);
+    notifyAtBat(firstRoundId).catch(console.error);
+    notifyOnDeck(firstRoundId).catch(console.error);
   }
 
   return game.id;
@@ -241,8 +241,8 @@ export async function submitQuestion(
     data: { status: ROUND_STATUS.QUESTION_SUBMITTED },
   });
 
-  // Notify all other players that a new question is ready
-  await notifyNewQuestion(roundId);
+  // Notify all other players that a new question is ready (fire-and-forget)
+  notifyNewQuestion(roundId).catch(console.error);
 
   return question.id;
 }
@@ -457,8 +457,8 @@ export async function submitAnswer(
           where: { id: roundId },
           data: { status: ROUND_STATUS.CLOSED },
         });
-        // Notify at-bat player that all answers are in and it's time to grade
-        await notifyAllAnswersIn(roundId);
+        // Notify at-bat player that all answers are in and it's time to grade (fire-and-forget)
+        notifyAllAnswersIn(roundId).catch(console.error);
       }
     }
   }
@@ -764,8 +764,8 @@ export async function closeRound(roundId: string): Promise<void> {
     data: { status: ROUND_STATUS.GRADED, funFact, questionComposite },
   });
 
-  // Notify all players of round results
-  await notifyRoundResults(roundId);
+  // Notify all players of round results (fire-and-forget)
+  notifyRoundResults(roundId).catch(console.error);
 
   // Check if game should end (all players at 0 or no remaining rounds)
   const remainingActiveRounds = game.rounds.filter(
@@ -844,8 +844,8 @@ export async function closeRound(roundId: string): Promise<void> {
         data: { status: ROUND_STATUS.AWAITING_QUESTION },
       });
       // Notify the new at-bat and on-deck players
-      await notifyAtBat(nextRound.id);
-      await notifyOnDeck(nextRound.id);
+      notifyAtBat(nextRound.id).catch(console.error);
+      notifyOnDeck(nextRound.id).catch(console.error);
     }
   }
 }
@@ -962,8 +962,8 @@ export async function skipPlayerTurn(
     }
 
     // Notify the player now at bat for the current (reordered) round
-    await notifyAtBat(round.id);
-    await notifyOnDeck(round.id);
+    notifyAtBat(round.id).catch(console.error);
+    notifyOnDeck(round.id).catch(console.error);
 
     return { cancelled: false };
   } else {
@@ -1030,8 +1030,8 @@ export async function skipPlayerTurn(
           where: { id: nextPending.id },
           data: { status: ROUND_STATUS.AWAITING_QUESTION },
         });
-        await notifyAtBat(nextPending.id);
-        await notifyOnDeck(nextPending.id);
+        notifyAtBat(nextPending.id).catch(console.error);
+        notifyOnDeck(nextPending.id).catch(console.error);
       }
     }
 
@@ -1190,7 +1190,7 @@ export async function throwFlag(
   const flaggerName =
     playerState.leaguePlayer.user.nickname || "A player";
 
-  await notifyFlagThrown(roundId, leaguePlayerId, flaggerName);
+  notifyFlagThrown(roundId, leaguePlayerId, flaggerName).catch(console.error);
 
   return { flagReviewId: flagReview.id };
 }
@@ -1464,8 +1464,8 @@ async function resolveFlagAgree(flagReviewId: string): Promise<void> {
         where: { id: nextPending.id },
         data: { status: ROUND_STATUS.AWAITING_QUESTION },
       });
-      await notifyAtBat(nextPending.id);
-      await notifyOnDeck(nextPending.id);
+      notifyAtBat(nextPending.id).catch(console.error);
+      notifyOnDeck(nextPending.id).catch(console.error);
     }
   }
 
@@ -1474,7 +1474,7 @@ async function resolveFlagAgree(flagReviewId: string): Promise<void> {
     (ps) => ps.leaguePlayerId === flagReview.flaggedById
   );
   const flaggerName = flaggerState?.leaguePlayer.user.nickname || "A player";
-  await notifyFlagResolved(round.id, "agreed", flaggerName);
+  notifyFlagResolved(round.id, "agreed", flaggerName).catch(console.error);
 }
 
 /**
@@ -1559,8 +1559,8 @@ async function resolveFlagDisagree(flagReviewId: string): Promise<void> {
         where: { id: pausedRound.id },
         data: { status: ROUND_STATUS.AWAITING_QUESTION },
       });
-      await notifyAtBat(pausedRound.id);
-      await notifyOnDeck(pausedRound.id);
+      notifyAtBat(pausedRound.id).catch(console.error);
+      notifyOnDeck(pausedRound.id).catch(console.error);
     }
   }
 
@@ -1592,7 +1592,7 @@ async function resolveFlagDisagree(flagReviewId: string): Promise<void> {
 
   // 6. Notify
   const flaggerName = flaggerState?.leaguePlayer.user.nickname || "A player";
-  await notifyFlagResolved(round.id, "disagreed", flaggerName);
+  notifyFlagResolved(round.id, "disagreed", flaggerName).catch(console.error);
 }
 
 /**

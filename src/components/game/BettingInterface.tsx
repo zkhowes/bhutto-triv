@@ -42,6 +42,7 @@ export default function BettingInterface({
 }: BettingInterfaceProps) {
   const [betAmount, setBetAmount] = useState(1);
   const [placing, setPlacing] = useState(false);
+  const [betPlaced, setBetPlaced] = useState(false);
   const [error, setError] = useState("");
   const [blindBetActive, setBlindBetActive] = useState(false);
   const [showBlindConfirm, setShowBlindConfirm] = useState(false);
@@ -81,10 +82,10 @@ export default function BettingInterface({
       if (useBlindBet) {
         setBlindBetActive(true);
       }
+      setBetPlaced(true);
       onBetPlaced();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to place bet");
-    } finally {
       setPlacing(false);
       setShowBlindConfirm(false);
     }
@@ -227,14 +228,16 @@ export default function BettingInterface({
         <div className="flex gap-2">
           <button
             onClick={() => handlePlaceBet(false)}
-            disabled={placing || betAmount < 1 || showBlindConfirm}
+            disabled={placing || betPlaced || betAmount < 1 || showBlindConfirm}
             className={`flex-1 text-lg font-bold py-3 rounded-lg transition-colors ${
               betAmount === maxPoints
                 ? "btn-gold"
                 : "btn-primary"
             }`}
           >
-            {placing && !showBlindConfirm
+            {betPlaced
+              ? "Bet Placed!"
+              : placing && !showBlindConfirm
               ? "Placing Bet..."
               : betAmount === maxPoints
                 ? `Go All In! Bet ${betAmount} point${betAmount === 1 ? "" : "s"}`
