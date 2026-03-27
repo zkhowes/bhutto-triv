@@ -206,7 +206,7 @@ export default function BettingInterface({
         </div>
       )}
 
-      {canBlindBet && !showBlindConfirm ? (
+      {canBlindBet && !categoryRevealed && !showBlindConfirm ? (
         <div className="flex gap-2">
           <button
             onClick={handleBlindBetClick}

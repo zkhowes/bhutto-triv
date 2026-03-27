@@ -579,6 +579,10 @@ export async function assessQuestionDifficulty(
     overallCorrectRate: number;
     categoryCorrectRates: Record<string, number>;
     category: string;
+    answerFormat?: string;
+    correctAnswer?: string;
+    correctOption?: string;
+    options?: { optionA?: string; optionB?: string; optionC?: string; optionD?: string };
   }
 ): Promise<{ difficulty: "easy" | "medium" | "hard"; reasoning: string }> {
   if (!process.env.ANTHROPIC_API_KEY) {
@@ -588,6 +592,23 @@ export async function assessQuestionDifficulty(
   try {
     const anthropic = getClient();
     const categoryRate = leagueStats.categoryCorrectRates[leagueStats.category];
+
+    // Build answer context so the AI can assess difficulty properly
+    let answerContext = "";
+    if (leagueStats.answerFormat) {
+      answerContext += `\nAnswer format: ${leagueStats.answerFormat}`;
+    }
+    if (leagueStats.answerFormat === "multiple_choice" && leagueStats.options) {
+      const opts = leagueStats.options;
+      answerContext += `\nOptions: A) ${opts.optionA} B) ${opts.optionB} C) ${opts.optionC} D) ${opts.optionD}`;
+      if (leagueStats.correctOption) answerContext += `\nCorrect: ${leagueStats.correctOption}`;
+    } else if (leagueStats.answerFormat === "price_is_right" && leagueStats.correctAnswer) {
+      answerContext += `\nCorrect answer (numeric): ${leagueStats.correctAnswer}`;
+      answerContext += `\nPlayers must guess closest without going over — consider how guessable the number is`;
+    } else if (leagueStats.correctAnswer) {
+      answerContext += `\nCorrect answer: ${leagueStats.correctAnswer}`;
+    }
+
     const response = await anthropic.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 300,
@@ -597,7 +618,7 @@ export async function assessQuestionDifficulty(
           content: `You are assessing the difficulty of a trivia question for a competitive trivia game.
 
 Question: ${question}
-Category: ${leagueStats.category}
+Category: ${leagueStats.category}${answerContext}
 
 League stats:
 - Overall correct answer rate: ${Math.round(leagueStats.overallCorrectRate * 100)}%
@@ -607,21 +628,32 @@ Assess whether this question is easy, medium, or hard relative to typical trivia
 - How obscure or specialized the knowledge is
 - Whether there are common misconceptions that might trip people up
 - The league's historical performance in this category
+- For numeric/price-is-right questions: how likely players are to know the right ballpark
 
-Respond with JSON only:
-{"difficulty": "easy"|"medium"|"hard", "reasoning": "1-2 sentence explanation"}`,
+Respond with ONLY a JSON object, no other text:
+{"difficulty": "easy", "reasoning": "..."}
+or
+{"difficulty": "medium", "reasoning": "..."}
+or
+{"difficulty": "hard", "reasoning": "..."}`,
         },
       ],
     });
 
     const text =
       response.content[0].type === "text" ? response.content[0].text : "";
-    const parsed = JSON.parse(text);
+    // Extract JSON from response (handle potential markdown wrapping)
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      return { difficulty: "medium", reasoning: "Could not parse AI response" };
+    }
+    const parsed = JSON.parse(jsonMatch[0]);
     return {
       difficulty: parsed.difficulty,
       reasoning: parsed.reasoning,
     };
-  } catch {
+  } catch (e) {
+    console.error("Difficulty assessment error:", e);
     return { difficulty: "medium", reasoning: "Could not assess difficulty" };
   }
 }

@@ -297,6 +297,10 @@ export default function QuestionSubmitForm({
           category,
           questionText: questionText.trim(),
           leagueId,
+          answerFormat,
+          correctAnswer: correctAnswer.trim() || undefined,
+          correctOption: correctOption || undefined,
+          options: answerFormat === "multiple_choice" ? { optionA, optionB, optionC, optionD } : undefined,
         }),
       });
       const data = await res.json();
@@ -375,7 +379,7 @@ export default function QuestionSubmitForm({
             onClick={() => setShowWorkshop(!showWorkshop)}
             className="btn-secondary text-sm"
           >
-            {showWorkshop ? "Hide Workshop" : "AI Workshop"}
+            {showWorkshop ? "Hide Workshop" : "Question Workshop"}
           </button>
         </div>
 
@@ -739,13 +743,25 @@ export default function QuestionSubmitForm({
               <label className="block text-sm font-medium text-[#a0a0b8] mb-1">
                 Direction *
               </label>
-              <input
-                type="text"
+              <select
                 value={orderingDirection}
                 onChange={(e) => setOrderingDirection(e.target.value)}
                 className="input-field"
-                placeholder='e.g. "most to least", "earliest to latest"'
-              />
+              >
+                <option value="">Select direction...</option>
+                <option value="most to least">Most to least</option>
+                <option value="least to most">Least to most</option>
+                <option value="earliest to latest">Earliest to latest</option>
+                <option value="latest to earliest">Latest to earliest</option>
+                <option value="largest to smallest">Largest to smallest</option>
+                <option value="smallest to largest">Smallest to largest</option>
+                <option value="oldest to newest">Oldest to newest</option>
+                <option value="newest to oldest">Newest to oldest</option>
+                <option value="highest to lowest">Highest to lowest</option>
+                <option value="lowest to highest">Lowest to highest</option>
+                <option value="northernmost to southernmost">Northernmost to southernmost</option>
+                <option value="alphabetical (A to Z)">Alphabetical (A to Z)</option>
+              </select>
             </div>
             <p className="text-xs text-[#666680]">
               Enter items in the correct order (1st = position 1).

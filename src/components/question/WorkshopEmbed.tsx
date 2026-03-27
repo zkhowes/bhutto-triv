@@ -17,6 +17,9 @@ interface Draft {
   correctOption: string | null;
   correctAnswer: string | null;
   acceptableAnswers: string | null;
+  orderingItems: string | null;
+  orderingCorrectOrder: string | null;
+  orderingDirection: string | null;
   useOnNextRound: boolean;
   updatedAt: string;
 }
@@ -254,6 +257,10 @@ export default function WorkshopEmbed({ onSelectQuestion }: WorkshopEmbedProps) 
       acceptableAnswers: draft.acceptableAnswers
         ? (() => { try { const a = JSON.parse(draft.acceptableAnswers!); return Array.isArray(a) ? a : undefined; } catch { return undefined; } })()
         : undefined,
+      orderingItems: draft.orderingItems
+        ? (() => { try { const a = JSON.parse(draft.orderingItems!); return Array.isArray(a) ? a : undefined; } catch { return undefined; } })()
+        : undefined,
+      orderingDirection: draft.orderingDirection || undefined,
     });
   };
 

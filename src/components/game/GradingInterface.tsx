@@ -293,7 +293,12 @@ export default function GradingInterface({
           const ratings = answers
             .filter((a) => a.leaguePlayerId !== atBatPlayerId && a.questionRating != null)
             .map((a) => a.questionRating!);
-          if (ratings.length === 0) return null;
+          if (ratings.length === 0) return (
+            <div className="mt-2 flex items-center gap-2">
+              <span className="text-[10px] text-[#666680] uppercase tracking-wider">Question Rating:</span>
+              <span className="text-xs text-[#666680]">No ratings yet</span>
+            </div>
+          );
           const avg = ratings.reduce((s, r) => s + r, 0) / ratings.length;
           return (
             <div className="mt-2 flex items-center gap-2">

@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Rate limit exceeded. Try again shortly." }, { status: 429 });
   }
 
-  const { category, questionText, leagueId } = await req.json();
+  const { category, questionText, leagueId, answerFormat, correctAnswer, correctOption, options } = await req.json();
 
   if (!category || !questionText) {
     return NextResponse.json(
@@ -74,6 +74,10 @@ export async function POST(req: NextRequest) {
     overallCorrectRate,
     categoryCorrectRates,
     category,
+    answerFormat,
+    correctAnswer,
+    correctOption,
+    options,
   });
 
   return NextResponse.json(result);
