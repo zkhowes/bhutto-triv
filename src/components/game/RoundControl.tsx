@@ -256,12 +256,12 @@ export default function RoundControl({
 
         {/* Question rating — left-aligned below answer */}
         {round.questionScore?.composite != null && (
-          <div className="mt-2 flex items-center gap-2">
-            <span className="text-[10px] text-[#666680] uppercase tracking-wider">Question Rating:</span>
-            <span className="text-sm text-[#fbbf24] font-bold">{round.questionScore.composite.toFixed(1)}</span>
-            <span className="text-xs text-[#666680]">/ 5</span>
+          <div className="mt-2 flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-[#a0a0b8] uppercase tracking-wider font-semibold">Question Rating:</span>
+            <span className="text-base text-[#fbbf24] font-bold">{round.questionScore.composite.toFixed(1)}</span>
+            <span className="text-sm text-[#666680]">/ 5</span>
             {round.questionScore.successRate != null && (
-              <span className="text-xs text-[#666680]">
+              <span className="text-sm text-[#a0a0b8]">
                 {Math.round(round.questionScore.successRate * 100)}% correct
               </span>
             )}

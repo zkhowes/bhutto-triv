@@ -130,9 +130,14 @@
   html {
     font-size: 18px;
   }
-  .text-xs, .text-\[10px\], .text-\[11px\] {
+  .text-xs {
     font-size: 1rem !important;
     line-height: 1.5rem !important;
+  }
+  /* Catch Tailwind arbitrary tiny sizes */
+  [class*="text-[10px]"], [class*="text-[11px]"], [class*="text-[12px]"] {
+    font-size: 0.875rem !important;
+    line-height: 1.25rem !important;
   }
   .text-sm {
     font-size: 1.0625rem !important;
