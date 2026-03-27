@@ -122,6 +122,30 @@
   }
 }
 
+/* Mobile accessibility: bump small text sizes for readability on phones.
+   text-xs (12px → 14px), text-sm (14px → 16px) on screens < 640px.
+   Desktop stays at Tailwind defaults. */
+@media (max-width: 639px) {
+  .text-xs {
+    font-size: 0.875rem !important;
+    line-height: 1.25rem !important;
+  }
+  .text-sm {
+    font-size: 1rem !important;
+    line-height: 1.5rem !important;
+  }
+  .table-header {
+    font-size: 0.875rem !important;
+  }
+  .badge, .badge-correct, .badge-incorrect, .badge-pending, .badge-absent {
+    font-size: 0.875rem !important;
+    padding: 0.25rem 0.75rem !important;
+  }
+  .stat-label {
+    font-size: 0.875rem !important;
+  }
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
