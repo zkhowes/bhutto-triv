@@ -2,7 +2,7 @@
 
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import NavBar from "@/components/layout/NavBar";
 import ChartCard from "@/components/admin/ChartCard";
 
@@ -136,14 +136,9 @@ export default function AdminPage() {
   const [testPhone, setTestPhone] = useState("");
   const [testAppend, setTestAppend] = useState("");
   const [testStatus, setTestStatus] = useState<Record<string, "idle" | "sending" | "sent" | "failed">>({});
-  const [testTabPassword, setTestTabPassword] = useState("");
 
-  // Password authentication state
+  // Admin authentication state
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
-  const [passwordInput, setPasswordInput] = useState("");
-  const [passwordError, setPasswordError] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const adminPasswordRef = useRef<string>("");
 
   // Search state
   const [searchQuery, setSearchQuery] = useState("");
@@ -197,16 +192,9 @@ export default function AdminPage() {
     if (status === "unauthenticated") router.push("/");
   }, [status, router]);
 
-  // Check if already authenticated as super admin
+  // Check if current user is the admin
   useEffect(() => {
     if (session?.user) {
-      // Restore saved password so test-sms works after page reload
-      const saved = sessionStorage.getItem("adminPw");
-      if (saved) {
-        adminPasswordRef.current = saved;
-        setTestTabPassword(saved);
-      }
-
       fetch("/api/admin/auth")
         .then((r) => r.json())
         .then((data) => {
@@ -227,7 +215,6 @@ export default function AdminPage() {
         .then(setData)
         .catch(() => {
           setIsAuthenticated(false);
-          setPasswordError("Session expired. Please re-authenticate.");
         })
         .finally(() => setLoading(false));
     }
@@ -401,36 +388,6 @@ export default function AdminPage() {
     }
   };
 
-  const handlePasswordSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    setPasswordError("");
-
-    try {
-      const res = await fetch("/api/admin/auth", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: passwordInput }),
-      });
-
-      const data = await res.json();
-
-      if (res.ok && data.authenticated) {
-        setIsAuthenticated(true);
-        adminPasswordRef.current = passwordInput;
-        sessionStorage.setItem("adminPw", passwordInput);
-        setTestTabPassword(passwordInput);
-        setPasswordInput("");
-      } else {
-        setPasswordError(data.error || "Incorrect password");
-      }
-    } catch (error) {
-      setPasswordError("An error occurred. Please try again.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   if (status === "loading" || isAuthenticated === null) {
     return (
       <div className="min-h-screen">
@@ -442,55 +399,20 @@ export default function AdminPage() {
     );
   }
 
-  // Show password form if not authenticated
+  // Show access denied if not the admin user
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen">
         <NavBar />
         <div className="flex items-center justify-center py-20">
           <div className="w-full max-w-md px-4">
-            <div className="bg-[#1e3a5f] rounded-lg p-8 border border-[#2a4a6f]">
+            <div className="bg-[#1e3a5f] rounded-lg p-8 border border-[#2a4a6f] text-center">
               <h1 className="text-2xl font-bold text-amber-400 mb-2">
-                Super Admin Access
+                Access Denied
               </h1>
-              <p className="text-[#a0a0b8] text-sm mb-6">
-                Enter the super admin password to access the dashboard.
+              <p className="text-[#a0a0b8] text-sm">
+                You don&apos;t have permission to view this page.
               </p>
-
-              <form onSubmit={handlePasswordSubmit}>
-                <div className="mb-4">
-                  <label
-                    htmlFor="password"
-                    className="block text-sm font-medium text-[#a0a0b8] mb-2"
-                  >
-                    Password
-                  </label>
-                  <input
-                    id="password"
-                    type="password"
-                    value={passwordInput}
-                    onChange={(e) => setPasswordInput(e.target.value)}
-                    className="w-full px-4 py-2 bg-[#0d1b2a] border border-[#2a4a6f] rounded-lg text-white placeholder-[#666680] focus:outline-none focus:border-amber-500"
-                    placeholder="Enter password"
-                    required
-                    disabled={isSubmitting}
-                  />
-                </div>
-
-                {passwordError && (
-                  <div className="mb-4 p-3 bg-red-500/10 border border-red-500/50 rounded-lg text-red-400 text-sm">
-                    {passwordError}
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="w-full bg-amber-500 hover:bg-amber-600 text-black font-semibold py-2 px-4 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isSubmitting ? "Verifying..." : "Access Dashboard"}
-                </button>
-              </form>
             </div>
           </div>
         </div>
@@ -1293,23 +1215,6 @@ export default function AdminPage() {
                 Sends a real SMS via Mosio. Notifications are not recorded in the database.
               </p>
 
-              {/* Admin password */}
-              <div className="mb-4">
-                <label className="block text-xs font-medium text-[#a0a0b8] uppercase tracking-wider mb-1.5">
-                  Admin password
-                </label>
-                <input
-                  type="password"
-                  value={testTabPassword}
-                  onChange={(e) => {
-                    setTestTabPassword(e.target.value);
-                    sessionStorage.setItem("adminPw", e.target.value);
-                  }}
-                  placeholder="Enter admin password"
-                  className="w-full px-3 py-2 bg-[#0f0f23] border border-[#2a4a6f] rounded-lg text-white placeholder-[#666680] text-sm focus:outline-none focus:border-[#e94560]"
-                />
-              </div>
-
               {/* Phone number */}
               <div className="mb-4">
                 <label className="block text-xs font-medium text-[#a0a0b8] uppercase tracking-wider mb-1.5">
@@ -1365,14 +1270,14 @@ export default function AdminPage() {
                         </div>
                       </div>
                       <button
-                        disabled={s === "sending" || !testPhone.trim() || !testTabPassword.trim()}
+                        disabled={s === "sending" || !testPhone.trim()}
                         onClick={async () => {
                           setTestStatus((prev) => ({ ...prev, [type]: "sending" }));
                           try {
                             const res = await fetch("/api/admin/test-sms", {
                               method: "POST",
                               headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ to: testPhone, type, appendText: testAppend, adminPassword: testTabPassword }),
+                              body: JSON.stringify({ to: testPhone, type, appendText: testAppend }),
                             });
                             const data = await res.json();
                             setTestStatus((prev) => ({ ...prev, [type]: data.error ? "failed" : "sent" }));
@@ -1393,7 +1298,7 @@ export default function AdminPage() {
                             ? "bg-red-500/20 border-red-500/50 text-red-400"
                             : s === "sending"
                             ? "bg-[#1e3a5f] border-[#2a4a6f] text-[#666680] cursor-wait"
-                            : (!testPhone.trim() || !testTabPassword.trim())
+                            : !testPhone.trim()
                             ? "bg-[#1e3a5f] border-[#2a4a6f] text-[#666680] cursor-not-allowed"
                             : "bg-[#e94560]/10 border-[#e94560]/40 text-[#e94560] hover:bg-[#e94560]/20"
                         }`}
