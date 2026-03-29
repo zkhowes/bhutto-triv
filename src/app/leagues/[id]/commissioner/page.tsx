@@ -25,6 +25,7 @@ interface LeagueInfo {
   id: string;
   name: string;
   type: string;
+  maxPlayers: number;
   gamesPerSeason: number;
   dailyDeadline: string;
   deadlineTimezone: string;
@@ -227,6 +228,15 @@ export default function CommissionerPage() {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ notificationMode: mode }),
+    });
+    await fetchLeague();
+  };
+
+  const saveMaxPlayers = async (value: number) => {
+    await fetch(`/api/leagues/${leagueId}/settings`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ maxPlayers: value }),
     });
     await fetchLeague();
   };
@@ -709,6 +719,31 @@ export default function CommissionerPage() {
               </p>
             )}
             <div className="space-y-3 text-sm">
+              <div className="flex justify-between items-center py-2 border-b border-[#1e3a5f]">
+                <div>
+                  <span className="text-[#a0a0b8]">Max Players</span>
+                  <span className="text-xs text-[#666680] block mt-0.5">
+                    {league.players.length} of {league.maxPlayers} slots filled
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => saveMaxPlayers(Math.max(2, league.maxPlayers - 1))}
+                    disabled={league.maxPlayers <= league.players.length}
+                    className="w-7 h-7 rounded bg-[#0d1b2a] border border-[#2a4a6f] text-white text-sm font-medium disabled:opacity-30 disabled:cursor-not-allowed hover:border-[#4fc3f7]"
+                  >
+                    -
+                  </button>
+                  <span className="text-white w-6 text-center font-medium">{league.maxPlayers}</span>
+                  <button
+                    onClick={() => saveMaxPlayers(Math.min(10, league.maxPlayers + 1))}
+                    disabled={league.maxPlayers >= 10}
+                    className="w-7 h-7 rounded bg-[#0d1b2a] border border-[#2a4a6f] text-white text-sm font-medium disabled:opacity-30 disabled:cursor-not-allowed hover:border-[#4fc3f7]"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
               <div className="flex justify-between py-2 border-b border-[#1e3a5f]">
                 <span className="text-[#a0a0b8]">Games per Season</span>
                 <span className="text-white">{league.gamesPerSeason}</span>

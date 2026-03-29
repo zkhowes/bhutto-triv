@@ -36,15 +36,12 @@ export async function PUT(
     },
   });
 
-  if (activeSeason) {
-    return NextResponse.json(
-      { error: "Settings can only be changed between seasons" },
-      { status: 400 }
-    );
-  }
-
   const body = await req.json();
-  const allowedFields = [
+
+  // Fields that can be changed anytime (even during a season)
+  const alwaysAllowedFields = ["maxPlayers"];
+  // Fields that require no active season
+  const seasonLockedFields = [
     "gamesPerSeason",
     "dailyDeadline",
     "deadlineTimezone",
@@ -55,9 +52,11 @@ export async function PUT(
     "absenteePenaltyType",
     "lightningMode",
   ];
+  const allowedFields = [...alwaysAllowedFields, ...seasonLockedFields];
 
   // Validate field types
   const fieldValidators: Record<string, (v: unknown) => boolean> = {
+    maxPlayers: (v) => typeof v === "number" && Number.isInteger(v) && v >= 2 && v <= 10,
     gamesPerSeason: (v) => typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= 50,
     dailyDeadline: (v) => typeof v === "string" && /^\d{2}:\d{2}$/.test(v),
     deadlineTimezone: (v) => typeof v === "string" && v.length <= 50,
@@ -72,6 +71,13 @@ export async function PUT(
   const updateData: Record<string, unknown> = {};
   for (const field of allowedFields) {
     if (body[field] !== undefined) {
+      // Block season-locked fields during active season
+      if (activeSeason && seasonLockedFields.includes(field)) {
+        return NextResponse.json(
+          { error: "Settings can only be changed between seasons" },
+          { status: 400 }
+        );
+      }
       const validator = fieldValidators[field];
       if (validator && !validator(body[field])) {
         return NextResponse.json({ error: `Invalid value for ${field}` }, { status: 400 });
