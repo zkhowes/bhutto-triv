@@ -32,7 +32,7 @@ export default function ProfilePage() {
 }
 
 function ProfilePageContent() {
-  const { data: session, status } = useSession();
+  const { data: session, status, update: updateSession } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
   const returnTo = searchParams.get("returnTo");
@@ -144,6 +144,9 @@ function ProfilePageContent() {
       if (!res.ok) {
         throw new Error("Failed to save profile");
       }
+
+      // Refresh the session so profileComplete is updated before redirect
+      await updateSession();
 
       router.push(returnTo || "/dashboard");
     } catch {
