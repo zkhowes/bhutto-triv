@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { notifyAboutToBeSkipped } from "@/lib/notifications";
+import { notifyAboutToBeSkipped, notifyActionReminder } from "@/lib/notifications";
 
 /**
  * Vercel Cron Job — runs every 15 minutes
- * Fires "You're about to be skipped" notification to the last player
- * without a bet+answer when a round's deadline is within 30–90 minutes.
+ *
+ * 1. "About to be skipped" — last player without bet+answer, deadline 30–90 min away
+ * 2. "Action reminder" — round stale 24+ hours, reminds whoever is blocking progress
  */
 export async function GET(request: NextRequest) {
   // Authenticate cron requests — always require secret
@@ -19,6 +20,10 @@ export async function GET(request: NextRequest) {
   }
 
   const now = new Date();
+  let notificationsSent = 0;
+
+  // ─── 1. About to be skipped (existing) ──────────────────────────────────────
+
   const windowStart = new Date(now.getTime() + 30 * 60 * 1000);  // 30 min from now
   const windowEnd = new Date(now.getTime() + 90 * 60 * 1000);    // 90 min from now
 
@@ -45,8 +50,6 @@ export async function GET(request: NextRequest) {
       },
     },
   });
-
-  let notificationsSent = 0;
 
   for (const round of approachingRounds) {
     // Find players who haven't completed both bet+answer
@@ -77,9 +80,87 @@ export async function GET(request: NextRequest) {
     notificationsSent++;
   }
 
+  // ─── 2. 24-hour action reminders ────────────────────────────────────────────
+
+  const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+  // 2a. Awaiting question — at-bat player hasn't submitted after 24h
+  const staleAwaitingQuestion = await prisma.round.findMany({
+    where: {
+      status: "awaiting_question",
+      updatedAt: { lte: twentyFourHoursAgo },
+      game: { status: "active" },
+    },
+    select: { id: true, atBatPlayerId: true },
+    take: 50,
+  });
+
+  for (const round of staleAwaitingQuestion) {
+    if (!round.atBatPlayerId) continue;
+    await notifyActionReminder(round.id, round.atBatPlayerId, "question");
+    notificationsSent++;
+  }
+
+  // 2b. Question submitted / category revealed — players haven't answered after 24h
+  const staleAwaitingAnswers = await prisma.round.findMany({
+    where: {
+      status: { in: ["question_submitted", "category_revealed"] },
+      updatedAt: { lte: twentyFourHoursAgo },
+      game: { status: "active" },
+    },
+    include: {
+      answers: {
+        select: { leaguePlayerId: true, betPlacedAt: true, answeredAt: true },
+      },
+      game: {
+        include: {
+          playerStates: {
+            where: { isEliminated: false },
+            select: { leaguePlayerId: true },
+          },
+        },
+      },
+    },
+    take: 50,
+  });
+
+  for (const round of staleAwaitingAnswers) {
+    const incompletePlayerIds = round.game.playerStates
+      .filter((ps) => {
+        if (ps.leaguePlayerId === round.atBatPlayerId) return false;
+        const answer = round.answers.find((a) => a.leaguePlayerId === ps.leaguePlayerId);
+        return !answer || !answer.betPlacedAt || !answer.answeredAt;
+      })
+      .map((ps) => ps.leaguePlayerId);
+
+    for (const playerId of incompletePlayerIds) {
+      await notifyActionReminder(round.id, playerId, "answer");
+      notificationsSent++;
+    }
+  }
+
+  // 2c. Closed — at-bat player hasn't graded after 24h
+  const staleAwaitingGrading = await prisma.round.findMany({
+    where: {
+      status: "closed",
+      updatedAt: { lte: twentyFourHoursAgo },
+      game: { status: "active" },
+    },
+    select: { id: true, atBatPlayerId: true },
+    take: 50,
+  });
+
+  for (const round of staleAwaitingGrading) {
+    if (!round.atBatPlayerId) continue;
+    await notifyActionReminder(round.id, round.atBatPlayerId, "grading");
+    notificationsSent++;
+  }
+
   return NextResponse.json({
     success: true,
-    roundsChecked: approachingRounds.length,
+    approachingRoundsChecked: approachingRounds.length,
+    staleRoundsChecked:
+      staleAwaitingQuestion.length + staleAwaitingAnswers.length + staleAwaitingGrading.length,
     notificationsSent,
     timestamp: now.toISOString(),
   });

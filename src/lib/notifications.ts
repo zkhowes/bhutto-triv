@@ -11,7 +11,8 @@ export type NotificationType =
   | "about_to_be_skipped"
   | "round_closed_by_commissioner"
   | "flag_thrown"
-  | "flag_resolved";
+  | "flag_resolved"
+  | "action_reminder";
 
 // Which levels each notification type gets sent at
 const LEVEL_MAP: Record<NotificationType, NotificationLevel[]> = {
@@ -24,6 +25,7 @@ const LEVEL_MAP: Record<NotificationType, NotificationLevel[]> = {
   round_closed_by_commissioner: ["low"],
   flag_thrown: ["low", "high"],
   flag_resolved: ["low", "high"],
+  action_reminder: ["low", "high"],
 };
 
 // ─── Effective Level Resolution ───────────────────────────────────────────────
@@ -533,5 +535,53 @@ export async function notifyFlagResolved(
     ));
   } catch (err) {
     console.error("[Notifications] notifyFlagResolved failed:", err);
+  }
+}
+
+/**
+ * "Still awaiting your [question/answer/grading]"
+ * Level: Low + High | Recipient: player(s) blocking the round
+ * Trigger: Cron job — round has been stale for 24+ hours
+ * Deduplication: one reminder per player per round
+ */
+export async function notifyActionReminder(
+  roundId: string,
+  leaguePlayerId: string,
+  actionType: "question" | "answer" | "grading"
+): Promise<void> {
+  try {
+    const player = await getPlayerInfo(leaguePlayerId);
+    if (!player || !player.isActive || player.isFake) return;
+
+    // Deduplication: don't send if already reminded this player for this round
+    const alreadyReminded = await prisma.notification.findFirst({
+      where: {
+        roundId,
+        userId: player.userId,
+        type: "action_reminder",
+      },
+    });
+    if (alreadyReminded) return;
+
+    const round = await getRoundContext(roundId);
+    if (!round) return;
+
+    const league = round.game.season.league;
+    const leagueId = league.id;
+    const ln = league.name;
+
+    await createNotification({
+      userId: player.userId,
+      leagueId,
+      gameId: round.gameId,
+      roundId,
+      type: "action_reminder",
+      title: `${ln}: Still awaiting your ${actionType}`,
+      message: `Your game is waiting on you! Tap here to submit your ${actionType} now.`,
+      destinationUrl: `/games/${round.gameId}?round=${roundId}`,
+      phoneNumber: player.phoneNumber,
+    });
+  } catch (err) {
+    console.error("[Notifications] notifyActionReminder failed:", err);
   }
 }

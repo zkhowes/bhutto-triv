@@ -357,6 +357,9 @@ export default function GamePage() {
   // Build scorecard data
   const getPlayerRoundStatus = (leaguePlayerId: string): string => {
     if (!currentRoundData) return "";
+    // Eliminated players can't bet or answer — show "Busted"
+    const playerState = game.playerStates.find((ps) => ps.leaguePlayerId === leaguePlayerId);
+    if (playerState?.isEliminated) return "Busted";
     if (leaguePlayerId === currentRoundData.atBatPlayerId) {
       return currentRoundData.status === "awaiting_question" ? "You're Up" : "Question Submitted";
     }
