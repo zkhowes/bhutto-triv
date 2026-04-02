@@ -27,7 +27,7 @@ export async function GET(
   return NextResponse.json(players);
 }
 
-// PATCH - pause/unpause player (commissioner only)
+// PATCH - pause/unpause player (commissioner or self)
 export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } }
@@ -42,19 +42,6 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 
-  const commissioner = await prisma.leaguePlayer.findFirst({
-    where: {
-      leagueId: params.id,
-      userId: session.user.id,
-      role: "commissioner",
-      isActive: true,
-    },
-  });
-
-  if (!commissioner) {
-    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
-  }
-
   const targetPlayer = await prisma.leaguePlayer.findUnique({
     where: { id: playerId },
   });
@@ -65,6 +52,37 @@ export async function PATCH(
 
   if (targetPlayer.role === "commissioner") {
     return NextResponse.json({ error: "Cannot pause commissioner" }, { status: 400 });
+  }
+
+  // Allow commissioner OR the player themselves
+  const isSelf = targetPlayer.userId === session.user.id;
+  const commissioner = await prisma.leaguePlayer.findFirst({
+    where: {
+      leagueId: params.id,
+      userId: session.user.id,
+      role: "commissioner",
+      isActive: true,
+    },
+  });
+
+  if (!commissioner && !isSelf) {
+    return NextResponse.json({ error: "Not authorized" }, { status: 403 });
+  }
+
+  // Self-pause requires no active game in the league
+  if (isSelf && !commissioner) {
+    const activeGame = await prisma.game.findFirst({
+      where: {
+        season: { leagueId: params.id },
+        status: "active",
+      },
+    });
+    if (activeGame) {
+      return NextResponse.json(
+        { error: "You can only pause between games" },
+        { status: 400 }
+      );
+    }
   }
 
   if (action === "pause") {

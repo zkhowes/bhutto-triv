@@ -64,11 +64,24 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Check if user is a member
+  // Check if user is a member (active players)
   const isPlayer = league.players.some((p) => p.userId === session.user.id);
-  const myPlayer = session?.user?.id
+  let myPlayer = session?.user?.id
     ? league.players.find((p) => p.userId === session.user.id)
     : null;
+
+  // If user not found in active players, check if they're paused
+  let myPaused = false;
+  let myPausedPlayerId: string | null = null;
+  if (!myPlayer && session?.user?.id) {
+    const pausedPlayer = await prisma.leaguePlayer.findFirst({
+      where: { leagueId, userId: session.user.id, isPaused: true },
+    });
+    if (pausedPlayer) {
+      myPausedPlayerId = pausedPlayer.id;
+      myPaused = true;
+    }
+  }
 
   // Compute season standings: aggregate F1 points across all completed games in active season
   let seasonStandings: Array<{
@@ -170,9 +183,10 @@ export async function GET(
 
   return NextResponse.json({
     ...league,
-    isPlayer,
+    isPlayer: isPlayer || myPaused,
     myRole: myPlayer?.role || null,
-    myPlayerId: myPlayer?.id || null,
+    myPlayerId: myPlayer?.id || myPausedPlayerId,
+    myPaused,
     seasonStandings,
     seasonChartData,
     pausedPlayers,

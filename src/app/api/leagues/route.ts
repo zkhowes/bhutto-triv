@@ -123,7 +123,7 @@ export async function POST(req: NextRequest) {
     data: {
       name,
       type,
-      inviteCode: nanoid(21),
+      inviteCode: nanoid(5),
       maxPlayers: Math.min(Math.max(maxPlayers, 2), 10),
       gamesPerSeason,
       dailyDeadline,

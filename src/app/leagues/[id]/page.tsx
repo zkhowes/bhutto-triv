@@ -24,6 +24,7 @@ interface LeagueData {
   isPlayer: boolean;
   myRole: string | null;
   myPlayerId: string | null;
+  myPaused: boolean;
   players: Array<{
     id: string;
     role: string;
@@ -77,6 +78,7 @@ export default function LeagueDetailPage() {
   const [advanceMessage, setAdvanceMessage] = useState("");
   const [activeTestPlayerId, setActiveTestPlayerId] = useState<string | null>(null);
   const [inviteCopied, setInviteCopied] = useState<"code" | "link" | null>(null);
+  const [togglingPause, setTogglingPause] = useState(false);
 
   const fetchLeague = useCallback(async () => {
     try {
@@ -90,6 +92,31 @@ export default function LeagueDetailPage() {
       setLoading(false);
     }
   }, [leagueId, router]);
+
+  const togglePause = async () => {
+    if (!league?.myPlayerId) return;
+    setTogglingPause(true);
+    try {
+      const res = await fetch(`/api/leagues/${leagueId}/players`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          playerId: league.myPlayerId,
+          action: league.myPaused ? "unpause" : "pause",
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || "Failed to update status");
+        return;
+      }
+      await fetchLeague();
+    } catch {
+      alert("Failed to update status");
+    } finally {
+      setTogglingPause(false);
+    }
+  };
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/");
@@ -509,6 +536,42 @@ export default function LeagueDetailPage() {
             actAsParam={actAsParam}
             leagueId={leagueId}
           />
+        )}
+
+        {/* Self-Pause Controls (non-commissioner players) */}
+        {league.myPlayerId && league.myRole !== "commissioner" && league.myPaused && (
+          <div className="card p-4 mb-6 border border-[#fbbf24]/30 bg-gradient-to-br from-[#fbbf24]/5 to-[#1a1a2e]">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[#fbbf24] font-semibold text-sm">You are paused</p>
+                <p className="text-xs text-[#a0a0b8] mt-0.5">
+                  You won&apos;t be included in new games until you unpause.
+                </p>
+              </div>
+              <button
+                onClick={togglePause}
+                disabled={togglingPause}
+                className="btn-primary text-sm"
+              >
+                {togglingPause ? "Resuming..." : "Unpause"}
+              </button>
+            </div>
+          </div>
+        )}
+        {league.myPlayerId && league.myRole !== "commissioner" && !league.myPaused && gameEffectivelyDone && activeSeason && (
+          <div className="flex justify-end mb-4">
+            <button
+              onClick={() => {
+                if (confirm("Pause yourself? You won't be included in the next game. You can unpause anytime between games.")) {
+                  togglePause();
+                }
+              }}
+              disabled={togglingPause}
+              className="text-xs text-[#666680] hover:text-[#a0a0b8] transition-colors"
+            >
+              {togglingPause ? "Pausing..." : "Sit out next game"}
+            </button>
+          </div>
         )}
 
         {/* Season Standings */}
