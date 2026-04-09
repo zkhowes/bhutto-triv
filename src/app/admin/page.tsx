@@ -353,6 +353,11 @@ export default function AdminPage() {
     setQuestionAnswers([]);
   };
 
+  // League edit/delete state
+  const [editingLeagueId, setEditingLeagueId] = useState<string | null>(null);
+  const [editingLeagueName, setEditingLeagueName] = useState("");
+  const [deletingLeagueId, setDeletingLeagueId] = useState<string | null>(null);
+
   const [expandedImageUrl, setExpandedImageUrl] = useState<string | null>(null);
   const [removingImage, setRemovingImage] = useState(false);
 
@@ -385,6 +390,60 @@ export default function AdminPage() {
       alert("Request failed");
     } finally {
       setRemovingImage(false);
+    }
+  };
+
+  const handleRenameLeague = async (leagueId: string) => {
+    if (!editingLeagueName.trim()) return;
+    try {
+      const res = await fetch(`/api/admin/leagues/${leagueId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: editingLeagueName.trim() }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        alert(d.error || "Failed to rename league");
+        return;
+      }
+      // Update local state
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              recentLeagues: prev.recentLeagues.map((l) =>
+                l.id === leagueId ? { ...l, name: editingLeagueName.trim() } : l
+              ),
+            }
+          : prev
+      );
+      setEditingLeagueId(null);
+    } catch {
+      alert("Request failed");
+    }
+  };
+
+  const handleDeleteLeague = async (leagueId: string) => {
+    try {
+      const res = await fetch(`/api/admin/leagues/${leagueId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        alert(d.error || "Failed to delete league");
+        return;
+      }
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              recentLeagues: prev.recentLeagues.filter((l) => l.id !== leagueId),
+            }
+          : prev
+      );
+      setDeletingLeagueId(null);
+    } catch {
+      alert("Request failed");
     }
   };
 
@@ -564,12 +623,43 @@ export default function AdminPage() {
                   <th className="table-header p-3 text-center">Type</th>
                   <th className="table-header p-3 text-center">Season</th>
                   <th className="table-header p-3 text-right">Created</th>
+                  <th className="table-header p-3 text-center">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {data.recentLeagues.map((l) => (
                   <tr key={l.id} className="table-row">
-                    <td className="p-3 text-white text-sm">{l.name}</td>
+                    <td className="p-3 text-white text-sm">
+                      {editingLeagueId === l.id ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={editingLeagueName}
+                            onChange={(e) => setEditingLeagueName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleRenameLeague(l.id);
+                              if (e.key === "Escape") setEditingLeagueId(null);
+                            }}
+                            className="px-2 py-1 bg-[#0f0f23] border border-[#2a4a6f] rounded text-white text-sm focus:outline-none focus:border-amber-500 w-40"
+                            autoFocus
+                          />
+                          <button
+                            onClick={() => handleRenameLeague(l.id)}
+                            className="text-xs text-emerald-400 hover:text-emerald-300"
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={() => setEditingLeagueId(null)}
+                            className="text-xs text-[#666680] hover:text-[#a0a0b8]"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        l.name
+                      )}
+                    </td>
                     <td className="p-3 text-[#a0a0b8] text-sm">
                       {l.commissioner}
                     </td>
@@ -592,6 +682,43 @@ export default function AdminPage() {
                     </td>
                     <td className="p-3 text-right text-sm text-[#666680]">
                       {new Date(l.createdAt).toLocaleDateString()}
+                    </td>
+                    <td className="p-3 text-center">
+                      {deletingLeagueId === l.id ? (
+                        <div className="flex items-center justify-center gap-2">
+                          <span className="text-xs text-red-400">Delete?</span>
+                          <button
+                            onClick={() => handleDeleteLeague(l.id)}
+                            className="px-2 py-1 bg-red-500/20 text-red-400 rounded text-xs hover:bg-red-500/30"
+                          >
+                            Yes
+                          </button>
+                          <button
+                            onClick={() => setDeletingLeagueId(null)}
+                            className="px-2 py-1 bg-[#1e3a5f] text-[#a0a0b8] rounded text-xs hover:bg-[#2a4a6f]"
+                          >
+                            No
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            onClick={() => {
+                              setEditingLeagueId(l.id);
+                              setEditingLeagueName(l.name);
+                            }}
+                            className="px-2 py-1 bg-amber-500/20 text-amber-400 rounded text-xs hover:bg-amber-500/30"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => setDeletingLeagueId(l.id)}
+                            className="px-2 py-1 bg-red-500/20 text-red-400 rounded text-xs hover:bg-red-500/30"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}

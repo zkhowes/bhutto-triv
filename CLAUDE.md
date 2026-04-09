@@ -209,7 +209,7 @@ Required for development (see `.env.example`):
 
 ## Kanban
 
-> Last updated: 2026-04-01 (busted label fix + 24h reminders)
+> Last updated: 2026-04-01 (self-pause + shorter invite codes)
 
 ### Backlog
 - [ ] Replay past questions — *schema has isReplay/originalQuestionId, needs UI + API*
@@ -226,6 +226,7 @@ Required for development (see `.env.example`):
 ### In Progress
 
 ### Done
+- [x] Self-pause + shorter invite codes — *players can pause/unpause themselves between games; invite codes now 5 chars (old codes still work)*
 - [x] Busted label fix + 24h action reminders — *scorecard shows "Busted" for eliminated players; cron sends reminder after 24h of inactivity for question/answer/grading*
 - [x] Triangle Fellas launch fixes — *11 fixes: invite flow, late joiners, busted label, graph freeze, SMS league name, category deselect, AI category check, PiR UX, tooltip overflow, text accessibility*
 - [x] What's New popup — *shows 5 recent features to existing users on first visit after release, tracked via lastSeenWhatsNew DB field, new users excluded*

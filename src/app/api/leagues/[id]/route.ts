@@ -214,12 +214,10 @@ export async function DELETE(
     return NextResponse.json({ error: "League not found" }, { status: 404 });
   }
 
-  if (league.players.length === 0) {
+  // Also allow super admin to delete any league
+  const isSuperAdmin = session.user.isSuperAdmin === true;
+  if (league.players.length === 0 && !isSuperAdmin) {
     return NextResponse.json({ error: "Only the commissioner can delete a league" }, { status: 403 });
-  }
-
-  if (league.type !== "test") {
-    return NextResponse.json({ error: "Only test leagues can be deleted" }, { status: 400 });
   }
 
   // Delete fake users created for test players

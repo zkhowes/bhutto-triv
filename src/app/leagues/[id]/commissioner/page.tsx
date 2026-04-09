@@ -72,6 +72,9 @@ export default function CommissionerPage() {
   const [inviteCopied, setInviteCopied] = useState(false);
   const [addingTestPlayers, setAddingTestPlayers] = useState(false);
   const [testPlayerCount, setTestPlayerCount] = useState(1);
+  const [shutdownStep, setShutdownStep] = useState(0);
+  const [shutdownConfirmName, setShutdownConfirmName] = useState("");
+  const [shutdownDeleting, setShutdownDeleting] = useState(false);
 
   const fetchLeague = useCallback(async () => {
     try {
@@ -221,6 +224,24 @@ export default function CommissionerPage() {
       return;
     }
     await fetchLeague();
+  };
+
+  const handleShutdownLeague = async () => {
+    if (!league || shutdownConfirmName !== league.name) return;
+    setShutdownDeleting(true);
+    try {
+      const res = await fetch(`/api/leagues/${leagueId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const d = await res.json();
+        alert(d.error || "Failed to delete league");
+        setShutdownDeleting(false);
+        return;
+      }
+      router.push("/dashboard");
+    } catch {
+      alert("Request failed");
+      setShutdownDeleting(false);
+    }
   };
 
   const saveNotificationMode = async (mode: string) => {
@@ -709,6 +730,7 @@ export default function CommissionerPage() {
 
         {/* Settings Tab */}
         {tab === "settings" && (
+          <div className="space-y-4">
           <div className="card p-5">
             <h2 className="text-sm font-semibold text-[#a0a0b8] uppercase tracking-wider mb-3">
               League Settings
@@ -839,6 +861,92 @@ export default function CommissionerPage() {
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* Danger Zone - Shutdown League */}
+          <div className="card p-5 border-red-500/30 border">
+            <h2 className="text-sm font-semibold text-red-400 uppercase tracking-wider mb-3">
+              Danger Zone
+            </h2>
+
+            {shutdownStep === 0 && (
+              <div>
+                <p className="text-sm text-[#a0a0b8] mb-3">
+                  Permanently shut down this league. This deletes all seasons, games, rounds, questions, answers, and player data. This action cannot be undone.
+                </p>
+                <button
+                  onClick={() => setShutdownStep(1)}
+                  className="px-4 py-2 bg-red-500/10 border border-red-500/30 text-red-400 rounded-lg text-sm hover:bg-red-500/20 transition"
+                >
+                  Shutdown League...
+                </button>
+              </div>
+            )}
+
+            {shutdownStep === 1 && (
+              <div>
+                <p className="text-sm text-red-400 font-medium mb-2">
+                  Are you sure? This will permanently delete:
+                </p>
+                <ul className="text-sm text-[#a0a0b8] mb-4 space-y-1 ml-4 list-disc">
+                  <li>All {league.seasons.length} season(s) and their games</li>
+                  <li>All rounds, questions, and answers</li>
+                  <li>All player stats and history</li>
+                  <li>The league itself and its invite code</li>
+                </ul>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShutdownStep(2)}
+                    className="px-4 py-2 bg-red-500/20 border border-red-500/40 text-red-400 rounded-lg text-sm hover:bg-red-500/30 transition"
+                  >
+                    I understand, continue
+                  </button>
+                  <button
+                    onClick={() => setShutdownStep(0)}
+                    className="px-4 py-2 bg-[#1e3a5f] text-[#a0a0b8] rounded-lg text-sm hover:bg-[#2a4a6f] transition"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {shutdownStep === 2 && (
+              <div>
+                <p className="text-sm text-red-400 font-medium mb-2">
+                  Final confirmation: type the league name to confirm deletion.
+                </p>
+                <p className="text-xs text-[#666680] mb-3">
+                  Type <span className="text-white font-mono">{league.name}</span> below:
+                </p>
+                <input
+                  type="text"
+                  value={shutdownConfirmName}
+                  onChange={(e) => setShutdownConfirmName(e.target.value)}
+                  placeholder={league.name}
+                  className="w-full px-3 py-2 bg-[#0f0f23] border border-red-500/30 rounded-lg text-white text-sm focus:outline-none focus:border-red-500 mb-3"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleShutdownLeague}
+                    disabled={shutdownConfirmName !== league.name || shutdownDeleting}
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {shutdownDeleting ? "Deleting..." : "Permanently Delete League"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShutdownStep(0);
+                      setShutdownConfirmName("");
+                    }}
+                    className="px-4 py-2 bg-[#1e3a5f] text-[#a0a0b8] rounded-lg text-sm hover:bg-[#2a4a6f] transition"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
           </div>
         )}
       </div>
