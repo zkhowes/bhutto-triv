@@ -1,0 +1,22 @@
+name: Notification Reminders
+
+on:
+  schedule:
+    # Every 15 minutes
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger notification cron
+        run: |
+          response=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            "https://bwiz.zkhowes.fun/api/cron/notifications")
+          echo "HTTP status: $response"
+          if [ "$response" != "200" ]; then
+            echo "Cron endpoint returned non-200 status"
+            exit 1
+          fi
