@@ -209,7 +209,7 @@ Required for development (see `.env.example`):
 
 ## Kanban
 
-> Last updated: 2026-04-09 (league edit/delete + commissioner shutdown)
+> Last updated: 2026-04-12 (Apple Sign-In fix + player roster on start)
 
 ### Backlog
 - [ ] Replay past questions — *schema has isReplay/originalQuestionId, needs UI + API*
@@ -218,7 +218,6 @@ Required for development (see `.env.example`):
 - [ ] Season pause (functional) — *stub exists, shows alert()*
 
 ### Up Next
-- [ ] Apple Sign-In — *code deployed, awaiting Apple Developer approval (~2026-03-24)*
 - [ ] Auto-submit banked question when At Bat — *useOnNextRound flag stored, no consumption logic*
 - [ ] Commissioner settings editing UI — *API supports writes, UI is read-only*
 - [ ] Shareable link generation UI — *API + model exist, needs Share buttons on game/round/season pages*
@@ -226,6 +225,8 @@ Required for development (see `.env.example`):
 ### In Progress
 
 ### Done
+- [x] Apple Sign-In — *fixed Service ID mismatch, PKCE→state check, sameSite=none cookies for cross-site POST*
+- [x] Player roster on commissioner start buttons — *shows active players with avatars before starting game/season*
 - [x] League edit/delete + commissioner shutdown — *admin can rename/delete any league; commissioners can shutdown their league with 3-step confirmation (type league name to confirm)*
 - [x] Self-pause + shorter invite codes — *players can pause/unpause themselves between games; invite codes now 5 chars (old codes still work)*
 - [x] Busted label fix + 24h action reminders — *scorecard shows "Busted" for eliminated players; cron sends reminder after 24h of inactivity for question/answer/grading*
