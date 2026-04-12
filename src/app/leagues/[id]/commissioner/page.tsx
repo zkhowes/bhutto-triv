@@ -583,6 +583,19 @@ export default function CommissionerPage() {
                 {canStartNextGame ? (
                   <div>
                     <p className="mb-3">All rounds complete — ready for the next game.</p>
+                    <div className="mb-4 text-left">
+                      <p className="text-xs font-semibold text-[#a0a0b8] uppercase tracking-wider mb-2">
+                        Active Players ({league.players.length})
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {league.players.map((p) => (
+                          <div key={p.id} className="flex items-center gap-1.5 bg-[#0d1b2a] rounded-full px-2.5 py-1">
+                            <Avatar src={p.user.avatarUrl || p.user.image} name={p.fakeNickname || p.user.nickname} size="sm" />
+                            <span className="text-xs text-white">{p.fakeNickname || p.user.nickname || p.user.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                     <button onClick={startNextGame} className="btn-gold text-sm">
                       Start Game {(currentGame?.number ?? 0) + 1}
                     </button>
@@ -670,6 +683,21 @@ export default function CommissionerPage() {
                   <p className="text-sm text-[#a0a0b8] mb-4">
                     Game {currentGame?.number ?? 0} of {league.gamesPerSeason}{latestGameComplete ? " complete" : " in progress"}
                   </p>
+                  {canStartNextGame && (
+                    <div className="mb-4">
+                      <p className="text-xs font-semibold text-[#a0a0b8] uppercase tracking-wider mb-2">
+                        Active Players ({league.players.length})
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {league.players.map((p) => (
+                          <div key={p.id} className="flex items-center gap-1.5 bg-[#0d1b2a] rounded-full px-2.5 py-1">
+                            <Avatar src={p.user.avatarUrl || p.user.image} name={p.fakeNickname || p.user.nickname} size="sm" />
+                            <span className="text-xs text-white">{p.fakeNickname || p.user.nickname || p.user.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <div className="flex flex-wrap gap-2">
                     {canStartNextGame && (
                       <button
@@ -716,6 +744,19 @@ export default function CommissionerPage() {
               ) : (
                 <div>
                   <p className="text-[#a0a0b8] mb-3">No active season</p>
+                  <div className="mb-4 text-left">
+                    <p className="text-xs font-semibold text-[#a0a0b8] uppercase tracking-wider mb-2">
+                      Active Players ({league.players.length})
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {league.players.map((p) => (
+                        <div key={p.id} className="flex items-center gap-1.5 bg-[#0d1b2a] rounded-full px-2.5 py-1">
+                          <Avatar src={p.user.avatarUrl || p.user.image} name={p.fakeNickname || p.user.nickname} size="sm" />
+                          <span className="text-xs text-white">{p.fakeNickname || p.user.nickname || p.user.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                   <button
                     onClick={startNewSeason}
                     className="btn-gold text-sm"

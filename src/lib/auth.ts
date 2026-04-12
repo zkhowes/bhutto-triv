@@ -10,6 +10,14 @@ export const authOptions: NextAuthOptions = {
     AppleProvider({
       clientId: process.env.APPLE_ID || "",
       clientSecret: process.env.APPLE_SECRET || "",
+      checks: ["state"],
+      authorization: {
+        params: {
+          scope: "name email",
+          response_type: "code",
+          response_mode: "form_post",
+        },
+      },
     }),
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID || "",
@@ -50,8 +58,32 @@ export const authOptions: NextAuthOptions = {
       return session;
     },
   },
+  cookies: {
+    csrfToken: {
+      name: "__Secure-next-auth.csrf-token",
+      options: { httpOnly: true, sameSite: "none" as const, path: "/", secure: true },
+    },
+    callbackUrl: {
+      name: "__Secure-next-auth.callback-url",
+      options: { httpOnly: true, sameSite: "none" as const, path: "/", secure: true },
+    },
+    state: {
+      name: "__Secure-next-auth.state",
+      options: { httpOnly: true, sameSite: "none" as const, path: "/", secure: true, maxAge: 900 },
+    },
+    nonce: {
+      name: "__Secure-next-auth.nonce",
+      options: { httpOnly: true, sameSite: "none" as const, path: "/", secure: true },
+    },
+    pkceCodeVerifier: {
+      name: "__Secure-next-auth.pkce.code_verifier",
+      options: { httpOnly: true, sameSite: "none" as const, path: "/", secure: true, maxAge: 900 },
+    },
+  },
+  debug: false,
   pages: {
     signIn: "/",
+    error: "/auth-error",
   },
   events: {
     async signIn({ user }) {
