@@ -289,9 +289,17 @@ export default function LeagueDetailPage() {
                 )}
               </button>
             </div>
-            <p className="text-xs text-[#666680] mt-3">
+            <p className="text-xs text-[#666680] mt-3 mb-3">
               {league.players.length} / {league.maxPlayers} players joined
             </p>
+            <div className="flex flex-wrap gap-2">
+              {league.players.map((p) => (
+                <div key={p.id} className="flex items-center gap-1.5 bg-[#0d1b2a] rounded-full px-2.5 py-1">
+                  <Avatar src={p.user.avatarUrl || p.user.image} name={p.fakeNickname || p.user.nickname} size="sm" />
+                  <span className="text-xs text-white">{p.fakeNickname || p.user.nickname || p.user.name}</span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
