@@ -51,6 +51,7 @@ export default function NavBar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [shortSha, setShortSha] = useState<string | null>(null);
   const [commissionerLeagueId, setCommissionerLeagueId] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -59,6 +60,14 @@ export default function NavBar() {
       .then((d) => setShortSha(d.shortSha ?? null))
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!session?.user) return;
+    fetch("/api/users/profile")
+      .then((r) => r.json())
+      .then((d) => setAvatarUrl(d.avatarUrl || d.image || null))
+      .catch(() => {});
+  }, [session]);
 
   useEffect(() => {
     if (!session?.user) return;
@@ -264,7 +273,7 @@ export default function NavBar() {
                 className="relative flex items-center gap-2"
               >
                 <Avatar
-                  src={session.user.avatarUrl || session.user.image}
+                  src={avatarUrl || session.user.image}
                   name={session.user.nickname || session.user.name}
                   size="sm"
                 />

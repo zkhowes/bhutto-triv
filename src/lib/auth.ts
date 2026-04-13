@@ -36,12 +36,11 @@ export const authOptions: NextAuthOptions = {
       if (token.id || trigger === "update") {
         const dbUser = await prisma.user.findUnique({
           where: { id: token.id as string },
-          select: { profileComplete: true, nickname: true, isSuperAdmin: true, avatarUrl: true },
+          select: { profileComplete: true, nickname: true, isSuperAdmin: true },
         });
         token.profileComplete = dbUser?.profileComplete ?? false;
         token.nickname = dbUser?.nickname ?? null;
         token.isSuperAdmin = dbUser?.isSuperAdmin ?? false;
-        token.avatarUrl = dbUser?.avatarUrl ?? null;
       }
       return token;
     },
@@ -53,7 +52,6 @@ export const authOptions: NextAuthOptions = {
         (session.user as Record<string, unknown>).nickname = token.nickname;
         (session.user as Record<string, unknown>).isSuperAdmin =
           token.isSuperAdmin;
-        (session.user as Record<string, unknown>).avatarUrl = token.avatarUrl;
       }
       return session;
     },
