@@ -14,7 +14,13 @@ export function middleware(request: NextRequest) {
       .filter((name) => name.startsWith("__Secure-next-auth") || name.startsWith("next-auth"));
 
     for (const name of cookieNames) {
-      response.cookies.delete(name);
+      response.cookies.set(name, "", {
+        path: "/",
+        expires: new Date(0),
+        secure: true,
+        httpOnly: true,
+        sameSite: "none",
+      });
     }
 
     return response;
