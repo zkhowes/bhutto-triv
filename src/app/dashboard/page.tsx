@@ -13,10 +13,40 @@ interface LeagueSummary {
   playerCount: number;
   maxPlayers: number;
   myRole: string;
+  myLeaguePlayerId: string | null;
+  gameId: string | null;
   currentSeason: { number: number; status: string } | null;
   currentGame: { number: number; status: string } | null;
   currentRound: { number: number; status: string } | null;
+  activeRound: {
+    status: string;
+    atBatPlayerId: string | null;
+    hasBet: boolean;
+    hasAnswered: boolean;
+  } | null;
   inviteCode: string;
+}
+
+function getLeagueAction(league: LeagueSummary): { text: string; urgent: boolean } | null {
+  if (!league.activeRound) return null;
+  const { status, atBatPlayerId, hasBet, hasAnswered } = league.activeRound;
+  const isAtBat = atBatPlayerId === league.myLeaguePlayerId;
+
+  if (status === "awaiting_question" && isAtBat)
+    return { text: "Your turn -- submit a question", urgent: true };
+  if (status === "awaiting_question")
+    return { text: "Waiting for question submission", urgent: false };
+  if (status === "question_submitted" && !hasBet)
+    return { text: "New question -- place your bet", urgent: true };
+  if (status === "question_submitted")
+    return { text: "Bet placed -- waiting for category reveal", urgent: false };
+  if (status === "category_revealed" && !hasAnswered)
+    return { text: "Answer the question!", urgent: true };
+  if (status === "category_revealed")
+    return { text: "Waiting for all answers", urgent: false };
+  if (status === "closed")
+    return { text: "Round under review", urgent: false };
+  return null;
 }
 
 export default function DashboardPage() {
@@ -109,46 +139,45 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        {/* Quick Actions */}
-        <div className="grid grid-cols-2 gap-3 mb-6">
-          <Link href="/leagues/create" className="btn-primary text-center">
-            Create League
-          </Link>
-          <Link
-            href="/questions/workshop"
-            className="btn-secondary text-center"
-          >
-            Question Workshop
-          </Link>
-        </div>
-
-        {/* Join League */}
-        <div className="card p-4 mb-6">
-          <h2 className="text-sm font-semibold text-[#a0a0b8] uppercase tracking-wider mb-3">
-            Join a League
+        {/* Get Started — Create or Join */}
+        <div className="card p-5 mb-8">
+          <h2 className="text-sm font-semibold text-[#a0a0b8] uppercase tracking-wider mb-4">
+            Get Started
           </h2>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={joinCode}
-              onChange={(e) => setJoinCode(e.target.value)}
-              placeholder="Enter invite code"
-              className="input-field flex-1"
-            />
-            <button onClick={handleJoinLeague} className="btn-primary">
-              Join
-            </button>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Link href="/leagues/create" className="btn-primary text-center sm:flex-shrink-0">
+              Create League
+            </Link>
+            <div className="flex gap-2 flex-1">
+              <input
+                type="text"
+                value={joinCode}
+                onChange={(e) => setJoinCode(e.target.value)}
+                placeholder="Enter invite code"
+                className="input-field flex-1"
+              />
+              <button onClick={handleJoinLeague} className="btn-secondary">
+                Join
+              </button>
+            </div>
           </div>
           {joinError && (
             <p className="text-red-400 text-xs mt-2">{joinError}</p>
           )}
         </div>
 
-        {/* Active Leagues */}
-        <div className="mb-6">
-          <h2 className="text-sm font-semibold text-[#a0a0b8] uppercase tracking-wider mb-3">
-            Your Leagues
-          </h2>
+        {/* Your Leagues */}
+        <div className="border-t border-[#1e3a5f] pt-6 mb-6">
+          <div className="mb-4">
+            <h2 className="text-lg font-bold text-white">
+              Your Leagues
+            </h2>
+            {leagues.length > 0 && (
+              <p className="text-sm text-[#a0a0b8] mt-0.5">
+                {leagues.length} league{leagues.length !== 1 ? "s" : ""}
+              </p>
+            )}
+          </div>
           {leagues.length === 0 ? (
             <div className="card p-8 text-center">
               <p className="text-[#666680] mb-4">
@@ -160,87 +189,98 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {leagues.map((league) => (
-                <Link
-                  key={league.id}
-                  href={`/leagues/${league.id}`}
-                  className="card-hover block p-4"
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-semibold text-white">
-                        {league.name}
-                        {league.myRole === "commissioner" && (
-                          <span className="ml-2 badge bg-amber-500/20 text-amber-400">
-                            Commissioner
+              {leagues.map((league) => {
+                const action = getLeagueAction(league);
+                const tileHref = league.gameId && league.currentGame?.status === "active"
+                  ? `/games/${league.gameId}`
+                  : `/leagues/${league.id}`;
+                return (
+                  <Link
+                    key={league.id}
+                    href={tileHref}
+                    className="card-hover block p-5"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="min-w-0 flex-1">
+                        <h3 className="font-semibold text-white">
+                          {league.name}
+                          {league.myRole === "commissioner" && (
+                            <span className="ml-2 badge bg-amber-500/20 text-amber-400">
+                              Commissioner
+                            </span>
+                          )}
+                        </h3>
+                        <p className="text-sm text-[#a0a0b8] mt-0.5">
+                          {league.playerCount}/{league.maxPlayers} players
+                          {league.currentSeason && (
+                            <span>
+                              {" "}
+                              &middot; Season {league.currentSeason.number}
+                            </span>
+                          )}
+                          {league.currentGame && (
+                            <span>
+                              {" "}
+                              &middot; Game {league.currentGame.number}
+                            </span>
+                          )}
+                          {league.currentRound && (
+                            <span>
+                              {" "}
+                              &middot; Round {league.currentRound.number}
+                            </span>
+                          )}
+                        </p>
+                        {action && (
+                          <p className={`text-sm mt-1 ${action.urgent ? "text-[#fbbf24] font-medium" : "text-[#666680]"}`}>
+                            {action.urgent && "\u2192 "}{action.text}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {league.currentSeason?.status === "active" && (
+                          <span className="badge bg-emerald-500/20 text-emerald-400">
+                            Active
                           </span>
                         )}
-                      </h3>
-                      <p className="text-sm text-[#a0a0b8] mt-0.5">
-                        {league.playerCount}/{league.maxPlayers} players
-                        {league.currentSeason && (
-                          <span>
-                            {" "}
-                            &middot; Season {league.currentSeason.number}
+                        {league.type === "test" && (
+                          <span className="badge bg-purple-500/20 text-purple-400">
+                            Test
                           </span>
                         )}
-                        {league.currentGame && (
-                          <span>
-                            {" "}
-                            &middot; Game {league.currentGame.number}
-                          </span>
+                        {league.type === "test" && league.myRole === "commissioner" && (
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleDeleteLeague(league.id, league.name);
+                            }}
+                            className="text-red-400 hover:text-red-300 p-1"
+                            title="Delete test league"
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
                         )}
-                        {league.currentRound && (
-                          <span>
-                            {" "}
-                            &middot; Round {league.currentRound.number}
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {league.currentSeason?.status === "active" && (
-                        <span className="badge bg-emerald-500/20 text-emerald-400">
-                          Active
-                        </span>
-                      )}
-                      {league.type === "test" && (
-                        <span className="badge bg-purple-500/20 text-purple-400">
-                          Test
-                        </span>
-                      )}
-                      {league.type === "test" && league.myRole === "commissioner" && (
-                        <button
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            handleDeleteLeague(league.id, league.name);
-                          }}
-                          className="text-red-400 hover:text-red-300 p-1"
-                          title="Delete test league"
+                        <svg
+                          className="w-4 h-4 text-[#666680]"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
                         >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                      )}
-                      <svg
-                        className="w-4 h-4 text-[#666680]"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M9 5l7 7-7 7"
-                        />
-                      </svg>
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M9 5l7 7-7 7"
+                          />
+                        </svg>
+                      </div>
                     </div>
-                  </div>
-                </Link>
-              ))}
+                  </Link>
+                );
+              })}
             </div>
           )}
         </div>

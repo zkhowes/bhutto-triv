@@ -43,11 +43,74 @@ export async function GET() {
     },
   });
 
+  // Build per-league active round info
+  const activeRoundInfo: Record<string, {
+    roundId: string;
+    status: string;
+    atBatPlayerId: string | null;
+    myLeaguePlayerId: string;
+    gameId: string;
+  }> = {};
+
+  const roundIdsToCheck: string[] = [];
+  const playerIdsToCheck: string[] = [];
+
+  for (const league of leagues) {
+    const myPlayer = league.players.find((p) => p.userId === session.user.id);
+    const currentSeason = league.seasons[0];
+    const currentGame = currentSeason?.games[0];
+    if (!currentGame || currentGame.status !== "active" || !myPlayer) continue;
+
+    // Find the active round (latest non-graded, non-cancelled)
+    const activeRound = [...currentGame.rounds]
+      .reverse()
+      .find((r) => r.status !== "graded" && r.status !== "cancelled" && r.status !== "pending");
+
+    if (!activeRound) continue;
+
+    activeRoundInfo[league.id] = {
+      roundId: activeRound.id,
+      status: activeRound.status,
+      atBatPlayerId: activeRound.atBatPlayerId,
+      myLeaguePlayerId: myPlayer.id,
+      gameId: currentGame.id,
+    };
+    roundIdsToCheck.push(activeRound.id);
+    playerIdsToCheck.push(myPlayer.id);
+  }
+
+  // Batch lookup: check if user has bet/answered in active rounds
+  const myAnswers = roundIdsToCheck.length > 0
+    ? await prisma.roundAnswer.findMany({
+        where: {
+          roundId: { in: roundIdsToCheck },
+          leaguePlayerId: { in: playerIdsToCheck },
+        },
+        select: { roundId: true, leaguePlayerId: true, betPlacedAt: true, answeredAt: true },
+      })
+    : [];
+
+  const answerLookup = new Map(
+    myAnswers.map((a) => [`${a.roundId}:${a.leaguePlayerId}`, a])
+  );
+
   const leaguesWithRole = leagues.map((league) => {
     const myPlayer = league.players.find((p) => p.userId === session.user.id);
     const currentSeason = league.seasons[0];
     const currentGame = currentSeason?.games[0];
     const currentRound = currentGame?.rounds[0];
+    const info = activeRoundInfo[league.id];
+
+    let activeRound = null;
+    if (info) {
+      const answer = answerLookup.get(`${info.roundId}:${info.myLeaguePlayerId}`);
+      activeRound = {
+        status: info.status,
+        atBatPlayerId: info.atBatPlayerId,
+        hasBet: !!answer?.betPlacedAt,
+        hasAnswered: !!answer?.answeredAt,
+      };
+    }
 
     return {
       id: league.id,
@@ -56,6 +119,8 @@ export async function GET() {
       playerCount: league.players.length,
       maxPlayers: league.maxPlayers,
       myRole: myPlayer?.role,
+      myLeaguePlayerId: myPlayer?.id ?? null,
+      gameId: currentGame?.id ?? null,
       currentSeason: currentSeason
         ? { number: currentSeason.number, status: currentSeason.status }
         : null,
@@ -65,6 +130,7 @@ export async function GET() {
       currentRound: currentRound
         ? { number: currentRound.number, status: currentRound.status }
         : null,
+      activeRound,
       inviteCode: league.inviteCode,
     };
   });

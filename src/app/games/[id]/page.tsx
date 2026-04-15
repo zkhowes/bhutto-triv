@@ -711,6 +711,26 @@ export default function GamePage() {
             <GameChart data={chartInfo.data} playerNames={chartInfo.playerNames} playerAvatars={chartInfo.playerAvatars} />
           </div>
         )}
+
+        {/* Season Standings Link */}
+        <Link
+          href={`/leagues/${league.id}`}
+          className="card-hover block p-5 mb-6"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-semibold text-[#a0a0b8] uppercase tracking-wider">
+                Season {game.season.number} Standings
+              </h3>
+              <p className="text-white text-sm mt-1">
+                See season standings
+              </p>
+            </div>
+            <svg className="w-5 h-5 text-[#666680]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </div>
+        </Link>
       </div>
     </div>
   );

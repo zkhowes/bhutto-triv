@@ -3,6 +3,7 @@
 import { useState } from "react";
 import CountdownTimer from "./CountdownTimer";
 import InfoTooltip from "@/components/ui/InfoTooltip";
+import Spinner from "@/components/ui/Spinner";
 
 interface BettingInterfaceProps {
   roundId: string;
@@ -160,15 +161,28 @@ export default function BettingInterface({
             </span>
           </div>
 
-          <input
-            type="range"
-            min={1}
-            max={maxPoints}
-            value={betAmount}
-            onChange={(e) => setBetAmount(Number(e.target.value))}
-            className="bet-slider w-full"
-            aria-label="Bet amount"
-          />
+          <div className="relative pt-8">
+            {/* Floating value label above thumb */}
+            <div
+              className="absolute top-0 -translate-x-1/2 pointer-events-none"
+              style={{ left: `${((betAmount - 1) / Math.max(maxPoints - 1, 1)) * 100}%` }}
+            >
+              <div className="bg-[#fbbf24] text-black text-sm font-bold px-2.5 py-0.5 rounded-full whitespace-nowrap">
+                {betAmount}
+              </div>
+              <div className="w-0 h-0 mx-auto border-l-[5px] border-r-[5px] border-t-[5px] border-transparent border-t-[#fbbf24]" />
+            </div>
+
+            <input
+              type="range"
+              min={1}
+              max={maxPoints}
+              value={betAmount}
+              onChange={(e) => setBetAmount(Number(e.target.value))}
+              className="bet-slider w-full"
+              aria-label="Bet amount"
+            />
+          </div>
         </div>
       )}
 
@@ -194,7 +208,7 @@ export default function BettingInterface({
               disabled={placing}
               className="btn-gold text-sm flex-1"
             >
-              {placing ? "Placing..." : `Confirm Blind Bet (${betAmount} x2)`}
+              {placing ? <span className="inline-flex items-center justify-center gap-2"><Spinner /> Placing...</span> : `Confirm Blind Bet (${betAmount} x2)`}
             </button>
             <button
               onClick={() => setShowBlindConfirm(false)}
@@ -238,7 +252,7 @@ export default function BettingInterface({
             {betPlaced
               ? "Bet Placed!"
               : placing && !showBlindConfirm
-              ? "Placing Bet..."
+              ? <span className="inline-flex items-center justify-center gap-2"><Spinner /> Placing Bet...</span>
               : betAmount === maxPoints
                 ? `Go All In! Bet ${betAmount} point${betAmount === 1 ? "" : "s"}`
                 : `Bet ${betAmount} point${betAmount === 1 ? "" : "s"}`}

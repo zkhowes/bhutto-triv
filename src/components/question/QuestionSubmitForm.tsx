@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { CATEGORIES, isDefaultCategory } from "@/lib/constants";
 import WorkshopEmbed from "./WorkshopEmbed";
 import ImageAttachment from "./ImageAttachment";
+import Spinner from "@/components/ui/Spinner";
 
 interface QuestionSubmitFormProps {
   roundId: string;
@@ -873,7 +874,7 @@ export default function QuestionSubmitForm({
           disabled={submitting}
           className="btn-primary w-full"
         >
-          {submitting ? "Submitting..." : "Submit Question"}
+          {submitting ? <span className="inline-flex items-center justify-center gap-2"><Spinner /> Submitting...</span> : "Submit Question"}
         </button>
       </div>
     </div>

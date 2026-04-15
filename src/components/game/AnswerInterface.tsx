@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import CountdownTimer from "./CountdownTimer";
 import StarRating from "@/components/ui/StarRating";
+import Spinner from "@/components/ui/Spinner";
 import { computePowerUpCost } from "@/lib/scoring";
 
 interface AnswerInterfaceProps {
@@ -540,7 +541,7 @@ export default function AnswerInterface({
         disabled={submitting}
         className="btn-primary w-full text-lg"
       >
-        {submitting ? "Submitting..." : "Submit Answer"}
+        {submitting ? <span className="inline-flex items-center justify-center gap-2"><Spinner /> Submitting...</span> : "Submit Answer"}
       </button>
     </div>
   );
