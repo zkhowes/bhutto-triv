@@ -209,7 +209,7 @@ Required for development (see `.env.example`):
 
 ## Kanban
 
-> Last updated: 2026-04-12 (Apple Sign-In fix + player roster on start)
+> Last updated: 2026-04-14 (usability improvements: game status, slider label, nav icons, spinners)
 
 ### Backlog
 - [ ] Replay past questions — *schema has isReplay/originalQuestionId, needs UI + API*
@@ -225,6 +225,7 @@ Required for development (see `.env.example`):
 ### In Progress
 
 ### Done
+- [x] Usability improvements — *floating bet slider label, game status on dashboard tiles, home+workshop icons in nav, dashboard layout cleanup, season standings link, submit button spinners*
 - [x] Apple Sign-In — *fixed Service ID mismatch, PKCE→state check, sameSite=none cookies for cross-site POST*
 - [x] Player roster on commissioner start buttons — *shows active players with avatars before starting game/season*
 - [x] League edit/delete + commissioner shutdown — *admin can rename/delete any league; commissioners can shutdown their league with 3-step confirmation (type league name to confirm)*
