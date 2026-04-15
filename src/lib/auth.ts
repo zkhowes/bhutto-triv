@@ -57,6 +57,10 @@ export const authOptions: NextAuthOptions = {
     },
   },
   cookies: {
+    sessionToken: {
+      name: "__Secure-next-auth.session-token",
+      options: { httpOnly: true, sameSite: "none" as const, path: "/", secure: true, maxAge: 30 * 24 * 60 * 60 },
+    },
     csrfToken: {
       name: "__Secure-next-auth.csrf-token",
       options: { httpOnly: true, sameSite: "none" as const, path: "/", secure: true },
