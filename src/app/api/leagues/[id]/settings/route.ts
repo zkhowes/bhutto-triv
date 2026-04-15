@@ -39,7 +39,7 @@ export async function PUT(
   const body = await req.json();
 
   // Fields that can be changed anytime (even during a season)
-  const alwaysAllowedFields = ["maxPlayers"];
+  const alwaysAllowedFields = ["maxPlayers", "autoSkipEnabled"];
   // Fields that require no active season
   const seasonLockedFields = [
     "gamesPerSeason",
@@ -50,7 +50,6 @@ export async function PUT(
     "categoryRevealTime",
     "answerTimerSeconds",
     "absenteePenaltyType",
-    "lightningMode",
   ];
   const allowedFields = [...alwaysAllowedFields, ...seasonLockedFields];
 
@@ -65,7 +64,7 @@ export async function PUT(
     categoryRevealTime: (v) => typeof v === "number" && v >= 0 && v <= 300,
     answerTimerSeconds: (v) => typeof v === "number" && v >= 0 && v <= 600,
     absenteePenaltyType: (v) => typeof v === "string" && ["none", "proportional", "fixed"].includes(v),
-    lightningMode: (v) => typeof v === "boolean",
+    autoSkipEnabled: (v) => typeof v === "boolean",
   };
 
   const updateData: Record<string, unknown> = {};

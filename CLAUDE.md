@@ -43,18 +43,17 @@ npm run lint                 # Run ESLint
 The game engine (`src/lib/game-engine.ts`) manages the core gameplay loop. Understanding round status transitions is critical:
 
 ```
-awaiting_question → question_submitted → category_revealed → closed → graded
-                                                                        ↓
-                                                                   under_review → graded (flag denied)
-                                                                               → cancelled (flag upheld)
+awaiting_question → question_submitted → category_revealed → graded
+                                                                ↓
+                                                           under_review → graded (flag denied)
+                                                                       → cancelled (flag upheld)
 ```
 
 **Round Status Transitions:**
-1. `awaiting_question` - At-bat player submits question
+1. `awaiting_question` - At-bat player submits question (auto-submitted from bank if available)
 2. `question_submitted` - Other players can now see category and place bets
 3. `category_revealed` - Betting locks, players answer the question, timer starts
-4. `closed` - Answers submitted, awaiting grading review (or skipped in Lightning Mode)
-5. `graded` - Round finalized, scores calculated, F1 points awarded
+4. `graded` - All answers in, AI auto-grades and finalizes immediately. Scores calculated, F1 points awarded
 
 **Key Functions:**
 - `submitAnswer()` - Handles answer submission and triggers AI grading
@@ -80,8 +79,8 @@ AI grading happens automatically during answer submission (`src/lib/ai.ts`):
 - **Multiple choice:** Auto-graded by comparing options
 - **Free text:** AI (Claude Sonnet) performs fuzzy matching against correct answer and acceptable answers
 - Grading result stored with `gradedBy: "ai"` or `"auto"`
-- Question submitter can review/override AI grades in grading interface
-- **Lightning Mode:** Skips manual review, immediately finalizes round after AI grading
+- Rounds auto-grade and finalize when all answers are in (no manual review step)
+- Commissioners can re-grade from the graded state if needed
 
 ### Authentication & Roles
 
@@ -100,7 +99,7 @@ League → Season → Game → Round → RoundAnswer
    LeaguePlayer → GamePlayerState
 ```
 
-- **League:** Settings, invite codes, Lightning Mode toggle
+- **League:** Settings, invite codes, auto-skip toggle
 - **Season:** Container for multiple games, awards at completion
 - **Game:** Single game instance, maintains batting order and player states
 - **Round:** Individual trivia round with one question and multiple answers
@@ -163,17 +162,6 @@ import { ROUND_STATUS } from "@/lib/constants";
 if (round.status === ROUND_STATUS.CATEGORY_REVEALED) { ... }
 ```
 
-### Lightning Mode Detection
-Check league setting before manual grading:
-```typescript
-const isLightningMode = round.game.season.league.lightningMode;
-if (isLightningMode) {
-  await closeRound(roundId); // Skip manual review
-} else {
-  await prisma.round.update({ data: { status: ROUND_STATUS.CLOSED } });
-}
-```
-
 ## Environment Variables
 
 Required for development (see `.env.example`):
@@ -190,7 +178,7 @@ Required for development (see `.env.example`):
 1. Update `ROUND_STATUS` in `src/lib/constants.ts`
 2. Add transitions in `src/lib/game-engine.ts`
 3. Update UI conditionals in round page components
-4. Consider impact on test mode and Lightning Mode
+4. Consider impact on test mode
 
 ### Modifying Scoring Logic
 1. Edit `calculateF1Scoring()` in `src/lib/scoring.ts`
@@ -209,7 +197,7 @@ Required for development (see `.env.example`):
 
 ## Kanban
 
-> Last updated: 2026-04-14 (usability improvements: game status, slider label, nav icons, spinners)
+> Last updated: 2026-04-15 (game flow: auto-grade, auto-submit bank questions, 24h auto-skip)
 
 ### Backlog
 - [ ] Replay past questions — *schema has isReplay/originalQuestionId, needs UI + API*
@@ -218,13 +206,13 @@ Required for development (see `.env.example`):
 - [ ] Season pause (functional) — *stub exists, shows alert()*
 
 ### Up Next
-- [ ] Auto-submit banked question when At Bat — *useOnNextRound flag stored, no consumption logic*
 - [ ] Commissioner settings editing UI — *API supports writes, UI is read-only*
 - [ ] Shareable link generation UI — *API + model exist, needs Share buttons on game/round/season pages*
 
 ### In Progress
 
 ### Done
+- [x] Game flow improvements — *auto-grade rounds (removed Lightning Mode/conclude step), auto-submit banked questions server-side, 24h auto-skip with 3h warning for at-bat players*
 - [x] Usability improvements — *floating bet slider label, game status on dashboard tiles, home+workshop icons in nav, dashboard layout cleanup, season standings link, submit button spinners*
 - [x] Apple Sign-In — *fixed Service ID mismatch, PKCE→state check, sameSite=none cookies for cross-site POST*
 - [x] Player roster on commissioner start buttons — *shows active players with avatars before starting game/season*
@@ -249,14 +237,14 @@ Required for development (see `.env.example`):
 - [x] AI grading — fuzzy match for free text, auto for MC
 - [x] AI question workshop — 3-variation cards, edit flow, draft bank
 - [x] AI league name suggestions + avatar generation
-- [x] Lightning Mode — AI auto-grade, skip manual review
+- [x] Lightning Mode (removed — now default behavior) — AI auto-grade, skip manual review
 - [x] Price-is-Right answer format — *beyond spec*
 - [x] Power-ups (hint, elimination, high-low) — *beyond spec*
 - [x] Question quality ratings + bonus — *beyond spec*
 - [x] Notification system — in-app + SMS via Mosio
 - [x] Cron-based deadline warning (every 15 min)
 - [x] Notification center page + NavBar bell
-- [x] Commissioner tools — players, game controls, season mgmt, Lightning Mode toggle
+- [x] Commissioner tools — players, game controls, season mgmt, auto-skip toggle
 - [x] Hall of Fame — 9 season awards + career stats table
 - [x] Test mode — fake players, advance controls, act-as switching
 - [x] Super Admin dashboard — stats, charts, search, question bank, notification stats

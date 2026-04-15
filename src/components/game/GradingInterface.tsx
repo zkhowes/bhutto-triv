@@ -273,7 +273,13 @@ export default function GradingInterface({
               Correct order ({question.orderingDirection}):
             </p>
             <div className="space-y-1">
-              {orderingItems.map((item, i) => (
+              {(orderingCorrectOrder.length > 0
+                ? orderingCorrectOrder
+                    .map((pos, idx) => ({ pos, item: orderingItems[idx] }))
+                    .sort((a, b) => a.pos - b.pos)
+                    .map(e => e.item)
+                : orderingItems
+              ).map((item, i) => (
                 <p key={i} className="text-emerald-400 text-xs">
                   {i + 1}. {item}
                 </p>

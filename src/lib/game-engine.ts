@@ -15,7 +15,6 @@ import { scoreRound, calculateAbsenteePenalty, getF1PointsForPlacement, determin
 import {
   notifyAtBat,
   notifyNewQuestion,
-  notifyAllAnswersIn,
   notifyOnDeck,
   notifyRoundResults,
   notifyFlagThrown,
@@ -128,8 +127,9 @@ export async function initializeGame(
     if (i === 0) firstRoundId = round.id;
   }
 
-  // Notify the first at-bat and on-deck players (fire-and-forget)
+  // Auto-submit banked question if available, then notify
   if (firstRoundId) {
+    await tryAutoSubmitFromBank(firstRoundId);
     notifyAtBat(firstRoundId).catch(console.error);
     notifyOnDeck(firstRoundId).catch(console.error);
   }
@@ -496,24 +496,98 @@ export async function submitAnswer(
     });
 
     if (answeredCount >= eligiblePlayerIds.length) {
-      const isLightningMode = round.game.season.league.lightningMode;
-
-      if (isLightningMode) {
-        // Lightning Mode: AI has already graded, skip manual review and finalize immediately
-        await closeRound(roundId);
-      } else {
-        // Normal Mode: Set to "closed" (awaiting grading review by at-bat player)
-        await prisma.round.update({
-          where: { id: roundId },
-          data: { status: ROUND_STATUS.CLOSED },
-        });
-        // Notify at-bat player that all answers are in and it's time to grade (fire-and-forget)
-        notifyAllAnswersIn(roundId).catch(console.error);
-      }
+      // All answers in — auto-grade and finalize immediately
+      await closeRound(roundId);
     }
   }
 
   return { isCorrect, gradedBy };
+}
+
+/**
+ * Auto-submit a banked question when a round activates to AWAITING_QUESTION.
+ * If the at-bat player has a draft with useOnNextRound=true that hasn't been
+ * played in this game, submit it automatically. Non-fatal on failure.
+ */
+async function tryAutoSubmitFromBank(roundId: string): Promise<void> {
+  try {
+    const round = await prisma.round.findUnique({
+      where: { id: roundId },
+      include: {
+        game: {
+          include: {
+            rounds: {
+              where: { question: { isNot: null } },
+              include: { question: { select: { questionText: true } } },
+            },
+          },
+        },
+      },
+    });
+    if (!round || !round.atBatPlayerId) return;
+
+    const atBatPlayer = await prisma.leaguePlayer.findUnique({
+      where: { id: round.atBatPlayerId },
+      select: { userId: true, id: true, isFake: true },
+    });
+    if (!atBatPlayer || atBatPlayer.isFake) return;
+
+    const draft = await prisma.questionDraft.findFirst({
+      where: {
+        userId: atBatPlayer.userId,
+        useOnNextRound: true,
+        category: { not: null },
+        questionText: { not: null },
+        answerFormat: { not: null },
+      },
+      orderBy: { updatedAt: "desc" },
+    });
+    if (!draft || !draft.category || !draft.questionText || !draft.answerFormat) return;
+
+    // Check: hasn't been played in this game
+    const existingTexts = round.game.rounds
+      .map((r) => r.question?.questionText?.toLowerCase().trim())
+      .filter(Boolean) as string[];
+    if (existingTexts.includes(draft.questionText.toLowerCase().trim())) return;
+
+    const questionId = await submitQuestion(roundId, {
+      category: draft.category,
+      questionText: draft.questionText,
+      answerFormat: draft.answerFormat,
+      optionA: draft.optionA ?? undefined,
+      optionB: draft.optionB ?? undefined,
+      optionC: draft.optionC ?? undefined,
+      optionD: draft.optionD ?? undefined,
+      correctOption: draft.correctOption ?? undefined,
+      correctAnswer: draft.correctAnswer ?? undefined,
+      acceptableAnswers: draft.acceptableAnswers ? JSON.parse(draft.acceptableAnswers) : undefined,
+      leaguePlayerId: atBatPlayer.id,
+      creatorUserId: atBatPlayer.userId,
+      imageUrl: draft.imageUrl ?? undefined,
+      imageSource: draft.imageSource ?? undefined,
+      imageAttribution: draft.imageAttribution ?? undefined,
+      orderingItems: draft.orderingItems ? JSON.parse(draft.orderingItems) : undefined,
+      orderingCorrectOrder: draft.orderingCorrectOrder ? JSON.parse(draft.orderingCorrectOrder) : undefined,
+      orderingDirection: draft.orderingDirection ?? undefined,
+    });
+
+    // Mark question as from bank
+    await prisma.question.update({
+      where: { id: questionId },
+      data: {
+        isFromBank: true,
+        originalQuestionId: draft.id,
+      },
+    });
+
+    // Clear the useOnNextRound flag
+    await prisma.questionDraft.update({
+      where: { id: draft.id },
+      data: { useOnNextRound: false },
+    });
+  } catch (err) {
+    console.error("[AutoSubmit] Failed to auto-submit from bank:", err);
+  }
 }
 
 /**
@@ -549,6 +623,9 @@ export async function closeRound(roundId: string): Promise<void> {
   });
 
   if (!round) throw new Error("Round not found");
+
+  // Guard against race condition: two simultaneous answer submissions can both trigger closeRound
+  if (round.status === ROUND_STATUS.GRADED) return;
 
   const game = round.game;
   const league = game.season.league;
@@ -893,6 +970,8 @@ export async function closeRound(roundId: string): Promise<void> {
         where: { id: nextRound.id },
         data: { status: ROUND_STATUS.AWAITING_QUESTION },
       });
+      // Auto-submit banked question if available
+      await tryAutoSubmitFromBank(nextRound.id);
       // Notify the new at-bat and on-deck players
       notifyAtBat(nextRound.id).catch(console.error);
       notifyOnDeck(nextRound.id).catch(console.error);
@@ -1080,6 +1159,8 @@ export async function skipPlayerTurn(
           where: { id: nextPending.id },
           data: { status: ROUND_STATUS.AWAITING_QUESTION },
         });
+        // Auto-submit banked question if available
+        await tryAutoSubmitFromBank(nextPending.id);
         notifyAtBat(nextPending.id).catch(console.error);
         notifyOnDeck(nextPending.id).catch(console.error);
       }
@@ -1514,6 +1595,8 @@ async function resolveFlagAgree(flagReviewId: string): Promise<void> {
         where: { id: nextPending.id },
         data: { status: ROUND_STATUS.AWAITING_QUESTION },
       });
+      // Auto-submit banked question if available
+      await tryAutoSubmitFromBank(nextPending.id);
       notifyAtBat(nextPending.id).catch(console.error);
       notifyOnDeck(nextPending.id).catch(console.error);
     }

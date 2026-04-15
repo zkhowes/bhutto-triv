@@ -34,7 +34,7 @@ interface LeagueInfo {
   categoryRevealTime: string;
   answerTimerSeconds: number;
   absenteePenaltyType: string;
-  lightningMode: boolean;
+  autoSkipEnabled: boolean;
   notificationMode: string;
   inviteCode: string;
   myRole: string | null;
@@ -253,6 +253,16 @@ export default function CommissionerPage() {
     await fetchLeague();
   };
 
+  const toggleAutoSkip = async () => {
+    const newValue = !league?.autoSkipEnabled;
+    await fetch(`/api/leagues/${leagueId}/settings`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ autoSkipEnabled: newValue }),
+    });
+    await fetchLeague();
+  };
+
   const saveMaxPlayers = async (value: number) => {
     await fetch(`/api/leagues/${leagueId}/settings`, {
       method: "PUT",
@@ -262,21 +272,6 @@ export default function CommissionerPage() {
     await fetchLeague();
   };
 
-  const toggleLightningMode = async () => {
-    const newValue = !league?.lightningMode;
-    if (!confirm(
-      newValue
-        ? "Enable Lightning Mode? AI will auto-grade all answers and rounds will progress automatically without manual review."
-        : "Disable Lightning Mode? You'll need to manually review and confirm grades for each round."
-    )) return;
-
-    await fetch(`/api/leagues/${leagueId}/settings`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ lightningMode: newValue }),
-    });
-    await fetchLeague();
-  };
 
   if (status === "loading" || loading || !league) {
     return (
@@ -550,22 +545,6 @@ export default function CommissionerPage() {
                     >
                       Reveal Category
                     </button>
-                  )}
-                  {activeRound.status === "closed" && (
-                    <>
-                      <Link
-                        href={`/rounds/${activeRound.id}`}
-                        className="btn-primary text-sm inline-block"
-                      >
-                        Review & Grade Answers
-                      </Link>
-                      <button
-                        onClick={() => closeRound(activeRound.id)}
-                        className="btn-danger text-sm"
-                      >
-                        Force Grade & Score
-                      </button>
-                    </>
                   )}
                   {(activeRound.status === "question_submitted" ||
                     activeRound.status === "category_revealed") && (
@@ -843,23 +822,24 @@ export default function CommissionerPage() {
                   {league.absenteePenaltyType}
                 </span>
               </div>
+
+              {/* Auto-Skip */}
               <div className="flex justify-between items-center py-3 border-b border-[#1e3a5f]">
                 <div>
-                  <span className="text-[#a0a0b8] block">Lightning Mode</span>
+                  <span className="text-[#a0a0b8] block">Auto-Skip</span>
                   <span className="text-xs text-[#666680] block mt-1">
-                    AI auto-grades, game keeps moving without manual review
+                    Warn at-bat players after 24h, auto-skip after 27h
                   </span>
                 </div>
                 <button
-                  onClick={toggleLightningMode}
-                  disabled={hasActiveSeason}
+                  onClick={toggleAutoSkip}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    league.lightningMode ? "bg-[#e94560]" : "bg-[#1e3a5f]"
-                  } ${hasActiveSeason ? "opacity-50 cursor-not-allowed" : ""}`}
+                    league.autoSkipEnabled ? "bg-[#e94560]" : "bg-[#1e3a5f]"
+                  }`}
                 >
                   <span
                     className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      league.lightningMode ? "translate-x-6" : "translate-x-1"
+                      league.autoSkipEnabled ? "translate-x-6" : "translate-x-1"
                     }`}
                   />
                 </button>

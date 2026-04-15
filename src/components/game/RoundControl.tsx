@@ -201,9 +201,16 @@ export default function RoundControl({
               {(() => {
                 try {
                   const items: string[] = JSON.parse(round.question!.orderingItems ?? "[]");
+                  const order: number[] = round.question!.orderingCorrectOrder
+                    ? JSON.parse(round.question!.orderingCorrectOrder)
+                    : items.map((_, i) => i + 1);
+                  const sorted = order
+                    .map((pos, idx) => ({ pos, item: items[idx] }))
+                    .sort((a, b) => a.pos - b.pos)
+                    .map(e => e.item);
                   return (
                     <div className="space-y-0.5">
-                      {items.map((item, i) => (
+                      {sorted.map((item, i) => (
                         <p key={i} className="text-xs text-emerald-400">
                           {i + 1}. {item}
                         </p>

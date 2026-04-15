@@ -378,35 +378,6 @@ export default function GuideControl(props: GuideControlProps) {
     );
   }
 
-  // Grading: at bat or commissioner
-  if (isClosed && (isAtBat || isCommissioner) && round.question) {
-    return (
-      <div className="mb-6">
-        <GradingInterface
-          roundId={round.id}
-          answers={round.answers}
-          question={round.question}
-          atBatPlayerId={round.atBatPlayerId}
-          categoryRevealAt={round.categoryRevealAt}
-          onGradingComplete={onRefresh}
-        />
-      </div>
-    );
-  }
-
-  // Awaiting review (non-at-bat, non-commissioner)
-  if (isClosed && !isAtBat && !isCommissioner) {
-    return (
-      <div className="card p-5 mb-6 text-center">
-        <p className="text-lg font-bold text-orange-400 mb-2">
-          Awaiting Review
-        </p>
-        <p className="text-[#a0a0b8]">
-          Waiting for the question creator to review and confirm grades...
-        </p>
-      </div>
-    );
-  }
 
   // Answered, waiting for round close
   if (!isGraded && !isClosed && !isAtBat && hasAnswered) {

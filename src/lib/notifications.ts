@@ -12,7 +12,9 @@ export type NotificationType =
   | "round_closed_by_commissioner"
   | "flag_thrown"
   | "flag_resolved"
-  | "action_reminder";
+  | "action_reminder"
+  | "auto_skip_warning"
+  | "auto_skipped";
 
 // Which levels each notification type gets sent at
 const LEVEL_MAP: Record<NotificationType, NotificationLevel[]> = {
@@ -26,6 +28,8 @@ const LEVEL_MAP: Record<NotificationType, NotificationLevel[]> = {
   flag_thrown: ["low", "high"],
   flag_resolved: ["low", "high"],
   action_reminder: ["low", "high"],
+  auto_skip_warning: ["low", "high"],
+  auto_skipped: ["low", "high"],
 };
 
 // ─── Effective Level Resolution ───────────────────────────────────────────────
@@ -583,5 +587,79 @@ export async function notifyActionReminder(
     });
   } catch (err) {
     console.error("[Notifications] notifyActionReminder failed:", err);
+  }
+}
+
+/**
+ * Warn an at-bat player that they'll be auto-skipped in 3 hours.
+ * Deduplication: one warning per player per round
+ */
+export async function notifyAutoSkipWarning(
+  roundId: string,
+  leaguePlayerId: string
+): Promise<void> {
+  try {
+    const player = await getPlayerInfo(leaguePlayerId);
+    if (!player || !player.isActive || player.isFake) return;
+
+    const alreadyWarned = await prisma.notification.findFirst({
+      where: {
+        roundId,
+        userId: player.userId,
+        type: "auto_skip_warning",
+      },
+    });
+    if (alreadyWarned) return;
+
+    const round = await getRoundContext(roundId);
+    if (!round) return;
+
+    const league = round.game.season.league;
+
+    await createNotification({
+      userId: player.userId,
+      leagueId: league.id,
+      gameId: round.gameId,
+      roundId,
+      type: "auto_skip_warning",
+      title: `${league.name}: Submit your question or be skipped!`,
+      message: `You have 3 hours to submit a question or you'll be auto-skipped.`,
+      destinationUrl: `/games/${round.gameId}?round=${roundId}`,
+      phoneNumber: player.phoneNumber,
+    });
+  } catch (err) {
+    console.error("[Notifications] notifyAutoSkipWarning failed:", err);
+  }
+}
+
+/**
+ * Notify an at-bat player that they were auto-skipped.
+ */
+export async function notifyAutoSkipped(
+  roundId: string,
+  leaguePlayerId: string
+): Promise<void> {
+  try {
+    const player = await getPlayerInfo(leaguePlayerId);
+    if (!player || !player.isActive || player.isFake) return;
+
+    const round = await getRoundContext(roundId);
+    if (!round) return;
+
+    const league = round.game.season.league;
+
+    await createNotification({
+      userId: player.userId,
+      leagueId: league.id,
+      gameId: round.gameId,
+      roundId,
+      type: "auto_skipped",
+      title: `${league.name}: You were auto-skipped`,
+      message: `You didn't submit a question in time and were automatically skipped.`,
+      destinationUrl: `/games/${round.gameId}`,
+      phoneNumber: player.phoneNumber,
+    });
+  } catch (err) {
+    console.error("[Notifications] notifyAutoSkipped failed:", err);
   }
 }

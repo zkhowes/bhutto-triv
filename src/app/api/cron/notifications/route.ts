@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { notifyAboutToBeSkipped, notifyActionReminder } from "@/lib/notifications";
+import { notifyAboutToBeSkipped, notifyActionReminder, notifyAutoSkipWarning, notifyAutoSkipped } from "@/lib/notifications";
+import { skipPlayerTurn } from "@/lib/game-engine";
 
 /**
  * Vercel Cron Job — runs every 15 minutes
  *
  * 1. "About to be skipped" — last player without bet+answer, deadline 30–90 min away
  * 2. "Action reminder" — round stale 24+ hours, reminds whoever is blocking progress
+ * 3. "Auto-skip" — for leagues with autoSkipEnabled: warn at 24h, skip at 27h
  */
 export async function GET(request: NextRequest) {
   // Authenticate cron requests — always require secret
@@ -139,28 +141,78 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // 2c. Closed — at-bat player hasn't graded after 24h
-  const staleAwaitingGrading = await prisma.round.findMany({
+  // ─── 3. Auto-skip (leagues with autoSkipEnabled) ─────────────────────────────
+  // Warn at-bat players at 24h, auto-skip at 27h (when warning was sent 3h+ ago)
+
+  let autoSkipsPerformed = 0;
+
+  const autoSkipStaleRounds = await prisma.round.findMany({
     where: {
-      status: "closed",
+      status: "awaiting_question",
       updatedAt: { lte: twentyFourHoursAgo },
-      game: { status: "active" },
+      game: {
+        status: "active",
+        season: { league: { autoSkipEnabled: true } },
+      },
     },
-    select: { id: true, atBatPlayerId: true },
+    select: {
+      id: true,
+      atBatPlayerId: true,
+      game: {
+        select: {
+          season: { select: { league: { select: { id: true } } } },
+        },
+      },
+    },
     take: 50,
   });
 
-  for (const round of staleAwaitingGrading) {
+  const threeHoursAgo = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+
+  for (const round of autoSkipStaleRounds) {
     if (!round.atBatPlayerId) continue;
-    await notifyActionReminder(round.id, round.atBatPlayerId, "grading");
-    notificationsSent++;
+
+    // Look up the user ID for the at-bat player
+    const atBatPlayer = await prisma.leaguePlayer.findUnique({
+      where: { id: round.atBatPlayerId },
+      select: { userId: true, isFake: true },
+    });
+    if (!atBatPlayer || atBatPlayer.isFake) continue;
+
+    // Check if warning already sent
+    const existingWarning = await prisma.notification.findFirst({
+      where: {
+        roundId: round.id,
+        userId: atBatPlayer.userId,
+        type: "auto_skip_warning",
+      },
+      select: { createdAt: true },
+    });
+
+    if (!existingWarning) {
+      // Send 3-hour warning
+      await notifyAutoSkipWarning(round.id, round.atBatPlayerId);
+      notificationsSent++;
+    } else if (existingWarning.createdAt <= threeHoursAgo) {
+      // Warning was sent 3+ hours ago — auto-skip
+      try {
+        await skipPlayerTurn(round.id, round.atBatPlayerId);
+        await notifyAutoSkipped(round.id, round.atBatPlayerId);
+        autoSkipsPerformed++;
+        notificationsSent++;
+      } catch (err) {
+        console.error("[AutoSkip] Failed to skip player:", err);
+      }
+    }
   }
 
   return NextResponse.json({
     success: true,
     approachingRoundsChecked: approachingRounds.length,
     staleRoundsChecked:
-      staleAwaitingQuestion.length + staleAwaitingAnswers.length + staleAwaitingGrading.length,
+      staleAwaitingQuestion.length + staleAwaitingAnswers.length,
+    autoSkipRoundsChecked: autoSkipStaleRounds.length,
+    autoSkipsPerformed,
     notificationsSent,
     timestamp: now.toISOString(),
   });

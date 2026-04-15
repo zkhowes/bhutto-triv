@@ -120,7 +120,14 @@ export default function QuestionSubmitForm({
             setOptionD(autoSubmitDraft.optionD || "");
             setCorrectOption(autoSubmitDraft.correctOption || "");
           } else if (autoSubmitDraft.answerFormat === "ordering" && autoSubmitDraft.orderingItems) {
-            const items = JSON.parse(autoSubmitDraft.orderingItems);
+            const rawItems = JSON.parse(autoSubmitDraft.orderingItems);
+            const order = autoSubmitDraft.orderingCorrectOrder
+              ? JSON.parse(autoSubmitDraft.orderingCorrectOrder)
+              : rawItems.map((_: string, i: number) => i + 1);
+            const items = order
+              .map((pos: number, idx: number) => ({ pos, item: rawItems[idx] }))
+              .sort((a: { pos: number }, b: { pos: number }) => a.pos - b.pos)
+              .map((e: { item: string }) => e.item);
             setOrderingItem1(items[0] || "");
             setOrderingItem2(items[1] || "");
             setOrderingItem3(items[2] || "");
@@ -363,13 +370,19 @@ export default function QuestionSubmitForm({
       setAnswerFormat("price_is_right");
     } else if (formatSuggestion.suggestedFormat === "ordering") {
       setAnswerFormat("ordering");
-      const items = (formatSuggestion as { orderingItems?: string[] }).orderingItems || [];
+      const fs = formatSuggestion as { orderingItems?: string[]; orderingCorrectOrder?: number[]; orderingDirection?: string };
+      const rawItems = fs.orderingItems || [];
+      const order = fs.orderingCorrectOrder || rawItems.map((_, i) => i + 1);
+      const items = order
+        .map((pos, idx) => ({ pos, item: rawItems[idx] }))
+        .sort((a, b) => a.pos - b.pos)
+        .map(e => e.item);
       setOrderingItem1(items[0] || "");
       setOrderingItem2(items[1] || "");
       setOrderingItem3(items[2] || "");
       setOrderingItem4(items[3] || "");
       setShowFourthItem(items.length >= 4);
-      setOrderingDirection((formatSuggestion as { orderingDirection?: string }).orderingDirection || "");
+      setOrderingDirection(fs.orderingDirection || "");
     }
     setFormatSuggestion(null);
   };
@@ -409,8 +422,14 @@ export default function QuestionSubmitForm({
                   setOptionD(q.optionD || "");
                   setCorrectOption(q.correctOption || "");
                 } else if (q.answerFormat === "ordering") {
-                  const qOrdering = q as typeof q & { orderingItems?: string[]; orderingDirection?: string };
-                  const items = qOrdering.orderingItems || [];
+                  const qOrdering = q as typeof q & { orderingItems?: string[]; orderingCorrectOrder?: number[]; orderingDirection?: string };
+                  const rawItems = qOrdering.orderingItems || [];
+                  const order = qOrdering.orderingCorrectOrder || rawItems.map((_, i) => i + 1);
+                  // Reorder items into correct order so form fields match the intended sequence
+                  const items = order
+                    .map((pos, idx) => ({ pos, item: rawItems[idx] }))
+                    .sort((a, b) => a.pos - b.pos)
+                    .map(e => e.item);
                   setOrderingItem1(items[0] || "");
                   setOrderingItem2(items[1] || "");
                   setOrderingItem3(items[2] || "");
