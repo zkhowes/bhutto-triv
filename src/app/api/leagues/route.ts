@@ -12,6 +12,7 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  try {
   const leagues = await prisma.league.findMany({
     where: {
       players: {
@@ -136,6 +137,10 @@ export async function GET() {
   });
 
   return NextResponse.json(leaguesWithRole);
+  } catch (error) {
+    console.error("[leagues] GET crashed:", error);
+    return NextResponse.json({ error: "Internal server error", detail: String(error) }, { status: 500 });
+  }
 }
 
 // POST /api/leagues - Create a new league
