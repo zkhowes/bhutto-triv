@@ -189,7 +189,6 @@ export default function GuideControl(props: GuideControlProps) {
   const hasBet = !!myAnswer?.betPlacedAt;
   const hasAnswered = !!myAnswer?.answeredAt;
   const isGraded = round.status === "graded";
-  const isClosed = round.status === "closed";
 
   const answerDeadline =
     round.categoryRevealAt && answerTimerSeconds
@@ -297,7 +296,7 @@ export default function GuideControl(props: GuideControlProps) {
   }
 
   // At bat: waiting for others
-  if (isAtBat && !isGraded && !isClosed && round.status !== "awaiting_question") {
+  if (isAtBat && !isGraded && round.status !== "awaiting_question") {
     return (
       <div className="card p-5 mb-6 text-center">
         <p className="text-lg font-bold text-[#e94560] mb-2">
@@ -311,7 +310,7 @@ export default function GuideControl(props: GuideControlProps) {
   }
 
   // Eliminated player
-  if (!isGraded && !isClosed && !isAtBat && myPlayerState && myPlayerState.points === 0 && !hasBet) {
+  if (!isGraded && !isAtBat && myPlayerState && myPlayerState.points === 0 && !hasBet) {
     return (
       <div className="card p-5 mb-6 text-center">
         <p className="text-lg font-bold text-red-400 mb-2">
@@ -380,7 +379,7 @@ export default function GuideControl(props: GuideControlProps) {
 
 
   // Answered, waiting for round close
-  if (!isGraded && !isClosed && !isAtBat && hasAnswered) {
+  if (!isGraded && !isAtBat && hasAnswered) {
     return (
       <div className="card p-5 mb-6 text-center">
         <p className="text-lg font-bold text-[#e94560] mb-2">
@@ -397,7 +396,7 @@ export default function GuideControl(props: GuideControlProps) {
   }
 
   // Category display (standalone when no other action applies)
-  if (round.question && (round.status === "category_revealed" || isClosed) && !isAtBat) {
+  if (round.question && round.status === "category_revealed" && !isAtBat) {
     return (
       <div className="card p-4 mb-6 text-center">
         <p className="text-xs text-[#a0a0b8] uppercase tracking-wider">Category</p>

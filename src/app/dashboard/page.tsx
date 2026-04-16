@@ -44,8 +44,6 @@ function getLeagueAction(league: LeagueSummary): { text: string; urgent: boolean
     return { text: "Answer the question!", urgent: true };
   if (status === "category_revealed")
     return { text: "Waiting for all answers", urgent: false };
-  if (status === "closed")
-    return { text: "Round under review", urgent: false };
   return null;
 }
 

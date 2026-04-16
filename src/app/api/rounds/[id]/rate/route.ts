@@ -38,7 +38,7 @@ export async function POST(
   }
 
   // Must be in a rateable state
-  if (!["category_revealed", "closed", "graded"].includes(round.status)) {
+  if (!["category_revealed", "graded"].includes(round.status)) {
     return NextResponse.json(
       { error: "Cannot rate in this round state" },
       { status: 400 }

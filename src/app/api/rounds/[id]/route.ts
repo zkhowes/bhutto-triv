@@ -102,7 +102,7 @@ export async function GET(
   }
 
   // If round is not yet graded, hide some answer details for non-graded rounds
-  const isGraded = round.status === "graded" || round.status === "closed" || round.status === "under_review";
+  const isGraded = round.status === "graded" || round.status === "under_review";
   const userId = session?.user?.id;
 
   // Support test mode actAs parameter for correct player identification

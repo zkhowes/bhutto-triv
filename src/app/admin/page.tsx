@@ -898,8 +898,6 @@ export default function AdminPage() {
                         className={`badge ${
                           r.status === "graded"
                             ? "bg-green-500/20 text-green-400"
-                            : r.status === "closed"
-                            ? "bg-yellow-500/20 text-yellow-400"
                             : r.status === "category_revealed"
                             ? "bg-blue-500/20 text-blue-400"
                             : "bg-gray-500/20 text-gray-400"

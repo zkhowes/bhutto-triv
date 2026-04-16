@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { ROUND_STATUS } from "@/lib/constants";
+import { closeRound } from "@/lib/game-engine";
 import { notifyRoundClosedByCommissioner } from "@/lib/notifications";
 
 export async function POST(
@@ -104,11 +104,8 @@ export async function POST(
       });
     }
 
-    // Stop at "closed" — commissioner will see grading interface on the round page
-    await prisma.round.update({
-      where: { id: roundId },
-      data: { status: ROUND_STATUS.CLOSED },
-    });
+    // Auto-grade the round immediately (absentees already marked above)
+    await closeRound(roundId);
 
     await notifyRoundClosedByCommissioner(roundId, absentPlayerNames);
 

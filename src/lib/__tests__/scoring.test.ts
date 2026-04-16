@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { determinePirWinners } from "../scoring";
+import {
+  scoreRound,
+  getF1PointsForPlacement,
+  computePowerUpCost,
+  determinePirWinners,
+  determineOrderingWinners,
+  calculateAbsenteePenalty,
+} from "../scoring";
 
 describe("determinePirWinners", () => {
   it("picks the closest guess without going over", () => {
@@ -123,5 +130,186 @@ describe("determinePirWinners", () => {
     // -10 is exact, -5 is over (> -10), -15 is under
     expect(winners.size).toBe(1);
     expect(winners.has("b")).toBe(true);
+  });
+});
+
+describe("scoreRound", () => {
+  const now = new Date();
+  const later = new Date(now.getTime() + 5000);
+
+  it("ranks correct answers above incorrect", () => {
+    const results = scoreRound([
+      { leaguePlayerId: "p1", isCorrect: true, betAmount: 5, answeredAt: now, isAbsent: false, nickname: "Alice" },
+      { leaguePlayerId: "p2", isCorrect: false, betAmount: 10, answeredAt: now, isAbsent: false, nickname: "Bob" },
+    ]);
+    expect(results.find((r) => r.leaguePlayerId === "p1")!.placement).toBe(1);
+    expect(results.find((r) => r.leaguePlayerId === "p2")!.placement).toBe(2);
+  });
+
+  it("ranks higher bet correct answers above lower bet", () => {
+    const results = scoreRound([
+      { leaguePlayerId: "p1", isCorrect: true, betAmount: 5, answeredAt: now, isAbsent: false, nickname: "Alice" },
+      { leaguePlayerId: "p2", isCorrect: true, betAmount: 10, answeredAt: now, isAbsent: false, nickname: "Bob" },
+    ]);
+    expect(results.find((r) => r.leaguePlayerId === "p2")!.placement).toBe(1);
+    expect(results.find((r) => r.leaguePlayerId === "p1")!.placement).toBe(2);
+  });
+
+  it("uses answer time as tiebreaker for same-bet correct answers", () => {
+    const results = scoreRound([
+      { leaguePlayerId: "p1", isCorrect: true, betAmount: 5, answeredAt: later, isAbsent: false, nickname: "Alice" },
+      { leaguePlayerId: "p2", isCorrect: true, betAmount: 5, answeredAt: now, isAbsent: false, nickname: "Bob" },
+    ]);
+    expect(results.find((r) => r.leaguePlayerId === "p2")!.placement).toBe(1);
+  });
+
+  it("ranks absent players last", () => {
+    const results = scoreRound([
+      { leaguePlayerId: "p1", isCorrect: false, betAmount: 5, answeredAt: now, isAbsent: false, nickname: "Alice" },
+      { leaguePlayerId: "p2", isCorrect: false, betAmount: 0, answeredAt: null, isAbsent: true, nickname: "Bob" },
+      { leaguePlayerId: "p3", isCorrect: true, betAmount: 3, answeredAt: now, isAbsent: false, nickname: "Charlie" },
+    ]);
+    expect(results.find((r) => r.leaguePlayerId === "p3")!.placement).toBe(1);
+    expect(results.find((r) => r.leaguePlayerId === "p1")!.placement).toBe(2);
+    expect(results.find((r) => r.leaguePlayerId === "p2")!.placement).toBe(3);
+  });
+
+  it("awards fastest lap to highest-bet correct player", () => {
+    const results = scoreRound([
+      { leaguePlayerId: "p1", isCorrect: true, betAmount: 10, answeredAt: later, isAbsent: false, nickname: "Alice" },
+      { leaguePlayerId: "p2", isCorrect: true, betAmount: 5, answeredAt: now, isAbsent: false, nickname: "Bob" },
+    ]);
+    expect(results.find((r) => r.leaguePlayerId === "p1")!.fastestLap).toBe(true);
+    expect(results.find((r) => r.leaguePlayerId === "p2")!.fastestLap).toBe(false);
+  });
+
+  it("breaks fastest lap ties with answer time", () => {
+    const results = scoreRound([
+      { leaguePlayerId: "p1", isCorrect: true, betAmount: 10, answeredAt: later, isAbsent: false, nickname: "Alice" },
+      { leaguePlayerId: "p2", isCorrect: true, betAmount: 10, answeredAt: now, isAbsent: false, nickname: "Bob" },
+    ]);
+    expect(results.find((r) => r.leaguePlayerId === "p2")!.fastestLap).toBe(true);
+  });
+
+  it("gives no fastest lap when no one is correct", () => {
+    const results = scoreRound([
+      { leaguePlayerId: "p1", isCorrect: false, betAmount: 5, answeredAt: now, isAbsent: false, nickname: "Alice" },
+      { leaguePlayerId: "p2", isCorrect: false, betAmount: 3, answeredAt: now, isAbsent: false, nickname: "Bob" },
+    ]);
+    expect(results.every((r) => !r.fastestLap)).toBe(true);
+  });
+
+  it("calculates pointsWon correctly", () => {
+    const results = scoreRound([
+      { leaguePlayerId: "p1", isCorrect: true, betAmount: 7, answeredAt: now, isAbsent: false, nickname: "Alice" },
+      { leaguePlayerId: "p2", isCorrect: false, betAmount: 4, answeredAt: now, isAbsent: false, nickname: "Bob" },
+    ]);
+    expect(results.find((r) => r.leaguePlayerId === "p1")!.pointsWon).toBe(7);
+    expect(results.find((r) => r.leaguePlayerId === "p2")!.pointsWon).toBe(-4);
+  });
+
+  it("gives absent players 0 pointsWon", () => {
+    const results = scoreRound([
+      { leaguePlayerId: "p1", isCorrect: false, betAmount: 0, answeredAt: null, isAbsent: true, nickname: "Alice" },
+    ]);
+    expect(results[0].pointsWon).toBe(0);
+  });
+});
+
+describe("getF1PointsForPlacement", () => {
+  it("gives 25 for first place in 10-player league", () => {
+    expect(getF1PointsForPlacement(1, 10)).toBe(25);
+  });
+
+  it("gives 1 for last place in 10-player league", () => {
+    expect(getF1PointsForPlacement(10, 10)).toBe(1);
+  });
+
+  it("gives 25 for sole player", () => {
+    expect(getF1PointsForPlacement(1, 1)).toBe(25);
+  });
+
+  it("returns 0 for out-of-range placement", () => {
+    expect(getF1PointsForPlacement(11, 10)).toBe(0);
+    expect(getF1PointsForPlacement(0, 5)).toBe(0);
+  });
+});
+
+describe("determineOrderingWinners", () => {
+  it("all-correct players win", () => {
+    const { winners } = determineOrderingWinners(
+      [1, 2, 3],
+      [
+        { id: "a", playerOrder: [1, 2, 3] },
+        { id: "b", playerOrder: [3, 2, 1] },
+      ]
+    );
+    expect(winners.has("a")).toBe(true);
+    expect(winners.has("b")).toBe(false);
+  });
+
+  it("nobody wins if max correct < 2", () => {
+    const { winners } = determineOrderingWinners(
+      [1, 2, 3],
+      [
+        { id: "a", playerOrder: [3, 1, 2] },
+        { id: "b", playerOrder: [2, 3, 1] },
+      ]
+    );
+    expect(winners.size).toBe(0);
+  });
+
+  it("highest partial score wins if >= 2", () => {
+    const { winners, scores } = determineOrderingWinners(
+      [1, 2, 3, 4],
+      [
+        { id: "a", playerOrder: [1, 2, 4, 3] },
+        { id: "b", playerOrder: [1, 3, 2, 4] },
+        { id: "c", playerOrder: [4, 3, 2, 1] },
+      ]
+    );
+    expect(scores.get("a")).toBe(2);
+    expect(scores.get("b")).toBe(2);
+    expect(winners.has("a")).toBe(true);
+    expect(winners.has("b")).toBe(true);
+    expect(winners.has("c")).toBe(false);
+  });
+
+  it("returns empty sets for no submissions", () => {
+    const { winners, scores } = determineOrderingWinners([1, 2, 3], []);
+    expect(winners.size).toBe(0);
+    expect(scores.size).toBe(0);
+  });
+});
+
+describe("calculateAbsenteePenalty", () => {
+  it("divides current points by remaining rounds", () => {
+    expect(calculateAbsenteePenalty(20, 4)).toBe(5);
+  });
+
+  it("returns 0 for 0 remaining rounds", () => {
+    expect(calculateAbsenteePenalty(20, 0)).toBe(0);
+  });
+
+  it("returns 0 for 0 current points", () => {
+    expect(calculateAbsenteePenalty(0, 5)).toBe(0);
+  });
+
+  it("floors the result", () => {
+    expect(calculateAbsenteePenalty(10, 3)).toBe(3);
+  });
+});
+
+describe("computePowerUpCost", () => {
+  it("returns 1 for the poorest player", () => {
+    expect(computePowerUpCost(5, [5, 10, 15, 20])).toBe(1);
+  });
+
+  it("returns 8 for the richest player", () => {
+    expect(computePowerUpCost(20, [5, 10, 15, 20])).toBe(8);
+  });
+
+  it("returns 1 for empty array", () => {
+    expect(computePowerUpCost(10, [])).toBe(1);
   });
 });

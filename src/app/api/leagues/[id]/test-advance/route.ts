@@ -110,30 +110,17 @@ async function advanceSingleStage(
         }
       }
 
-      // submitAnswer auto-sets status to "closed" when all players have answered.
-      // If not all answered (some eliminated), manually set to closed.
+      // submitAnswer auto-grades when all eligible players have answered.
+      // If not all answered (some eliminated), call closeRound() directly.
       const currentRound = await prisma.round.findUnique({ where: { id: round.id } });
-      if (currentRound && currentRound.status !== ROUND_STATUS.CLOSED) {
-        await prisma.round.update({
-          where: { id: round.id },
-          data: { status: ROUND_STATUS.CLOSED },
-        });
+      if (currentRound && currentRound.status !== ROUND_STATUS.GRADED) {
+        await closeRound(round.id);
       }
 
       return {
         from: "category_revealed",
-        to: "closed",
-        message: `${betCount} bets, ${answerCount} answers, awaiting grading review`,
-      };
-    }
-
-    case ROUND_STATUS.CLOSED: {
-      // Auto-confirm all grades and close the round
-      await closeRound(round.id);
-      return {
-        from: "closed",
         to: "graded",
-        message: "Grades confirmed, round graded",
+        message: `${betCount} bets, ${answerCount} answers, round graded`,
       };
     }
 
@@ -149,7 +136,7 @@ async function completeRound(
   playerStates: PlayerStateInfo[],
 ): Promise<string[]> {
   const messages: string[] = [];
-  const stageOrder: string[] = [ROUND_STATUS.AWAITING_QUESTION, ROUND_STATUS.QUESTION_SUBMITTED, ROUND_STATUS.CATEGORY_REVEALED, ROUND_STATUS.CLOSED];
+  const stageOrder: string[] = [ROUND_STATUS.AWAITING_QUESTION, ROUND_STATUS.QUESTION_SUBMITTED, ROUND_STATUS.CATEGORY_REVEALED];
   let currentStatus: string = round.status;
 
   for (const stage of stageOrder) {

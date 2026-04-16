@@ -62,7 +62,6 @@ export const ROUND_STATUS = {
   AWAITING_QUESTION: "awaiting_question",
   QUESTION_SUBMITTED: "question_submitted",
   CATEGORY_REVEALED: "category_revealed",
-  CLOSED: "closed",
   GRADED: "graded",
   UNDER_REVIEW: "under_review",
   CANCELLED: "cancelled",

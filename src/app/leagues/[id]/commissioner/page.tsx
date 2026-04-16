@@ -602,9 +602,7 @@ export default function CommissionerPage() {
                       const statusColor =
                         round.status === "graded"
                           ? "text-emerald-400"
-                          : round.status === "closed"
-                            ? "text-orange-400"
-                            : round.status === "category_revealed"
+                          : round.status === "category_revealed"
                               ? "text-blue-400"
                               : "text-[#a0a0b8]";
                       const atBatPlayer = league.players.find(
