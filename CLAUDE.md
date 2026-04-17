@@ -197,21 +197,22 @@ Required for development (see `.env.example`):
 
 ## Kanban
 
-> Last updated: 2026-04-15 (game flow: auto-grade, auto-submit bank questions, 24h auto-skip)
+> Last updated: 2026-04-17 (settings cleanup, 24hr rule improvements, nav simplification)
 
 ### Backlog
 - [ ] Replay past questions — *schema has isReplay/originalQuestionId, needs UI + API*
 - [ ] View-only public round dashboard — *currently requires auth, no anonymous mode*
-- [ ] "Go back to previous player" commissioner control
 - [ ] Season pause (functional) — *stub exists, shows alert()*
 
 ### Up Next
-- [ ] Commissioner settings editing UI — *API supports writes, UI is read-only*
+- [ ] Commissioner settings editing UI — *API supports writes for answerTimerSeconds/gamesPerSeason/maxPlayers, UI is read-only*
 - [ ] Shareable link generation UI — *API + model exist, needs Share buttons on game/round/season pages*
 
 ### In Progress
 
 ### Done
+- [x] 24hr rule improvements — *auto-skip extended to answerers (warn 24h, close 27h), revert skip control, in-game countdown timer, announcement popup + SMS on enable, absentee penalty capped at 50%*
+- [x] Settings cleanup + nav simplification — *removed unused settings (daily deadline, submission window, category reveal, absentee penalty type) from UI/API; removed redundant Dashboard + Create League nav links*
 - [x] Game flow improvements — *auto-grade rounds (removed Lightning Mode/conclude step), auto-submit banked questions server-side, 24h auto-skip with 3h warning for at-bat players*
 - [x] Usability improvements — *floating bet slider label, game status on dashboard tiles, home+workshop icons in nav, dashboard layout cleanup, season standings link, submit button spinners*
 - [x] Apple Sign-In — *fixed Service ID mismatch, PKCE→state check, sameSite=none cookies for cross-site POST*
