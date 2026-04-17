@@ -43,13 +43,7 @@ export async function PUT(
   // Fields that require no active season
   const seasonLockedFields = [
     "gamesPerSeason",
-    "dailyDeadline",
-    "deadlineTimezone",
-    "submissionWindowStart",
-    "submissionWindowEnd",
-    "categoryRevealTime",
     "answerTimerSeconds",
-    "absenteePenaltyType",
   ];
   const allowedFields = [...alwaysAllowedFields, ...seasonLockedFields];
 
@@ -57,13 +51,7 @@ export async function PUT(
   const fieldValidators: Record<string, (v: unknown) => boolean> = {
     maxPlayers: (v) => typeof v === "number" && Number.isInteger(v) && v >= 2 && v <= 10,
     gamesPerSeason: (v) => typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= 50,
-    dailyDeadline: (v) => typeof v === "string" && /^\d{2}:\d{2}$/.test(v),
-    deadlineTimezone: (v) => typeof v === "string" && v.length <= 50,
-    submissionWindowStart: (v) => typeof v === "string" || v === null,
-    submissionWindowEnd: (v) => typeof v === "string" || v === null,
-    categoryRevealTime: (v) => typeof v === "number" && v >= 0 && v <= 300,
     answerTimerSeconds: (v) => typeof v === "number" && v >= 0 && v <= 600,
-    absenteePenaltyType: (v) => typeof v === "string" && ["none", "proportional", "fixed"].includes(v),
     autoSkipEnabled: (v) => typeof v === "boolean",
   };
 
@@ -89,6 +77,34 @@ export async function PUT(
     where: { id: leagueId },
     data: updateData,
   });
+
+  // When autoSkipEnabled is toggled ON, notify all players
+  if (updateData.autoSkipEnabled === true) {
+    try {
+      const players = await prisma.leaguePlayer.findMany({
+        where: { leagueId, isActive: true, isFake: false },
+        include: { user: { select: { id: true, phoneNumber: true } } },
+      });
+
+      const { createNotification } = await import("@/lib/notifications");
+
+      await Promise.all(
+        players.map((p) =>
+          createNotification({
+            userId: p.user.id,
+            leagueId,
+            type: "auto_skip_enabled",
+            title: "24-Hour Rule Enabled",
+            message: `${league.name} now has the 24-hour rule. You'll be warned after 24h of inactivity and auto-skipped after 27h. Stay on top of your rounds!`,
+            destinationUrl: `/leagues/${leagueId}`,
+            phoneNumber: p.user.phoneNumber ?? undefined,
+          })
+        )
+      );
+    } catch (err) {
+      console.error("[Settings] Failed to send auto-skip notifications:", err);
+    }
+  }
 
   return NextResponse.json(league);
 }

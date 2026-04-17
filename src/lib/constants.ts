@@ -35,12 +35,6 @@ export const QUESTION_QUALITY_BONUS = 3;
 export const DEFAULT_SETTINGS = {
   gamesPerSeason: 3,
   maxPlayers: 10,
-  dailyDeadline: "10:00",
-  deadlineTimezone: "America/Los_Angeles",
-  submissionWindowStart: "17:00",
-  submissionWindowEnd: "07:00",
-  categoryRevealTime: "07:00",
-  absenteePenaltyType: "half" as const,
 };
 
 export const ANSWER_FORMAT = {
@@ -138,4 +132,7 @@ export const NOTIFICATION_TYPES = {
   INVITATION: "invitation",
   FLAG_THROWN: "flag_thrown",
   FLAG_RESOLVED: "flag_resolved",
+  AUTO_CLOSE_WARNING: "auto_close_warning",
+  AUTO_CLOSED: "auto_closed",
+  AUTO_SKIP_ENABLED: "auto_skip_enabled",
 } as const;

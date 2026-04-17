@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { notifyAboutToBeSkipped, notifyActionReminder, notifyAutoSkipWarning, notifyAutoSkipped } from "@/lib/notifications";
-import { skipPlayerTurn } from "@/lib/game-engine";
+import { notifyAboutToBeSkipped, notifyActionReminder, notifyAutoSkipWarning, notifyAutoSkipped, notifyAutoCloseWarning, notifyAutoClosedRound } from "@/lib/notifications";
+import { skipPlayerTurn, closeRound } from "@/lib/game-engine";
 
 /**
  * Vercel Cron Job — runs every 15 minutes
@@ -206,6 +206,104 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // ─── 3b. Auto-close stale answering rounds (leagues with autoSkipEnabled) ───
+  // Warn answering players at 24h, auto-close round at 27h
+
+  let autoClosesPerformed = 0;
+
+  const autoCloseStaleRounds = await prisma.round.findMany({
+    where: {
+      status: { in: ["question_submitted", "category_revealed"] },
+      updatedAt: { lte: twentyFourHoursAgo },
+      game: {
+        status: "active",
+        season: { league: { autoSkipEnabled: true } },
+      },
+    },
+    include: {
+      question: { select: { id: true } },
+      answers: {
+        select: { leaguePlayerId: true, betPlacedAt: true, answeredAt: true },
+      },
+      game: {
+        include: {
+          playerStates: {
+            where: { isEliminated: false },
+            include: {
+              leaguePlayer: { select: { isPaused: true, isFake: true } },
+            },
+          },
+          season: { select: { league: { select: { id: true } } } },
+        },
+      },
+    },
+    take: 50,
+  });
+
+  for (const round of autoCloseStaleRounds) {
+    // Find active, non-paused, non-eliminated, non-fake players who haven't answered
+    const incompletePlayerIds = round.game.playerStates
+      .filter((ps) => {
+        if (ps.leaguePlayerId === round.atBatPlayerId) return false;
+        if (ps.leaguePlayer.isPaused || ps.leaguePlayer.isFake) return false;
+        const answer = round.answers.find((a) => a.leaguePlayerId === ps.leaguePlayerId);
+        return !answer || !answer.betPlacedAt || !answer.answeredAt;
+      })
+      .map((ps) => ps.leaguePlayerId);
+
+    if (incompletePlayerIds.length === 0) continue;
+
+    // Check if warning already sent for this round (use first incomplete player as proxy)
+    const existingWarning = await prisma.notification.findFirst({
+      where: {
+        roundId: round.id,
+        type: "auto_close_warning",
+      },
+      select: { createdAt: true },
+    });
+
+    if (!existingWarning) {
+      // Send 3-hour warning to each incomplete player
+      for (const playerId of incompletePlayerIds) {
+        await notifyAutoCloseWarning(round.id, playerId);
+        notificationsSent++;
+      }
+    } else if (existingWarning.createdAt <= threeHoursAgo) {
+      // Warning was sent 3+ hours ago — auto-close the round
+      try {
+        // Mark incomplete players absent then grade
+        for (const playerId of incompletePlayerIds) {
+          const lp = await prisma.leaguePlayer.findUnique({
+            where: { id: playerId },
+            select: { userId: true },
+          });
+          if (!lp) continue;
+
+          await prisma.roundAnswer.upsert({
+            where: {
+              roundId_leaguePlayerId: { roundId: round.id, leaguePlayerId: playerId },
+            },
+            update: { isAbsent: true },
+            create: {
+              roundId: round.id,
+              questionId: round.question?.id || "",
+              leaguePlayerId: playerId,
+              userId: lp.userId,
+              isAbsent: true,
+            },
+          });
+        }
+
+        await closeRound(round.id);
+        await notifyAutoClosedRound(round.id);
+        autoClosesPerformed++;
+        notificationsSent++;
+      } catch (err) {
+        console.error("[AutoClose] Failed to auto-close round:", err);
+      }
+    }
+  }
+
   return NextResponse.json({
     success: true,
     approachingRoundsChecked: approachingRounds.length,
@@ -213,6 +311,8 @@ export async function GET(request: NextRequest) {
       staleAwaitingQuestion.length + staleAwaitingAnswers.length,
     autoSkipRoundsChecked: autoSkipStaleRounds.length,
     autoSkipsPerformed,
+    autoCloseRoundsChecked: autoCloseStaleRounds.length,
+    autoClosesPerformed,
     notificationsSent,
     timestamp: now.toISOString(),
   });

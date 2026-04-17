@@ -1090,6 +1090,12 @@ export async function skipPlayerTurn(
       }
     }
 
+    // Mark who was skipped (for revert)
+    await prisma.round.update({
+      where: { id: round.id },
+      data: { skippedPlayerId: leaguePlayerId },
+    });
+
     // Notify the player now at bat for the current (reordered) round
     notifyAtBat(round.id).catch(console.error);
     notifyOnDeck(round.id).catch(console.error);
@@ -1109,12 +1115,14 @@ export async function skipPlayerTurn(
       },
     });
 
-    // Mark round as cancelled
+    // Mark round as cancelled with revert info
     await prisma.round.update({
       where: { id: roundId },
       data: {
         status: ROUND_STATUS.CANCELLED,
         isCancelled: true,
+        skippedPlayerId: leaguePlayerId,
+        skipPenaltyAmount: penalty,
       },
     });
 
@@ -1167,6 +1175,129 @@ export async function skipPlayerTurn(
     }
 
     return { cancelled: true };
+  }
+}
+
+/**
+ * Revert a skip — undo the most recent skipPlayerTurn on a round.
+ *
+ * First-skip revert: round is awaiting_question with no question submitted.
+ *   Moves the skipped player back to at-bat position, shifts others back.
+ *
+ * Second-skip revert: round is cancelled.
+ *   Uncancels the round, restores points, decrements skipCount.
+ */
+export async function revertSkip(roundId: string): Promise<void> {
+  const round = await prisma.round.findUnique({
+    where: { id: roundId },
+    include: {
+      question: true,
+      game: {
+        include: {
+          rounds: { orderBy: { number: "asc" } },
+          playerStates: true,
+          season: { include: { league: true } },
+        },
+      },
+    },
+  });
+
+  if (!round) throw new Error("Round not found");
+  if (!round.skippedPlayerId) throw new Error("No skip to revert on this round");
+
+  const game = round.game;
+  const skippedPlayerId = round.skippedPlayerId;
+
+  const playerState = await prisma.gamePlayerState.findUnique({
+    where: {
+      gameId_leaguePlayerId: {
+        gameId: game.id,
+        leaguePlayerId: skippedPlayerId,
+      },
+    },
+  });
+  if (!playerState) throw new Error("Player state not found");
+
+  if (round.status === ROUND_STATUS.AWAITING_QUESTION && !round.question) {
+    // ── REVERT FIRST SKIP ──
+    // The skipped player is now at the end of the order. Move them back to this round.
+    // Current at-bat (replacement player) and everyone after shift forward by one.
+
+    const futureRounds = game.rounds.filter(
+      (r) => r.number >= round.number && !r.isCancelled && r.status === ROUND_STATUS.PENDING || r.id === round.id
+    );
+
+    // Build current at-bat order for affected rounds
+    const currentAtBats = futureRounds.map((r) => r.atBatPlayerId!);
+    // The skipped player should be at the end of currentAtBats
+    // Reverse: put skipped player first, shift everyone else back
+    const withoutSkipped = currentAtBats.filter((id) => id !== skippedPlayerId);
+    const newAtBatOrder = [skippedPlayerId, ...withoutSkipped];
+
+    for (let i = 0; i < futureRounds.length; i++) {
+      const r = futureRounds[i];
+      const newAtBat = newAtBatOrder[i] || r.atBatPlayerId;
+      const onDeck = i + 1 < newAtBatOrder.length ? newAtBatOrder[i + 1] : null;
+      const inTheHole = i + 2 < newAtBatOrder.length ? newAtBatOrder[i + 2] : null;
+
+      await prisma.round.update({
+        where: { id: r.id },
+        data: {
+          atBatPlayerId: newAtBat,
+          onDeckPlayerId: onDeck,
+          inTheHolePlayerId: inTheHole,
+          ...(r.id === round.id ? { skippedPlayerId: null } : {}),
+        },
+      });
+    }
+
+    // Decrement skipCount
+    await prisma.gamePlayerState.update({
+      where: { id: playerState.id },
+      data: { skipCount: Math.max(0, playerState.skipCount - 1) },
+    });
+
+    // Notify restored at-bat player
+    notifyAtBat(round.id).catch(console.error);
+    notifyOnDeck(round.id).catch(console.error);
+
+  } else if (round.status === ROUND_STATUS.CANCELLED && round.isCancelled) {
+    // ── REVERT SECOND SKIP ──
+    const penalty = round.skipPenaltyAmount ?? 0;
+
+    // Restore points
+    await prisma.gamePlayerState.update({
+      where: { id: playerState.id },
+      data: {
+        skipCount: Math.max(0, playerState.skipCount - 1),
+        points: playerState.points + penalty,
+        isEliminated: false,
+      },
+    });
+
+    // Uncancel the round
+    await prisma.round.update({
+      where: { id: roundId },
+      data: {
+        status: ROUND_STATUS.AWAITING_QUESTION,
+        isCancelled: false,
+        skippedPlayerId: null,
+        skipPenaltyAmount: null,
+      },
+    });
+
+    // Increment game totalRounds back
+    await prisma.game.update({
+      where: { id: game.id },
+      data: { totalRounds: { increment: 1 } },
+    });
+
+    // Notify at-bat player
+    notifyAtBat(roundId).catch(console.error);
+    notifyOnDeck(roundId).catch(console.error);
+
+  } else {
+    throw new Error("Cannot revert skip: round has progressed past the revertible state");
   }
 }
 

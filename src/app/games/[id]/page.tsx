@@ -14,6 +14,7 @@ import RoundControl from "@/components/game/RoundControl";
 import BoxScoreControl from "@/components/game/BoxScoreControl";
 import { STARTING_POINTS } from "@/lib/constants";
 import { CHART_COLORS } from "@/components/game/GameChart";
+import AutoSkipAnnouncementModal from "@/components/ui/AutoSkipAnnouncementModal";
 
 const GameChart = dynamic(() => import("@/components/game/GameChart"), {
   ssr: false,
@@ -35,9 +36,8 @@ interface GameData {
       id: string;
       name: string;
       type: string;
-      dailyDeadline: string;
-      deadlineTimezone: string;
       answerTimerSeconds: number;
+      autoSkipEnabled: boolean;
     };
   };
   rounds: Array<{
@@ -76,11 +76,13 @@ interface RoundData {
   id: string;
   number: number;
   status: string;
+  updatedAt: string;
   funFact: string | null;
   categoryRevealAt: string | null;
   atBatPlayerId: string | null;
   onDeckPlayerId: string | null;
   inTheHolePlayerId: string | null;
+  skippedPlayerId: string | null;
   atBatAvgRating?: number | null;
   atBatSuccessRate?: number | null;
   atBatRatingCount?: number;
@@ -468,6 +470,7 @@ export default function GamePage() {
   return (
     <div className="min-h-screen">
       <NavBar />
+      {league.autoSkipEnabled && <AutoSkipAnnouncementModal leagueId={league.id} />}
       <div className="max-w-4xl mx-auto px-4 py-6">
         {/* Test mode banner */}
         {league.type === "test" && (
@@ -570,6 +573,8 @@ export default function GamePage() {
           atBatPlayerName={activeRound ? getPlayerName(activeRound.atBatPlayerId) : undefined}
           roundNumber={activeRound?.number}
           gameNumber={game.number}
+          autoSkipEnabled={league.autoSkipEnabled}
+          roundUpdatedAt={guideRoundData?.updatedAt}
         />
 
         {/* Previous round results (shown when a new round is active) */}

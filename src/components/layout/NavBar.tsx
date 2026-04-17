@@ -229,18 +229,6 @@ export default function NavBar() {
           {/* Desktop Nav */}
           <div className="hidden md:flex items-center gap-6">
             <Link
-              href="/dashboard"
-              className="text-[#a0a0b8] hover:text-white transition-colors text-sm font-medium"
-            >
-              Dashboard
-            </Link>
-            <Link
-              href="/leagues/create"
-              className="text-[#a0a0b8] hover:text-white transition-colors text-sm font-medium"
-            >
-              Create League
-            </Link>
-            <Link
               href="/questions/workshop"
               className="text-[#a0a0b8] hover:text-white transition-colors text-sm font-medium"
             >
@@ -325,14 +313,6 @@ export default function NavBar() {
                       onClick={() => setMenuOpen(false)}
                     >
                       Question Bank
-                    </Link>
-                    {/* Mobile-only nav links */}
-                    <Link
-                      href="/dashboard"
-                      className="block md:hidden px-4 py-2 text-sm text-[#a0a0b8] hover:text-white hover:bg-[#1e3a5f]/50"
-                      onClick={() => setMenuOpen(false)}
-                    >
-                      Dashboard
                     </Link>
                   </div>
 

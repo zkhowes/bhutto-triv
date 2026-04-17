@@ -14,7 +14,10 @@ export type NotificationType =
   | "flag_resolved"
   | "action_reminder"
   | "auto_skip_warning"
-  | "auto_skipped";
+  | "auto_skipped"
+  | "auto_close_warning"
+  | "auto_closed"
+  | "auto_skip_enabled";
 
 // Which levels each notification type gets sent at
 const LEVEL_MAP: Record<NotificationType, NotificationLevel[]> = {
@@ -30,6 +33,9 @@ const LEVEL_MAP: Record<NotificationType, NotificationLevel[]> = {
   action_reminder: ["low", "high"],
   auto_skip_warning: ["low", "high"],
   auto_skipped: ["low", "high"],
+  auto_close_warning: ["low", "high"],
+  auto_closed: ["low", "high"],
+  auto_skip_enabled: ["low", "high"],
 };
 
 // ─── Effective Level Resolution ───────────────────────────────────────────────
@@ -75,7 +81,7 @@ interface CreateNotificationParams {
   phoneNumber?: string;    // If provided and level warrants, send SMS
 }
 
-async function createNotification({
+export async function createNotification({
   userId,
   leagueId,
   gameId,
@@ -661,5 +667,82 @@ export async function notifyAutoSkipped(
     });
   } catch (err) {
     console.error("[Notifications] notifyAutoSkipped failed:", err);
+  }
+}
+
+/**
+ * Warn an answering player that the round will auto-close in 3 hours.
+ * Deduplication: one warning per player per round
+ */
+export async function notifyAutoCloseWarning(
+  roundId: string,
+  leaguePlayerId: string
+): Promise<void> {
+  try {
+    const player = await getPlayerInfo(leaguePlayerId);
+    if (!player || !player.isActive || player.isFake) return;
+
+    const alreadyWarned = await prisma.notification.findFirst({
+      where: {
+        roundId,
+        userId: player.userId,
+        type: "auto_close_warning",
+      },
+    });
+    if (alreadyWarned) return;
+
+    const round = await getRoundContext(roundId);
+    if (!round) return;
+
+    const league = round.game.season.league;
+
+    await createNotification({
+      userId: player.userId,
+      leagueId: league.id,
+      gameId: round.gameId,
+      roundId,
+      type: "auto_close_warning",
+      title: `${league.name}: Answer or be marked absent!`,
+      message: `You have 3 hours to place your bet and answer, or the round will auto-close and you'll be marked absent.`,
+      destinationUrl: `/games/${round.gameId}?round=${roundId}`,
+      phoneNumber: player.phoneNumber,
+    });
+  } catch (err) {
+    console.error("[Notifications] notifyAutoCloseWarning failed:", err);
+  }
+}
+
+/**
+ * Notify all players that a round was auto-closed due to inactivity.
+ */
+export async function notifyAutoClosedRound(
+  roundId: string
+): Promise<void> {
+  try {
+    const round = await getRoundContext(roundId);
+    if (!round) return;
+
+    const league = round.game.season.league;
+    const recipients = round.game.playerStates.filter(
+      (ps) => !ps.leaguePlayer.isFake && ps.leaguePlayer.isActive
+    );
+
+    await Promise.all(
+      recipients.map((ps) =>
+        createNotification({
+          userId: ps.leaguePlayer.userId,
+          leagueId: league.id,
+          gameId: round.gameId,
+          roundId,
+          type: "auto_closed",
+          title: `${league.name}: Round auto-closed`,
+          message: `Round ${round.number} was auto-closed due to player inactivity. Absent players have been penalized.`,
+          destinationUrl: `/games/${round.gameId}`,
+          phoneNumber: ps.leaguePlayer.user?.phoneNumber ?? undefined,
+        })
+      )
+    );
+  } catch (err) {
+    console.error("[Notifications] notifyAutoClosedRound failed:", err);
   }
 }

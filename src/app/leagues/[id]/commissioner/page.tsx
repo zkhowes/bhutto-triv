@@ -793,31 +793,9 @@ export default function CommissionerPage() {
                 <span className="text-white">= number of players</span>
               </div>
               <div className="flex justify-between py-2 border-b border-[#1e3a5f]">
-                <span className="text-[#a0a0b8]">Daily Deadline</span>
-                <span className="text-white">
-                  {league.dailyDeadline} {league.deadlineTimezone}
-                </span>
-              </div>
-              <div className="flex justify-between py-2 border-b border-[#1e3a5f]">
-                <span className="text-[#a0a0b8]">Submission Window</span>
-                <span className="text-white">
-                  {league.submissionWindowStart} - {league.submissionWindowEnd}
-                </span>
-              </div>
-              <div className="flex justify-between py-2 border-b border-[#1e3a5f]">
-                <span className="text-[#a0a0b8]">Category Reveal</span>
-                <span className="text-white">{league.categoryRevealTime}</span>
-              </div>
-              <div className="flex justify-between py-2 border-b border-[#1e3a5f]">
                 <span className="text-[#a0a0b8]">Answer Timer</span>
                 <span className="text-white">
                   {Math.floor(league.answerTimerSeconds / 60)}:{(league.answerTimerSeconds % 60).toString().padStart(2, "0")} min
-                </span>
-              </div>
-              <div className="flex justify-between py-2 border-b border-[#1e3a5f]">
-                <span className="text-[#a0a0b8]">Absentee Penalty</span>
-                <span className="text-white capitalize">
-                  {league.absenteePenaltyType}
                 </span>
               </div>
 
@@ -826,7 +804,7 @@ export default function CommissionerPage() {
                 <div>
                   <span className="text-[#a0a0b8] block">Auto-Skip</span>
                   <span className="text-xs text-[#666680] block mt-1">
-                    Warn at-bat players after 24h, auto-skip after 27h
+                    After 24h of inactivity, warn players. After 27h, auto-skip question submitters or auto-close answering rounds.
                   </span>
                 </div>
                 <button

@@ -298,6 +298,18 @@ describe("calculateAbsenteePenalty", () => {
   it("floors the result", () => {
     expect(calculateAbsenteePenalty(10, 3)).toBe(3);
   });
+
+  it("caps at 50% for last round", () => {
+    // With 1 round remaining, penalty would be 100% but capped at 50%
+    expect(calculateAbsenteePenalty(20, 1)).toBe(10);
+  });
+
+  it("cap does not affect penalties below 50%", () => {
+    // 20 / 4 = 5, which is 25% — well below cap
+    expect(calculateAbsenteePenalty(20, 4)).toBe(5);
+    // 20 / 2 = 10, which is exactly 50% — at the cap
+    expect(calculateAbsenteePenalty(20, 2)).toBe(10);
+  });
 });
 
 describe("computePowerUpCost", () => {

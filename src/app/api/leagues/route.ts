@@ -151,12 +151,6 @@ export async function POST(req: NextRequest) {
     type = "season",
     maxPlayers = DEFAULT_SETTINGS.maxPlayers,
     gamesPerSeason = DEFAULT_SETTINGS.gamesPerSeason,
-    dailyDeadline = DEFAULT_SETTINGS.dailyDeadline,
-    deadlineTimezone = DEFAULT_SETTINGS.deadlineTimezone,
-    submissionWindowStart = DEFAULT_SETTINGS.submissionWindowStart,
-    submissionWindowEnd = DEFAULT_SETTINGS.submissionWindowEnd,
-    categoryRevealTime = DEFAULT_SETTINGS.categoryRevealTime,
-    absenteePenaltyType = DEFAULT_SETTINGS.absenteePenaltyType,
   } = body;
 
   if (!name) {
@@ -192,12 +186,6 @@ export async function POST(req: NextRequest) {
       inviteCode: nanoid(5),
       maxPlayers: Math.min(Math.max(maxPlayers, 2), 10),
       gamesPerSeason,
-      dailyDeadline,
-      deadlineTimezone,
-      submissionWindowStart,
-      submissionWindowEnd,
-      categoryRevealTime,
-      absenteePenaltyType,
       players: {
         create: {
           userId: session.user.id,

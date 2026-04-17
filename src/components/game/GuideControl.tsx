@@ -7,6 +7,7 @@ import BettingInterface from "@/components/game/BettingInterface";
 import AnswerInterface from "@/components/game/AnswerInterface";
 import GradingInterface from "@/components/game/GradingInterface";
 import FlagReviewInterface from "@/components/game/FlagReviewInterface";
+import AutoSkipCountdown from "@/components/game/AutoSkipCountdown";
 
 interface RoundData {
   id: string;
@@ -14,6 +15,7 @@ interface RoundData {
   status: string;
   categoryRevealAt: string | null;
   atBatPlayerId: string | null;
+  skippedPlayerId: string | null;
   atBatAvgRating?: number | null;
   atBatSuccessRate?: number | null;
   question: {
@@ -100,12 +102,15 @@ interface GameGuideProps {
   atBatPlayerName?: string;
   roundNumber?: number;
   gameNumber?: number;
+  autoSkipEnabled?: boolean;
+  roundUpdatedAt?: string;
 }
 
 type GuideControlProps = LeagueGuideProps | GameGuideProps;
 
 export default function GuideControl(props: GuideControlProps) {
   const [editingGrades, setEditingGrades] = useState(false);
+  const [revertingSkip, setRevertingSkip] = useState(false);
 
   // League mode
   if (props.mode === "league") {
@@ -180,6 +185,8 @@ export default function GuideControl(props: GuideControlProps) {
     atBatPlayerName,
     roundNumber,
     gameNumber,
+    autoSkipEnabled,
+    roundUpdatedAt,
   } = props;
 
   if (!round) return null;
@@ -194,6 +201,8 @@ export default function GuideControl(props: GuideControlProps) {
     round.categoryRevealAt && answerTimerSeconds
       ? new Date(new Date(round.categoryRevealAt).getTime() + answerTimerSeconds * 1000).toISOString()
       : null;
+
+  const showAutoSkipTimer = autoSkipEnabled && roundUpdatedAt && !isGraded && round.status !== "cancelled";
 
   const actAsParam = actAsPlayerId ? `?actAs=${actAsPlayerId}` : "";
 
@@ -281,16 +290,69 @@ export default function GuideControl(props: GuideControlProps) {
     );
   }
 
+  // Undo Skip button for commissioners (first skip: awaiting_question with no question, second skip: cancelled)
+  const canRevertSkip = isCommissioner && round.skippedPlayerId && (
+    (round.status === "awaiting_question" && !round.question) ||
+    round.status === "cancelled"
+  );
+
+  const handleRevertSkip = async () => {
+    setRevertingSkip(true);
+    try {
+      const res = await fetch(`/api/rounds/${round.id}/revert-skip`, { method: "POST" });
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || "Failed to undo skip");
+      }
+      onRefresh();
+    } catch {
+      alert("Failed to undo skip");
+    } finally {
+      setRevertingSkip(false);
+    }
+  };
+
+  // Cancelled round with revertible skip
+  if (round.status === "cancelled" && canRevertSkip) {
+    return (
+      <div className="card p-5 mb-6 text-center">
+        <p className="text-lg font-bold text-red-400 mb-2">
+          Round Cancelled
+        </p>
+        <p className="text-[#a0a0b8] text-sm mb-3">
+          This round was cancelled due to a player skip.
+        </p>
+        <button
+          onClick={handleRevertSkip}
+          disabled={revertingSkip}
+          className="btn-secondary text-xs"
+        >
+          {revertingSkip ? "Reverting..." : "Undo Skip"}
+        </button>
+      </div>
+    );
+  }
+
   // At bat: submit question
   if (isAtBat && round.status === "awaiting_question" && myPlayerId) {
     return (
       <div className="mb-6">
+        {showAutoSkipTimer && <AutoSkipCountdown roundUpdatedAt={roundUpdatedAt!} />}
         <QuestionSubmitForm
           roundId={round.id}
           leaguePlayerId={myPlayerId}
           leagueId={leagueId}
           onSubmitted={onRefresh}
         />
+        {canRevertSkip && (
+          <button
+            onClick={handleRevertSkip}
+            disabled={revertingSkip}
+            className="btn-secondary text-xs w-full mt-3"
+          >
+            {revertingSkip ? "Reverting..." : "Undo Skip"}
+          </button>
+        )}
       </div>
     );
   }
@@ -305,6 +367,11 @@ export default function GuideControl(props: GuideControlProps) {
         <p className="text-[#a0a0b8]">
           You submitted the question for this round. Waiting for other players to bet and answer...
         </p>
+        {showAutoSkipTimer && (
+          <div className="flex justify-center">
+            <AutoSkipCountdown roundUpdatedAt={roundUpdatedAt!} />
+          </div>
+        )}
       </div>
     );
   }
@@ -391,6 +458,11 @@ export default function GuideControl(props: GuideControlProps) {
         <p className="text-sm text-[#666680] mt-2">
           Your bet: {myAnswer?.betAmount} points
         </p>
+        {showAutoSkipTimer && (
+          <div className="flex justify-center">
+            <AutoSkipCountdown roundUpdatedAt={roundUpdatedAt!} />
+          </div>
+        )}
       </div>
     );
   }
@@ -423,6 +495,20 @@ export default function GuideControl(props: GuideControlProps) {
         <p className="text-xs text-[#666680] mt-2">
           You&apos;ll be able to bet and answer once the question is in.
         </p>
+        {showAutoSkipTimer && (
+          <div className="flex justify-center">
+            <AutoSkipCountdown roundUpdatedAt={roundUpdatedAt!} />
+          </div>
+        )}
+        {canRevertSkip && (
+          <button
+            onClick={handleRevertSkip}
+            disabled={revertingSkip}
+            className="btn-secondary text-xs mt-3"
+          >
+            {revertingSkip ? "Reverting..." : "Undo Skip"}
+          </button>
+        )}
       </div>
     );
   }

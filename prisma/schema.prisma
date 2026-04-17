@@ -220,12 +220,14 @@ model Round {
   gameId      String
   number      Int // Round number within game
   status      String  @default("pending")
-  // "pending" | "awaiting_question" | "question_submitted" | "category_revealed" | "closed" | "graded" | "under_review" | "cancelled"
+  // "pending" | "awaiting_question" | "question_submitted" | "category_revealed" | "graded" | "under_review" | "cancelled"
   isCancelled Boolean @default(false)
 
   atBatPlayerId     String? // LeaguePlayer id of player creating question
   onDeckPlayerId    String? // Next player
   inTheHolePlayerId String? // Player after next
+  skippedPlayerId   String? // LeaguePlayer id of skipped player (for revert)
+  skipPenaltyAmount Int?    // Points deducted on 2nd skip (for revert)
 
   questionSubmissionOpensAt DateTime?
   categoryRevealAt          DateTime?

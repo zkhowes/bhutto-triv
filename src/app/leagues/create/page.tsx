@@ -12,7 +12,6 @@ export default function CreateLeaguePage() {
   const [type, setType] = useState("season");
   const [maxPlayers, setMaxPlayers] = useState(6);
   const [gamesPerSeason, setGamesPerSeason] = useState(3);
-  const [dailyDeadline, setDailyDeadline] = useState("10:00");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
@@ -48,7 +47,6 @@ export default function CreateLeaguePage() {
           type,
           maxPlayers,
           gamesPerSeason,
-          dailyDeadline,
         }),
       });
 
@@ -238,17 +236,6 @@ export default function CreateLeaguePage() {
                 <p className="text-xs text-[#a0a0b8]">
                   Rounds per game = number of players (each player bats once)
                 </p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-[#a0a0b8] mb-1">
-                  Daily Deadline (PST)
-                </label>
-                <input
-                  type="time"
-                  value={dailyDeadline}
-                  onChange={(e) => setDailyDeadline(e.target.value)}
-                  className="input-field"
-                />
               </div>
             </div>
           )}
