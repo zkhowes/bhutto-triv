@@ -470,7 +470,7 @@ export default function GamePage() {
   return (
     <div className="min-h-screen">
       <NavBar />
-      {league.autoSkipEnabled && <AutoSkipAnnouncementModal leagueId={league.id} />}
+      <AutoSkipAnnouncementModal leagueId={league.id} />
       <div className="max-w-4xl mx-auto px-4 py-6">
         {/* Test mode banner */}
         {league.type === "test" && (

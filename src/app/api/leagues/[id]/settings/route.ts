@@ -78,8 +78,8 @@ export async function PUT(
     data: updateData,
   });
 
-  // When autoSkipEnabled is toggled ON, notify all players
-  if (updateData.autoSkipEnabled === true) {
+  // When autoSkipEnabled is toggled, notify all players
+  if (updateData.autoSkipEnabled === true || updateData.autoSkipEnabled === false) {
     try {
       const players = await prisma.leaguePlayer.findMany({
         where: { leagueId, isActive: true, isFake: false },
@@ -87,15 +87,18 @@ export async function PUT(
       });
 
       const { createNotification } = await import("@/lib/notifications");
+      const enabled = updateData.autoSkipEnabled === true;
 
       await Promise.all(
         players.map((p) =>
           createNotification({
             userId: p.user.id,
             leagueId,
-            type: "auto_skip_enabled",
-            title: "24-Hour Rule Enabled",
-            message: `${league.name} now has the 24-hour rule. You'll be warned after 24h of inactivity and auto-skipped after 27h. Stay on top of your rounds!`,
+            type: enabled ? "auto_skip_enabled" : "auto_skip_disabled",
+            title: enabled ? "24-Hour Rule Enabled" : "24-Hour Rule Disabled",
+            message: enabled
+              ? `${league.name} now has the 24-hour rule. You'll be warned after 24h of inactivity and auto-skipped after 27h. Stay on top of your rounds!`
+              : `${league.name} no longer has the 24-hour rule. The commissioner will manually progress the game.`,
             destinationUrl: `/leagues/${leagueId}`,
             phoneNumber: p.user.phoneNumber ?? undefined,
           })

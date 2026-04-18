@@ -135,4 +135,5 @@ export const NOTIFICATION_TYPES = {
   AUTO_CLOSE_WARNING: "auto_close_warning",
   AUTO_CLOSED: "auto_closed",
   AUTO_SKIP_ENABLED: "auto_skip_enabled",
+  AUTO_SKIP_DISABLED: "auto_skip_disabled",
 } as const;

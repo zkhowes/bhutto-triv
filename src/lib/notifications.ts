@@ -17,7 +17,8 @@ export type NotificationType =
   | "auto_skipped"
   | "auto_close_warning"
   | "auto_closed"
-  | "auto_skip_enabled";
+  | "auto_skip_enabled"
+  | "auto_skip_disabled";
 
 // Which levels each notification type gets sent at
 const LEVEL_MAP: Record<NotificationType, NotificationLevel[]> = {
@@ -36,6 +37,7 @@ const LEVEL_MAP: Record<NotificationType, NotificationLevel[]> = {
   auto_close_warning: ["low", "high"],
   auto_closed: ["low", "high"],
   auto_skip_enabled: ["low", "high"],
+  auto_skip_disabled: ["low", "high"],
 };
 
 // ─── Effective Level Resolution ───────────────────────────────────────────────
