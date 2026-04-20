@@ -1,4 +1,9 @@
 {
   "buildCommand": "npm install && npm run build",
-  "installCommand": "npm install"
+  "installCommand": "npm install",
+  "git": {
+    "deploymentEnabled": {
+      "main": false
+    }
+  }
 }
