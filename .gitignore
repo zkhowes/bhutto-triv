@@ -47,3 +47,7 @@ prisma/*.db-journal
 
 # worktrees
 .worktrees/
+
+# local reference dumps
+/public/files/
+debugdump*.pdf
