@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSuperAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
+import { deleteLeagueCascade } from "@/lib/league-delete";
 
 export async function PATCH(
   req: NextRequest,
@@ -49,8 +50,15 @@ export async function DELETE(
   });
   const fakeUserIds = fakePlayers.map((p) => p.userId);
 
-  // Cascade delete handles league -> seasons -> games -> rounds -> answers etc.
-  await prisma.league.delete({ where: { id: leagueId } });
+  try {
+    await deleteLeagueCascade(leagueId);
+  } catch (err) {
+    console.error("Admin league delete failed", leagueId, err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Failed to delete league" },
+      { status: 500 }
+    );
+  }
 
   if (fakeUserIds.length > 0) {
     await prisma.user.deleteMany({ where: { id: { in: fakeUserIds } } });

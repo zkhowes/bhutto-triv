@@ -4,6 +4,7 @@ import { useState } from "react";
 import CountdownTimer from "./CountdownTimer";
 import InfoTooltip from "@/components/ui/InfoTooltip";
 import Spinner from "@/components/ui/Spinner";
+import BetSlider from "./BetSlider";
 
 interface BettingInterfaceProps {
   roundId: string;
@@ -111,9 +112,11 @@ export default function BettingInterface({
           <>
             <p className="text-2xl font-bold text-[#fbbf24] mt-1">{category}</p>
             {answerFormat && (
-              <span className="inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium bg-[#1e3a5f] text-[#a0a0b8]">
-                {FORMAT_LABELS[answerFormat] ?? answerFormat}
-              </span>
+              <div className="mt-2">
+                <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-[#1e3a5f] text-[#a0a0b8]">
+                  {FORMAT_LABELS[answerFormat] ?? answerFormat}
+                </span>
+              </div>
             )}
           </>
         ) : (
@@ -161,28 +164,12 @@ export default function BettingInterface({
             </span>
           </div>
 
-          <div className="relative pt-8">
-            {/* Floating value label above thumb */}
-            <div
-              className="absolute top-0 -translate-x-1/2 pointer-events-none"
-              style={{ left: `${((betAmount - 1) / Math.max(maxPoints - 1, 1)) * 100}%` }}
-            >
-              <div className="bg-[#fbbf24] text-black text-sm font-bold px-2.5 py-0.5 rounded-full whitespace-nowrap">
-                {betAmount}
-              </div>
-              <div className="w-0 h-0 mx-auto border-l-[5px] border-r-[5px] border-t-[5px] border-transparent border-t-[#fbbf24]" />
-            </div>
-
-            <input
-              type="range"
-              min={1}
-              max={maxPoints}
-              value={betAmount}
-              onChange={(e) => setBetAmount(Number(e.target.value))}
-              className="bet-slider w-full"
-              aria-label="Bet amount"
-            />
-          </div>
+          <BetSlider
+            value={betAmount}
+            min={1}
+            max={maxPoints}
+            onChange={setBetAmount}
+          />
         </div>
       )}
 
