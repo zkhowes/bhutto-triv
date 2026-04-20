@@ -1,25 +1,24 @@
+import { NextResponse } from "next/server";
+import type { Session } from "next-auth";
 import { getServerSession } from "next-auth";
 import { authOptions } from "./auth";
 
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
-
 /**
- * Check if the current session belongs to the admin user.
- * Returns the session if authorized, null otherwise.
+ * Gate API routes on super admin. Returns an error response if the session is
+ * missing or the user is not a super admin, otherwise returns the session.
+ *
+ * Super admin status lives on User.isSuperAdmin and is surfaced on the session
+ * by the JWT/session callbacks in src/lib/auth.ts.
  */
-export async function requireAdmin() {
+export async function requireSuperAdmin(): Promise<
+  { session: Session; error: null } | { session: null; error: NextResponse }
+> {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.email) return null;
-  if (!ADMIN_EMAIL || session.user.email !== ADMIN_EMAIL) return null;
-  return session;
-}
-
-/**
- * Simple boolean check for admin access (for backward compat with existing API routes).
- */
-export async function isAdminAuthenticated(_userId?: string): Promise<boolean> {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.email) return false;
-  if (!ADMIN_EMAIL || session.user.email !== ADMIN_EMAIL) return false;
-  return true;
+  if (!session?.user) {
+    return { session: null, error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
+  }
+  if (!session.user.isSuperAdmin) {
+    return { session: null, error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
+  }
+  return { session, error: null };
 }

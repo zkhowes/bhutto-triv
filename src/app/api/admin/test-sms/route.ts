@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isAdminAuthenticated } from "@/lib/admin-auth";
+import { requireSuperAdmin } from "@/lib/admin-auth";
 import { sendSms, isSmsConfigured } from "@/lib/sms";
 
 const SAMPLE_MESSAGES: Record<string, { title: string; body: string }> = {
@@ -30,9 +30,8 @@ const SAMPLE_MESSAGES: Record<string, { title: string; body: string }> = {
 };
 
 export async function POST(req: NextRequest) {
-  if (!(await isAdminAuthenticated())) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const { error } = await requireSuperAdmin();
+  if (error) return error;
 
   const body = await req.json();
   const { to, type, appendText } = body as {

@@ -1,23 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { isAdminAuthenticated } from "@/lib/admin-auth";
+import { requireSuperAdmin } from "@/lib/admin-auth";
 
 // GET - Super admin dashboard data
 export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  // Check if session is authenticated with password
-  if (!(await isAdminAuthenticated(session.user.id))) {
-    return NextResponse.json(
-      { error: "Super admin authentication required" },
-      { status: 403 }
-    );
-  }
+  const { error } = await requireSuperAdmin();
+  if (error) return error;
 
   const now = new Date();
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -328,18 +316,8 @@ export async function GET() {
 
 // POST - Admin actions
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  // Check if session is authenticated with password
-  if (!(await isAdminAuthenticated(session.user.id))) {
-    return NextResponse.json(
-      { error: "Super admin authentication required" },
-      { status: 403 }
-    );
-  }
+  const { session, error } = await requireSuperAdmin();
+  if (error) return error;
 
   const { action, entityType, entityId, reason } = await req.json();
 

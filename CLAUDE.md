@@ -170,7 +170,6 @@ Required for development (see `.env.example`):
 - `NEXTAUTH_SECRET` - Random string for session encryption
 - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` - OAuth credentials
 - `ANTHROPIC_API_KEY` - For AI grading and question workshop
-- `ADMIN_EMAIL` - Email address with admin dashboard access
 
 ## Common Tasks
 

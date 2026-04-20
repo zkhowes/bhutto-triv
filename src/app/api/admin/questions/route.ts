@@ -1,21 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { isAdminAuthenticated } from "@/lib/admin-auth";
+import { requireSuperAdmin } from "@/lib/admin-auth";
 
 export async function GET(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  if (!(await isAdminAuthenticated(session.user.id))) {
-    return NextResponse.json(
-      { error: "Super admin authentication required" },
-      { status: 403 }
-    );
-  }
+  const { error } = await requireSuperAdmin();
+  if (error) return error;
 
   const { searchParams } = new URL(req.url);
   const leagueId = searchParams.get("league");

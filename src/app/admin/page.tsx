@@ -137,8 +137,8 @@ export default function AdminPage() {
   const [testAppend, setTestAppend] = useState("");
   const [testStatus, setTestStatus] = useState<Record<string, "idle" | "sending" | "sent" | "failed">>({});
 
-  // Admin authentication state
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  // Admin authentication derived from session
+  const isAuthenticated = session?.user?.isSuperAdmin ?? null;
 
   // Search state
   const [searchQuery, setSearchQuery] = useState("");
@@ -192,18 +192,6 @@ export default function AdminPage() {
     if (status === "unauthenticated") router.push("/");
   }, [status, router]);
 
-  // Check if current user is the admin
-  useEffect(() => {
-    if (session?.user) {
-      fetch("/api/admin/auth")
-        .then((r) => r.json())
-        .then((data) => {
-          setIsAuthenticated(data.authenticated);
-        })
-        .catch(() => setIsAuthenticated(false));
-    }
-  }, [session]);
-
   // Fetch admin data once authenticated
   useEffect(() => {
     if (isAuthenticated && session?.user) {
@@ -213,9 +201,7 @@ export default function AdminPage() {
           return r.json();
         })
         .then(setData)
-        .catch(() => {
-          setIsAuthenticated(false);
-        })
+        .catch(() => {})
         .finally(() => setLoading(false));
     }
   }, [isAuthenticated, session]);
