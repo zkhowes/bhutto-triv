@@ -310,6 +310,13 @@ describe("calculateAbsenteePenalty", () => {
     // 20 / 2 = 10, which is exactly 50% — at the cap
     expect(calculateAbsenteePenalty(20, 2)).toBe(10);
   });
+
+  it("floors at 1 when player has points but math rounds to 0", () => {
+    // 3 / 10 = 0 floored; bumped to 1 so absence is never free
+    expect(calculateAbsenteePenalty(3, 10)).toBe(1);
+    // 1 point, any remaining: still costs 1 (full elimination)
+    expect(calculateAbsenteePenalty(1, 5)).toBe(1);
+  });
 });
 
 describe("computePowerUpCost", () => {

@@ -262,7 +262,9 @@ export function calculateAbsenteePenalty(
   const penalty = Math.floor(currentPoints / remainingRounds);
   // Cap at 50% so a single absence doesn't fully eliminate
   const maxPenalty = Math.floor(currentPoints * 0.5);
-  return Math.min(penalty, maxPenalty);
+  // Floor at 1: an absence always costs at least a point so it never goes
+  // unpunished (e.g. low remainingRounds or low currentPoints rounding to 0).
+  return Math.max(1, Math.min(penalty, maxPenalty));
 }
 
 /**
