@@ -80,31 +80,20 @@ export async function POST(
       (id) => !answeredPlayerIds.includes(id) && id !== round.atBatPlayerId
     );
 
+    // Collect names for the commissioner notification. Don't create the absent
+    // RoundAnswer records here — closeRound does that with the correct penalty,
+    // and pre-creating them causes closeRound's absent branch to skip these
+    // players (penalty never gets applied).
     const absentPlayerNames: string[] = [];
     for (const playerId of absentPlayerIds) {
       const lp = await prisma.leaguePlayer.findUnique({
         where: { id: playerId },
-        include: { user: { select: { id: true, nickname: true } } },
+        select: { user: { select: { nickname: true } } },
       });
       if (!lp) continue;
       absentPlayerNames.push(lp.user.nickname ?? "Unknown");
-
-      await prisma.roundAnswer.upsert({
-        where: {
-          roundId_leaguePlayerId: { roundId, leaguePlayerId: playerId },
-        },
-        update: { isAbsent: true },
-        create: {
-          roundId,
-          questionId: round.question?.id || "",
-          leaguePlayerId: playerId,
-          userId: lp.user.id,
-          isAbsent: true,
-        },
-      });
     }
 
-    // Auto-grade the round immediately (absentees already marked above)
     await closeRound(roundId);
 
     await notifyRoundClosedByCommissioner(roundId, absentPlayerNames);

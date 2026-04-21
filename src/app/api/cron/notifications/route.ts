@@ -269,31 +269,10 @@ export async function GET(request: NextRequest) {
         notificationsSent++;
       }
     } else if (existingWarning.createdAt <= threeHoursAgo) {
-      // Warning was sent 3+ hours ago — auto-close the round
+      // Warning was sent 3+ hours ago — auto-close the round.
+      // closeRound creates absent RoundAnswers with the correct penalty; don't
+      // pre-create them here or the penalty branch will skip these players.
       try {
-        // Mark incomplete players absent then grade
-        for (const playerId of incompletePlayerIds) {
-          const lp = await prisma.leaguePlayer.findUnique({
-            where: { id: playerId },
-            select: { userId: true },
-          });
-          if (!lp) continue;
-
-          await prisma.roundAnswer.upsert({
-            where: {
-              roundId_leaguePlayerId: { roundId: round.id, leaguePlayerId: playerId },
-            },
-            update: { isAbsent: true },
-            create: {
-              roundId: round.id,
-              questionId: round.question?.id || "",
-              leaguePlayerId: playerId,
-              userId: lp.userId,
-              isAbsent: true,
-            },
-          });
-        }
-
         await closeRound(round.id);
         await notifyAutoClosedRound(round.id);
         autoClosesPerformed++;
