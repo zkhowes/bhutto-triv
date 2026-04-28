@@ -58,7 +58,8 @@ export async function initializeSeason(leagueId: string): Promise<string> {
  */
 export async function initializeGame(
   seasonId: string,
-  playerIds: string[]
+  playerIds: string[],
+  bonusByPlayerId: Record<string, number> = {}
 ): Promise<string> {
   const season = await prisma.season.findUnique({
     where: { id: seasonId },
@@ -95,15 +96,19 @@ export async function initializeGame(
     })),
   });
 
-  // Create player states with starting points
+  // Create player states with starting points (carryover bonus from prior bust adds to starting)
   await prisma.gamePlayerState.createMany({
-    data: playerIds.map((playerId) => ({
-      gameId: game.id,
-      leaguePlayerId: playerId,
-      points: STARTING_POINTS,
-      totalF1Points: 0,
-      skipCount: 0,
-    })),
+    data: playerIds.map((playerId) => {
+      const startingPoints = STARTING_POINTS + (bonusByPlayerId[playerId] ?? 0);
+      return {
+        gameId: game.id,
+        leaguePlayerId: playerId,
+        points: startingPoints,
+        startingPoints,
+        totalF1Points: 0,
+        skipCount: 0,
+      };
+    }),
   });
 
   // Create rounds — one per player (each player bats exactly once)
@@ -151,6 +156,7 @@ export async function addLateJoiner(
     include: {
       rounds: { orderBy: { number: "asc" } },
       playerStates: true,
+      season: { select: { id: true } },
     },
   });
 
@@ -165,12 +171,24 @@ export async function addLateJoiner(
   const alreadyIn = game.playerStates.some((ps) => ps.leaguePlayerId === leaguePlayerId);
   if (alreadyIn) throw new Error("Player is already in this game");
 
-  // Add player state with starting points
+  // Look up prior-game bonus (same season) so a late joiner who busted last game still gets carryover.
+  const priorState = await prisma.gamePlayerState.findFirst({
+    where: {
+      leaguePlayerId,
+      game: { seasonId: game.season.id, id: { not: gameId } },
+    },
+    orderBy: { game: { number: "desc" } },
+    select: { bonusEarned: true },
+  });
+  const startingPoints = STARTING_POINTS + (priorState?.bonusEarned ?? 0);
+
+  // Add player state with starting points (+ carryover bonus)
   await prisma.gamePlayerState.create({
     data: {
       gameId,
       leaguePlayerId,
-      points: STARTING_POINTS,
+      points: startingPoints,
+      startingPoints,
       totalF1Points: 0,
       skipCount: 0,
     },
@@ -407,7 +425,7 @@ export async function submitAnswer(
     questionRating?: number;
   }
 ): Promise<{ isCorrect: boolean | null; gradedBy: string | null }> {
-  const roundAnswer = await prisma.roundAnswer.findUnique({
+  const existingAnswer = await prisma.roundAnswer.findUnique({
     where: {
       roundId_leaguePlayerId: { roundId, leaguePlayerId },
     },
@@ -416,9 +434,56 @@ export async function submitAnswer(
     },
   });
 
-  if (!roundAnswer) throw new Error("Must place bet before answering");
-  if (!roundAnswer.betAmount) throw new Error("Must place bet before answering");
-  if (roundAnswer.answeredAt) throw new Error("Already answered");
+  // Look up the round + this player's game state to decide which path to take.
+  const roundForGate = await prisma.round.findUnique({
+    where: { id: roundId },
+    include: {
+      question: true,
+      game: {
+        include: {
+          playerStates: { where: { leaguePlayerId } },
+        },
+      },
+    },
+  });
+  if (!roundForGate) throw new Error("Round not found");
+  const playerState = roundForGate.game.playerStates[0];
+  if (!playerState) throw new Error("Player not in this game");
+
+  const isBusted = playerState.isEliminated;
+
+  if (existingAnswer?.answeredAt) throw new Error("Already answered");
+
+  if (!isBusted) {
+    if (!existingAnswer) throw new Error("Must place bet before answering");
+    if (!existingAnswer.betAmount) throw new Error("Must place bet before answering");
+  } else {
+    // Busted: answer-only path. Round must be in the answer phase.
+    if (roundForGate.status !== ROUND_STATUS.CATEGORY_REVEALED) {
+      throw new Error("Cannot answer until category is revealed");
+    }
+    if (!roundForGate.question) throw new Error("No question on this round");
+  }
+
+  // Ensure a RoundAnswer row exists for this player (busted players may not have placed a bet).
+  let roundAnswer = existingAnswer;
+  if (!roundAnswer) {
+    const player = await prisma.leaguePlayer.findUnique({
+      where: { id: leaguePlayerId },
+      select: { userId: true },
+    });
+    if (!player) throw new Error("Player not found");
+    roundAnswer = await prisma.roundAnswer.create({
+      data: {
+        roundId,
+        questionId: roundForGate.question!.id,
+        leaguePlayerId,
+        userId: player.userId,
+        isAbsent: false,
+      },
+      include: { question: true },
+    });
+  }
 
   const question = roundAnswer.question;
   let isCorrect: boolean | null = null;
@@ -759,18 +824,22 @@ export async function closeRound(roundId: string): Promise<void> {
   }
 
   // Score the round
-  const results = allAnswers.map((a) => ({
-    leaguePlayerId: a.leaguePlayerId,
-    isCorrect: a.isCorrect || false,
-    betAmount: a.betAmount || 0,
-    answeredAt: a.answeredAt,
-    isAbsent: a.isAbsent,
-    nickname:
-      a.leaguePlayer.fakeNickname ||
-      a.leaguePlayer.user.nickname ||
-      a.leaguePlayer.user.name ||
-      "",
-  }));
+  const results = allAnswers.map((a) => {
+    const ps = game.playerStates.find((p) => p.leaguePlayerId === a.leaguePlayerId);
+    return {
+      leaguePlayerId: a.leaguePlayerId,
+      isCorrect: a.isCorrect || false,
+      betAmount: a.betAmount || 0,
+      answeredAt: a.answeredAt,
+      isAbsent: a.isAbsent,
+      isEliminated: ps?.isEliminated ?? false,
+      nickname:
+        a.leaguePlayer.fakeNickname ||
+        a.leaguePlayer.user.nickname ||
+        a.leaguePlayer.user.name ||
+        "",
+    };
+  });
 
   const scored = scoreRound(results);
 
@@ -781,6 +850,32 @@ export async function closeRound(roundId: string): Promise<void> {
     );
     if (!existingAnswer) continue;
 
+    const playerState = game.playerStates.find(
+      (ps) => ps.leaguePlayerId === score.leaguePlayerId
+    );
+
+    // Busted player path: no game-points change, no F1, no placement.
+    // Correct answer earns +1 bonusEarned (carries to next game's startingPoints).
+    if (playerState?.isEliminated) {
+      const earnedBonus = !!existingAnswer.isCorrect && !existingAnswer.isAbsent;
+      await prisma.roundAnswer.update({
+        where: { id: existingAnswer.id },
+        data: {
+          placement: null,
+          f1Points: 0,
+          pointsWon: 0,
+          fastestLap: false,
+        },
+      });
+      if (earnedBonus) {
+        await prisma.gamePlayerState.update({
+          where: { id: playerState.id },
+          data: { bonusEarned: { increment: 1 } },
+        });
+      }
+      continue;
+    }
+
     const blindMultiplier = existingAnswer.isBlindBet ? 2 : 1;
     const rawBetPointChange = existingAnswer.isAbsent
       ? existingAnswer.pointsWon
@@ -789,9 +884,6 @@ export async function closeRound(roundId: string): Promise<void> {
         : -(existingAnswer.betAmount || 0) * blindMultiplier;
 
     // Clamp negative betPointChange so player doesn't show losing more than they have
-    const playerState = game.playerStates.find(
-      (ps) => ps.leaguePlayerId === score.leaguePlayerId
-    );
     const betPointChange = rawBetPointChange < 0 && playerState
       ? Math.max(rawBetPointChange, -playerState.points)
       : rawBetPointChange;
@@ -909,8 +1001,11 @@ export async function closeRound(roundId: string): Promise<void> {
     const finalStates = await prisma.gamePlayerState.findMany({
       where: { gameId: game.id },
     });
-    // Sort by remaining points (descending) — higher points = better placement
-    const sortedByPoints = [...finalStates].sort((a, b) => b.points - a.points);
+    // Sort by remaining points (descending). Tiebreak by bonusEarned so busted
+    // players who hustled (answered correctly while busted) outrank busted quitters.
+    const sortedByPoints = [...finalStates].sort(
+      (a, b) => b.points - a.points || b.bonusEarned - a.bonusEarned
+    );
     const totalPlayers = sortedByPoints.length;
     for (let i = 0; i < sortedByPoints.length; i++) {
       const placement = i + 1;
@@ -1602,11 +1697,20 @@ async function resolveFlagAgree(flagReviewId: string): Promise<void> {
 
   // 1. Reverse round scoring for all answers
   for (const answer of round.answers) {
-    if (answer.pointsWon === 0) continue;
     const playerState = game.playerStates.find(
       (ps) => ps.leaguePlayerId === answer.leaguePlayerId
     );
     if (!playerState) continue;
+
+    // Reverse bonusEarned for busted-correct answers in the cancelled round.
+    if (playerState.isEliminated && answer.isCorrect && !answer.isAbsent) {
+      await prisma.gamePlayerState.update({
+        where: { id: playerState.id },
+        data: { bonusEarned: { decrement: 1 } },
+      });
+    }
+
+    if (answer.pointsWon === 0) continue;
 
     const reversedPoints = playerState.points - answer.pointsWon;
     await prisma.gamePlayerState.update({

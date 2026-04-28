@@ -61,6 +61,8 @@ interface GameData {
   playerStates: Array<{
     leaguePlayerId: string;
     points: number;
+    startingPoints: number;
+    bonusEarned: number;
     totalF1Points: number;
     isEliminated: boolean;
     blindBetUsed: boolean;
@@ -359,9 +361,19 @@ export default function GamePage() {
   // Build scorecard data
   const getPlayerRoundStatus = (leaguePlayerId: string): string => {
     if (!currentRoundData) return "";
-    // Eliminated players can't bet or answer — show "Busted"
     const playerState = game.playerStates.find((ps) => ps.leaguePlayerId === leaguePlayerId);
-    if (playerState?.isEliminated) return "Busted";
+    // Busted players can answer for a +1 next-game bonus, so reflect their per-round state.
+    if (playerState?.isEliminated) {
+      const answer = currentRoundData.answers.find((a) => a.leaguePlayerId === leaguePlayerId);
+      if (!answer || answer.isAbsent) return "Busted";
+      if (answer.answeredAt) {
+        if (currentRoundData.status === "graded") {
+          return answer.isCorrect ? "Busted ✓ (+1)" : "Busted ✗";
+        }
+        return "Busted (answered)";
+      }
+      return "Busted";
+    }
     if (leaguePlayerId === currentRoundData.atBatPlayerId) {
       return currentRoundData.status === "awaiting_question" ? "You're Up" : "Question Submitted";
     }
@@ -388,19 +400,22 @@ export default function GamePage() {
     );
 
     const playerAvatars: Record<string, string> = {};
+    const startingByName: Record<string, number> = {};
     for (const ps of game.playerStates) {
       const name = ps.leaguePlayer.fakeNickname || ps.leaguePlayer.user.nickname;
       playerAvatars[name] = ps.leaguePlayer.user.avatarUrl || ps.leaguePlayer.user.image || "";
+      // Per-player starting points (20 + carryover bonus from prior bust). Fallback for legacy data.
+      startingByName[name] = ps.startingPoints ?? STARTING_POINTS;
     }
 
     const data: Array<Record<string, number | string>> = [];
     const cumulative: Record<string, number> = {};
     const eliminated: Record<string, boolean> = {};
-    playerNames.forEach((n) => { cumulative[n] = STARTING_POINTS; eliminated[n] = false; });
+    playerNames.forEach((n) => { cumulative[n] = startingByName[n]; eliminated[n] = false; });
 
     // Starting point
     const startPoint: Record<string, number | string> = { round: "Start" };
-    playerNames.forEach((n) => (startPoint[n] = STARTING_POINTS));
+    playerNames.forEach((n) => (startPoint[n] = startingByName[n]));
     data.push(startPoint);
 
     for (const r of gradedRounds) {
@@ -415,7 +430,7 @@ export default function GamePage() {
           continue;
         }
         const answer = rd.answers.find((a) => a.leaguePlayerId === ps.leaguePlayerId);
-        cumulative[name] = Math.max(0, (cumulative[name] || STARTING_POINTS) + (answer?.pointsWon || 0) - (answer?.powerUpCost || 0));
+        cumulative[name] = Math.max(0, (cumulative[name] ?? startingByName[name]) + (answer?.pointsWon || 0) - (answer?.powerUpCost || 0));
         point[name] = cumulative[name];
         if (cumulative[name] === 0) eliminated[name] = true;
       }
@@ -562,7 +577,7 @@ export default function GamePage() {
           mode="game"
           round={guideRoundData || null}
           myPlayerId={myPlayerId}
-          myPlayerState={myPlayerState ? { leaguePlayerId: myPlayerState.leaguePlayerId, points: myPlayerState.points, isEliminated: myPlayerState.isEliminated, blindBetUsed: myPlayerState.blindBetUsed } : null}
+          myPlayerState={myPlayerState ? { leaguePlayerId: myPlayerState.leaguePlayerId, points: myPlayerState.points, isEliminated: myPlayerState.isEliminated, blindBetUsed: myPlayerState.blindBetUsed, bonusEarned: myPlayerState.bonusEarned } : null}
           allPlayerStates={game.playerStates.map((ps) => ({ leaguePlayerId: ps.leaguePlayerId, points: ps.points, isEliminated: ps.isEliminated }))}
           isCommissioner={isCommissioner}
           leagueId={league.id}

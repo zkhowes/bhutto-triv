@@ -30,6 +30,7 @@ interface AnswerInterfaceProps {
   powerUpType?: string | null; // already-purchased power-up this round
   actAsPlayerId?: string | null;
   onAnswered: () => void;
+  isBusted?: boolean; // Player is eliminated; answer-only path, no betting/power-ups
 }
 
 export default function AnswerInterface({
@@ -44,6 +45,7 @@ export default function AnswerInterface({
   powerUpType,
   actAsPlayerId,
   onAnswered,
+  isBusted = false,
 }: AnswerInterfaceProps) {
   const [selectedOption, setSelectedOption] = useState("");
   const [freeTextAnswer, setFreeTextAnswer] = useState("");
@@ -295,8 +297,17 @@ export default function AnswerInterface({
           )}
         </div>
         <div className="text-right">
-          <p className="text-xs text-[#a0a0b8]">Your Bet</p>
-          <p className="text-lg font-bold text-[#fbbf24]">{betAmount} pts</p>
+          {isBusted ? (
+            <>
+              <p className="text-xs text-[#a0a0b8]">Bonus Mode</p>
+              <p className="text-sm font-bold text-amber-400">+1 if correct</p>
+            </>
+          ) : (
+            <>
+              <p className="text-xs text-[#a0a0b8]">Your Bet</p>
+              <p className="text-lg font-bold text-[#fbbf24]">{betAmount} pts</p>
+            </>
+          )}
         </div>
       </div>
 
@@ -488,8 +499,8 @@ export default function AnswerInterface({
         </div>
       )}
 
-      {/* Power-up section */}
-      {!powerUpUsed && isAnswerPhase && canAffordPowerUp && (
+      {/* Power-up section (hidden for busted players — they don't have points to spend) */}
+      {!isBusted && !powerUpUsed && isAnswerPhase && canAffordPowerUp && (
         <div className="mb-4 p-3 rounded-lg border border-[#1e3a5f] bg-[#0a0a1a]">
           <div className="flex items-center justify-between">
             <div>
@@ -514,7 +525,7 @@ export default function AnswerInterface({
         </div>
       )}
 
-      {powerUpUsed && !hint && !eliminatedOption && !highLowResult && !firstPlaceItem && (
+      {!isBusted && powerUpUsed && !hint && !eliminatedOption && !highLowResult && !firstPlaceItem && (
         <div className="mb-4 text-xs text-[#666680] text-center">
           Power-up used this round
         </div>

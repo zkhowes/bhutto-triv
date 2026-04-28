@@ -6,6 +6,7 @@ interface PlayerRoundResult {
   betAmount: number;
   answeredAt: Date | null;
   isAbsent: boolean;
+  isEliminated?: boolean; // Busted players are excluded from placement and F1 scoring
   nickname: string;
 }
 
@@ -79,10 +80,12 @@ export function scoreRound(results: PlayerRoundResult[]): ScoredResult[] {
   // 5. Final tiebreaker: alphabetical nickname
 
   const sorted = [...results].sort((a, b) => {
-    // Absent players go last
-    if (a.isAbsent && !b.isAbsent) return 1;
-    if (!a.isAbsent && b.isAbsent) return -1;
-    if (a.isAbsent && b.isAbsent) return a.nickname.localeCompare(b.nickname);
+    // Absent and busted (eliminated) players go last — they don't compete for placement
+    const aOut = a.isAbsent || !!a.isEliminated;
+    const bOut = b.isAbsent || !!b.isEliminated;
+    if (aOut && !bOut) return 1;
+    if (!aOut && bOut) return -1;
+    if (aOut && bOut) return a.nickname.localeCompare(b.nickname);
 
     // Correct answers ranked above incorrect
     if (a.isCorrect && !b.isCorrect) return -1;
@@ -108,9 +111,10 @@ export function scoreRound(results: PlayerRoundResult[]): ScoredResult[] {
   const totalPlayers = results.length;
 
   // Determine fastest lap
-  // Player with highest wager who answered correctly, with fastest time as tiebreaker
+  // Player with highest wager who answered correctly, with fastest time as tiebreaker.
+  // Busted players don't compete for fastest lap (no bet, no F1 points).
   let fastestLapPlayerId: string | null = null;
-  const correctAnswers = results.filter((r) => r.isCorrect && !r.isAbsent);
+  const correctAnswers = results.filter((r) => r.isCorrect && !r.isAbsent && !r.isEliminated);
   if (correctAnswers.length > 0) {
     const maxBet = Math.max(...correctAnswers.map((r) => r.betAmount));
     const maxBetPlayers = correctAnswers.filter(
@@ -134,10 +138,12 @@ export function scoreRound(results: PlayerRoundResult[]): ScoredResult[] {
 
   return sorted.map((player, index) => {
     const placement = index + 1;
-    const f1Points =
-      getF1PointsForPlacement(placement, totalPlayers) +
-      (player.leaguePlayerId === fastestLapPlayerId ? 1 : 0);
-    const pointsWon = player.isAbsent
+    const isOut = player.isAbsent || !!player.isEliminated;
+    const f1Points = isOut
+      ? 0
+      : getF1PointsForPlacement(placement, totalPlayers) +
+        (player.leaguePlayerId === fastestLapPlayerId ? 1 : 0);
+    const pointsWon = isOut
       ? 0
       : player.isCorrect
         ? player.betAmount
@@ -148,7 +154,7 @@ export function scoreRound(results: PlayerRoundResult[]): ScoredResult[] {
       placement,
       f1Points,
       pointsWon,
-      fastestLap: player.leaguePlayerId === fastestLapPlayerId,
+      fastestLap: !isOut && player.leaguePlayerId === fastestLapPlayerId,
     };
   });
 }

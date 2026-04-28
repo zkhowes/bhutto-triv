@@ -214,6 +214,46 @@ describe("scoreRound", () => {
     ]);
     expect(results[0].pointsWon).toBe(0);
   });
+
+  // Busted player ("eliminated") behavior — they answer for a +1 next-game bonus
+  // but earn 0 game-points / 0 F1 / no fastest lap in the current round.
+  it("eliminated correct answer gets 0 pointsWon and 0 f1Points", () => {
+    const results = scoreRound([
+      { leaguePlayerId: "p1", isCorrect: true, betAmount: 5, answeredAt: now, isAbsent: false, nickname: "Alice" },
+      { leaguePlayerId: "p2", isCorrect: true, betAmount: 0, answeredAt: now, isAbsent: false, isEliminated: true, nickname: "Bob" },
+    ]);
+    const bob = results.find((r) => r.leaguePlayerId === "p2")!;
+    expect(bob.pointsWon).toBe(0);
+    expect(bob.f1Points).toBe(0);
+    expect(bob.fastestLap).toBe(false);
+  });
+
+  it("eliminated players are excluded from fastest-lap candidacy", () => {
+    // Bob's bet would normally win fastest lap (highest bet, fastest time) but he is busted.
+    const results = scoreRound([
+      { leaguePlayerId: "p1", isCorrect: true, betAmount: 5, answeredAt: later, isAbsent: false, nickname: "Alice" },
+      { leaguePlayerId: "p2", isCorrect: true, betAmount: 10, answeredAt: now, isAbsent: false, isEliminated: true, nickname: "Bob" },
+    ]);
+    expect(results.find((r) => r.leaguePlayerId === "p1")!.fastestLap).toBe(true);
+    expect(results.find((r) => r.leaguePlayerId === "p2")!.fastestLap).toBe(false);
+  });
+
+  it("ranks eliminated players behind incorrect non-busted players", () => {
+    const results = scoreRound([
+      { leaguePlayerId: "p1", isCorrect: false, betAmount: 5, answeredAt: now, isAbsent: false, nickname: "Alice" },
+      { leaguePlayerId: "p2", isCorrect: true, betAmount: 0, answeredAt: now, isAbsent: false, isEliminated: true, nickname: "Bob" },
+    ]);
+    expect(results.find((r) => r.leaguePlayerId === "p1")!.placement).toBe(1);
+    expect(results.find((r) => r.leaguePlayerId === "p2")!.placement).toBe(2);
+  });
+
+  it("eliminated wrong answer gets 0 pointsWon (no penalty)", () => {
+    const results = scoreRound([
+      { leaguePlayerId: "p1", isCorrect: false, betAmount: 0, answeredAt: now, isAbsent: false, isEliminated: true, nickname: "Alice" },
+    ]);
+    expect(results[0].pointsWon).toBe(0);
+    expect(results[0].f1Points).toBe(0);
+  });
 });
 
 describe("getF1PointsForPlacement", () => {

@@ -70,6 +70,7 @@ interface PlayerState {
   points: number;
   isEliminated: boolean;
   blindBetUsed?: boolean;
+  bonusEarned?: number;
 }
 
 // League mode props
@@ -376,15 +377,62 @@ export default function GuideControl(props: GuideControlProps) {
     );
   }
 
-  // Eliminated player
-  if (!isGraded && !isAtBat && myPlayerState && myPlayerState.points === 0 && !hasBet) {
+  // Busted (eliminated): can still answer for a +1 next-game bonus, but no bets/power-ups.
+  const isBusted = !!myPlayerState?.isEliminated;
+  if (isBusted && !isGraded && !isAtBat) {
+    const bonusSoFar = myPlayerState?.bonusEarned ?? 0;
+    const bonusLine =
+      bonusSoFar > 0
+        ? `You've banked +${bonusSoFar} for next game so far.`
+        : `Each correct answer banks +1 toward next game's starting points.`;
+
+    // Already answered this round
+    if (hasAnswered) {
+      return (
+        <div className="card p-5 mb-6 text-center border-amber-500/30 bg-amber-500/5">
+          <p className="text-lg font-bold text-amber-400 mb-1">Answer Banked</p>
+          <p className="text-[#a0a0b8] text-sm">{bonusLine}</p>
+          {showAutoSkipTimer && (
+            <div className="flex justify-center mt-2">
+              <AutoSkipCountdown roundUpdatedAt={roundUpdatedAt!} />
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // Category revealed: show AnswerInterface with no bet (busted mode)
+    if (round.status === "category_revealed" && round.question && myPlayerId) {
+      return (
+        <div className="mb-6">
+          <div className="card p-3 mb-3 text-center border-amber-500/30 bg-amber-500/5">
+            <p className="text-sm font-bold text-amber-400">Busted but Not Out</p>
+            <p className="text-xs text-[#a0a0b8] mt-0.5">{bonusLine}</p>
+          </div>
+          <AnswerInterface
+            roundId={round.id}
+            leaguePlayerId={myPlayerId}
+            question={round.question}
+            betAmount={0}
+            playerPoints={0}
+            allActivePoints={[]}
+            answerDeadline={answerDeadline}
+            roundStatus={round.status}
+            powerUpType={null}
+            actAsPlayerId={actAsPlayerId}
+            onAnswered={onRefresh}
+            isBusted
+          />
+        </div>
+      );
+    }
+
+    // Pre-category-reveal banner
     return (
-      <div className="card p-5 mb-6 text-center">
-        <p className="text-lg font-bold text-red-400 mb-2">
-          Eliminated
-        </p>
-        <p className="text-[#a0a0b8]">
-          You&apos;ve run out of points for this game. You can still view questions and results.
+      <div className="card p-5 mb-6 text-center border-amber-500/30 bg-amber-500/5">
+        <p className="text-lg font-bold text-amber-400 mb-1">Busted but Not Out</p>
+        <p className="text-[#a0a0b8] text-sm">
+          You&apos;re out of points for this game. {bonusLine} Wait for the category to be revealed, then answer.
         </p>
       </div>
     );

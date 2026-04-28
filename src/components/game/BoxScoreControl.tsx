@@ -75,6 +75,10 @@ export default function BoxScoreControl({
   const getAbsentLabel = (answer: typeof answers[0]): string =>
     isPlayerEliminated(answer.leaguePlayerId) ? "Busted" : "Absent";
 
+  // Busted player who chose to answer for a +1-next-game bonus (vs. simply absent)
+  const isBustedAndAnswered = (answer: typeof answers[0]): boolean =>
+    isPlayerEliminated(answer.leaguePlayerId) && !answer.isAbsent;
+
   const getAnswerDisplay = (answer: typeof answers[0]): string => {
     if (answer.isAbsent) return getAbsentLabel(answer);
     if (question.answerFormat === "multiple_choice") {
@@ -163,9 +167,13 @@ export default function BoxScoreControl({
                 className={`rounded-lg p-3 border transition-all ${
                   answer.isAbsent
                     ? "border-gray-500/30 bg-gray-500/5"
-                    : answer.isCorrect
-                      ? "border-emerald-500/30 bg-emerald-500/5"
-                      : "border-red-500/30 bg-red-500/5"
+                    : isBustedAndAnswered(answer)
+                      ? answer.isCorrect
+                        ? "border-gray-500/30 bg-gray-500/5 ring-1 ring-emerald-500/30"
+                        : "border-gray-500/30 bg-gray-500/5 ring-1 ring-red-500/30"
+                      : answer.isCorrect
+                        ? "border-emerald-500/30 bg-emerald-500/5"
+                        : "border-red-500/30 bg-red-500/5"
                 } ${isMe ? "ring-1 ring-[#e94560]/30" : ""}`}
               >
                 <div className="flex items-center justify-between mb-1">
@@ -186,21 +194,31 @@ export default function BoxScoreControl({
                     />
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    {/* Points */}
-                    <span
-                      className={`text-sm font-bold ${
-                        answer.pointsWon > 0
-                          ? "text-emerald-400"
-                          : answer.pointsWon < 0
-                            ? "text-red-400"
-                            : "text-[#666680]"
-                      }`}
-                    >
-                      {answer.pointsWon > 0 ? "+" : ""}{answer.pointsWon}
-                    </span>
+                    {/* Points (or bonus indicator for busted-correct answers) */}
+                    {isBustedAndAnswered(answer) && answer.isCorrect ? (
+                      <span className="text-xs font-bold text-amber-400">+1 next</span>
+                    ) : (
+                      <span
+                        className={`text-sm font-bold ${
+                          answer.pointsWon > 0
+                            ? "text-emerald-400"
+                            : answer.pointsWon < 0
+                              ? "text-red-400"
+                              : "text-[#666680]"
+                        }`}
+                      >
+                        {answer.pointsWon > 0 ? "+" : ""}{answer.pointsWon}
+                      </span>
+                    )}
                     {/* Result badge */}
                     {answer.isAbsent ? (
                       <span className="badge-absent text-xs">{getAbsentLabel(answer)}</span>
+                    ) : isBustedAndAnswered(answer) ? (
+                      answer.isCorrect ? (
+                        <span className="badge-busted-correct text-xs">Busted &#10003;</span>
+                      ) : (
+                        <span className="badge-busted-wrong text-xs">Busted &#10007;</span>
+                      )
                     ) : answer.isCorrect ? (
                       <span className="badge-correct text-xs">&#10003; Right</span>
                     ) : (

@@ -196,7 +196,7 @@ Required for development (see `.env.example`):
 
 ## Kanban
 
-> Last updated: 2026-04-20 (league delete cascade fix, responsive bet slider, button feedback)
+> Last updated: 2026-04-27 (busted but not out: bonus carryover, F1 tiebreak, three-state box score)
 
 ### Backlog
 - [ ] Replay past questions — *schema has isReplay/originalQuestionId, needs UI + API*
@@ -210,6 +210,7 @@ Required for development (see `.env.example`):
 ### In Progress
 
 ### Done
+- [x] Busted but Not Out — *busted players (0 pts) can still answer questions for +1 bonus per correct, applied to next-game starting points (same season). Schema: GamePlayerState.startingPoints + bonusEarned. Engine: submitAnswer bypasses bet gate when isEliminated; closeRound zeroes their game-points/F1 and increments bonusEarned. End-of-game F1 sort tiebreaks by bonusEarned. resolveFlagAgree decrements bonus when a busted-correct round is cancelled. Chart uses per-player startingPoints (no regression, mid-game freeze-at-0 preserved). Box score adds Busted ✓ +1 / Busted ✗ states. GuideControl renders AnswerInterface in busted mode (no bet/power-ups). Cron 24h reminder includes busted players. test-advance simulates busted answers.*
 - [x] League delete + betting polish — *manual cascade helper for league shutdown (covers Question/RoundAnswer/FlagReview relations missing onDelete), custom BetSlider with pointer-captured oversized hit area (bubble + thumb both grabbable, no first-touch delay), snappier btn-* disabled state with "Submitting..." immediately visible, format badge on its own line under category*
 - [x] 24hr rule improvements — *auto-skip extended to answerers (warn 24h, close 27h), revert skip control, in-game countdown timer, announcement popup + SMS on enable, absentee penalty capped at 50%*
 - [x] Settings cleanup + nav simplification — *removed unused settings (daily deadline, submission window, category reveal, absentee penalty type) from UI/API; removed redundant Dashboard + Create League nav links*

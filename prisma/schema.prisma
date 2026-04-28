@@ -188,9 +188,11 @@ model GamePlayerState {
   gameId         String
   leaguePlayerId String
   points         Int     @default(20) // Betting points
+  startingPoints Int     @default(20) // Points this player started the game with (20 + carryover bonus)
   totalF1Points  Int     @default(0) // Accumulated F1 scoring points
   skipCount      Int     @default(0) // Cumulative skips this game
   isEliminated   Boolean @default(false)
+  bonusEarned    Int     @default(0) // +1 per correct answer while busted; carries to next game in same season
   flagUsed       Boolean @default(false) // One challenge flag per game
   blindBetUsed   Boolean @default(false) // One blind bet per game
 

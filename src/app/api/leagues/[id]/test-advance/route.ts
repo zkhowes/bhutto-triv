@@ -87,7 +87,24 @@ async function advanceSingleStage(
       let answerCount = 0;
       for (const player of otherPlayers) {
         const playerState = playerStates.find((ps) => ps.leaguePlayerId === player.id);
-        if (!playerState || playerState.isEliminated) continue;
+        if (!playerState) continue;
+
+        const isCorrectAnswer = Math.random() < 0.6;
+        const options = ["A", "B", "C", "D"];
+        const selectedOption = isCorrectAnswer
+          ? testQ.correct
+          : options.filter((o) => o !== testQ.correct)[Math.floor(Math.random() * 3)];
+
+        // Busted players: no bet, answer-only path (exercises the "Busted but Not Out" flow).
+        if (playerState.isEliminated) {
+          try {
+            await submitAnswer(round.id, player.id, { selectedOption });
+            answerCount++;
+          } catch {
+            // Already answered
+          }
+          continue;
+        }
 
         const betAmount = Math.max(1, Math.floor(Math.random() * playerState.points) + 1);
         try {
@@ -97,11 +114,6 @@ async function advanceSingleStage(
           continue;
         }
 
-        const isCorrectAnswer = Math.random() < 0.6;
-        const options = ["A", "B", "C", "D"];
-        const selectedOption = isCorrectAnswer
-          ? testQ.correct
-          : options.filter((o) => o !== testQ.correct)[Math.floor(Math.random() * 3)];
         try {
           await submitAnswer(round.id, player.id, { selectedOption });
           answerCount++;

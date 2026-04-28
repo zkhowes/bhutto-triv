@@ -117,8 +117,7 @@ export async function GET(request: NextRequest) {
       game: {
         include: {
           playerStates: {
-            where: { isEliminated: false },
-            select: { leaguePlayerId: true },
+            select: { leaguePlayerId: true, isEliminated: true },
           },
         },
       },
@@ -131,6 +130,8 @@ export async function GET(request: NextRequest) {
       .filter((ps) => {
         if (ps.leaguePlayerId === round.atBatPlayerId) return false;
         const answer = round.answers.find((a) => a.leaguePlayerId === ps.leaguePlayerId);
+        // Busted players don't bet — they only need to answer to bank a +1 next-game bonus.
+        if (ps.isEliminated) return !answer || !answer.answeredAt;
         return !answer || !answer.betPlacedAt || !answer.answeredAt;
       })
       .map((ps) => ps.leaguePlayerId);

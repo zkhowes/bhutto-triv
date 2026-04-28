@@ -81,7 +81,10 @@ export async function POST(
     const finalStates = await prisma.gamePlayerState.findMany({
       where: { gameId: latestGame.id },
     });
-    const sortedByPoints = [...finalStates].sort((a, b) => b.points - a.points);
+    // Tiebreak by bonusEarned so busted hustlers outrank busted quitters.
+    const sortedByPoints = [...finalStates].sort(
+      (a, b) => b.points - a.points || b.bonusEarned - a.bonusEarned
+    );
     for (let i = 0; i < sortedByPoints.length; i++) {
       await prisma.gamePlayerState.update({
         where: { id: sortedByPoints[i].id },
@@ -116,7 +119,18 @@ export async function POST(
   }
 
   const playerIds = players.map((p) => p.id);
-  const gameId = await initializeGame(season.id, playerIds);
+
+  // Carry forward bonusEarned from the just-completed game (busted-but-not-out feature).
+  const previousStates = await prisma.gamePlayerState.findMany({
+    where: { gameId: latestGame.id, leaguePlayerId: { in: playerIds } },
+    select: { leaguePlayerId: true, bonusEarned: true },
+  });
+  const bonusByPlayerId: Record<string, number> = {};
+  for (const ps of previousStates) {
+    if (ps.bonusEarned > 0) bonusByPlayerId[ps.leaguePlayerId] = ps.bonusEarned;
+  }
+
+  const gameId = await initializeGame(season.id, playerIds, bonusByPlayerId);
 
   return NextResponse.json({ gameId }, { status: 201 });
 }
