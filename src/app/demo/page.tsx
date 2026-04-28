@@ -49,7 +49,7 @@ function DemoHeader({ step }: { step: number }) {
           <StepIndicator step={step} />
         </div>
         <button
-          onClick={() => signIn("google", { callbackUrl: "/profile" })}
+          onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
           className="text-sm font-semibold text-[#e94560] hover:text-white transition-colors"
         >
           Sign Up
@@ -620,7 +620,7 @@ function StepCTA() {
 
       <div className="flex flex-col gap-3 max-w-xs mx-auto">
         <button
-          onClick={() => signIn("google", { callbackUrl: "/profile" })}
+          onClick={() => signIn("google", { callbackUrl: "/dashboard" })}
           className="btn-primary text-lg px-8 py-3 flex items-center justify-center gap-3"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -645,7 +645,7 @@ function StepCTA() {
         </button>
 
         <button
-          onClick={() => signIn("apple", { callbackUrl: "/profile" })}
+          onClick={() => signIn("apple", { callbackUrl: "/dashboard" })}
           className="text-lg px-8 py-3 flex items-center justify-center gap-3 rounded-lg font-semibold bg-white text-black hover:bg-gray-100 transition-colors"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24">

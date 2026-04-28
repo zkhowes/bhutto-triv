@@ -21,7 +21,7 @@ export default function HomePage() {
 
   const handleSignIn = (provider: "google" | "apple") => {
     setSigningIn(provider);
-    signIn(provider, { callbackUrl: "/profile" });
+    signIn(provider, { callbackUrl: "/dashboard" });
   };
 
   if (status === "loading") {
