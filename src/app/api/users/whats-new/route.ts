@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-const LATEST_RELEASE = new Date("2026-03-24");
+const LATEST_RELEASE = new Date("2026-04-28");
 
 export async function GET() {
   const session = await getServerSession(authOptions);

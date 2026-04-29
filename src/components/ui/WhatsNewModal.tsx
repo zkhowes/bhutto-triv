@@ -4,29 +4,19 @@ import { useEffect, useState } from "react";
 
 const FEATURES = [
   {
-    title: "Ordering Questions",
+    title: "Busted but Not Out",
     description:
-      "A new question format! Challenge players to arrange items in the right order -- chronologically, by size, by rank, you name it.",
+      "Hit zero? Keep answering. Every correct answer earns +1 bonus, and those bonuses become your starting points in the next game of the season.",
   },
   {
-    title: "Blind Bet",
+    title: "24-Hour Auto-Skip",
     description:
-      "Feeling bold? Once per game, bet before seeing the question for a 2x multiplier. Everyone will know you went blind.",
+      "Rounds now advance automatically if someone goes quiet too long, with a heads-up warning first. Commissioners can toggle the rule and players see a countdown in-game.",
   },
   {
-    title: "Smarter Question Formats",
+    title: "Pause Yourself Between Games",
     description:
-      "The AI now helps you find the best format for your question. There's usually a more engaging option than plain text -- and converting is one tap.",
-  },
-  {
-    title: "Image Questions",
-    description:
-      "Add photos to your questions. Search the web, upload from your device, or paste a URL.",
-  },
-  {
-    title: "Interactive Demo",
-    description:
-      "New to the group? The landing page now has a guided walkthrough so newcomers can try the game before joining.",
+      "Sitting one out? You no longer need a commissioner. Pause and unpause your own slot from the league page between games.",
   },
 ];
 
