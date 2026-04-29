@@ -387,11 +387,23 @@ export default function WorkshopPage() {
         body.imageAttribution = img.attribution;
       }
 
-      await fetch("/api/questions/drafts", {
+      const res = await fetch("/api/questions/drafts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
+
+      if (!res.ok && autoSubmit) {
+        // Retry without auto-submit so the bank save still succeeds, then warn.
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || "Auto-submit could not be enabled — saving without it.");
+        body.useOnNextRound = false;
+        await fetch("/api/questions/drafts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+      }
 
       setSavedFeedback(true);
       await loadDrafts();
@@ -416,11 +428,16 @@ export default function WorkshopPage() {
   // ── Bank actions ───────────────────────────────────────────────────────────
 
   const toggleAutoSubmit = async (id: string, current: boolean) => {
-    await fetch("/api/questions/drafts", {
+    const res = await fetch("/api/questions/drafts", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, useOnNextRound: !current }),
     });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error || "Could not update auto-submit.");
+      return;
+    }
     setDrafts((prev) =>
       prev.map((d) => (d.id === id ? { ...d, useOnNextRound: !current } : d))
     );

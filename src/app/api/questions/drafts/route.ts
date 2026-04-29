@@ -3,6 +3,23 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+// Returns the leagueId where the user already played this question, or null.
+async function findLeagueWhereAlreadyPlayed(
+  userId: string,
+  questionText: string | null | undefined
+): Promise<string | null> {
+  const text = questionText?.trim();
+  if (!text) return null;
+  const prior = await prisma.question.findFirst({
+    where: {
+      creatorUserId: userId,
+      questionText: { equals: text, mode: "insensitive" },
+    },
+    select: { round: { select: { game: { select: { season: { select: { leagueId: true } } } } } } },
+  });
+  return prior?.round?.game?.season?.leagueId ?? null;
+}
+
 // GET - List user's drafts
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -26,6 +43,19 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
+
+  if (body.useOnNextRound) {
+    const leagueId = await findLeagueWhereAlreadyPlayed(session.user.id, body.questionText);
+    if (leagueId) {
+      return NextResponse.json(
+        {
+          error: "This question has already been played in one of your leagues. Auto-submit was disabled.",
+          alreadyPlayedLeagueId: leagueId,
+        },
+        { status: 409 }
+      );
+    }
+  }
 
   const draft = await prisma.questionDraft.create({
     data: {
@@ -86,6 +116,21 @@ export async function PUT(req: NextRequest) {
       { error: "Draft not found" },
       { status: 404 }
     );
+  }
+
+  if (updateData.useOnNextRound === true) {
+    const candidateText =
+      "questionText" in updateData ? updateData.questionText : draft.questionText;
+    const leagueId = await findLeagueWhereAlreadyPlayed(session.user.id, candidateText);
+    if (leagueId) {
+      return NextResponse.json(
+        {
+          error: "This question has already been played in one of your leagues. Auto-submit cannot be re-enabled.",
+          alreadyPlayedLeagueId: leagueId,
+        },
+        { status: 409 }
+      );
+    }
   }
 
   // Build update payload only from keys actually sent

@@ -581,10 +581,7 @@ async function tryAutoSubmitFromBank(roundId: string): Promise<void> {
       include: {
         game: {
           include: {
-            rounds: {
-              where: { question: { isNot: null } },
-              include: { question: { select: { questionText: true } } },
-            },
+            season: { select: { leagueId: true } },
           },
         },
       },
@@ -597,7 +594,20 @@ async function tryAutoSubmitFromBank(roundId: string): Promise<void> {
     });
     if (!atBatPlayer || atBatPlayer.isFake) return;
 
-    const draft = await prisma.questionDraft.findFirst({
+    const leagueId = round.game.season.leagueId;
+    const playedInLeague = await prisma.question.findMany({
+      where: {
+        creatorUserId: atBatPlayer.userId,
+        round: { game: { season: { leagueId } } },
+      },
+      select: { questionText: true },
+    });
+    const playedTexts = new Set(
+      playedInLeague.map((q) => q.questionText.toLowerCase().trim())
+    );
+
+    // Walk drafts newest-first; skip (and clear flag on) any that were already played in this league.
+    const candidates = await prisma.questionDraft.findMany({
       where: {
         userId: atBatPlayer.userId,
         useOnNextRound: true,
@@ -607,13 +617,21 @@ async function tryAutoSubmitFromBank(roundId: string): Promise<void> {
       },
       orderBy: { updatedAt: "desc" },
     });
-    if (!draft || !draft.category || !draft.questionText || !draft.answerFormat) return;
 
-    // Check: hasn't been played in this game
-    const existingTexts = round.game.rounds
-      .map((r) => r.question?.questionText?.toLowerCase().trim())
-      .filter(Boolean) as string[];
-    if (existingTexts.includes(draft.questionText.toLowerCase().trim())) return;
+    let draft: (typeof candidates)[number] | null = null;
+    for (const c of candidates) {
+      const text = c.questionText?.toLowerCase().trim() ?? "";
+      if (text && playedTexts.has(text)) {
+        await prisma.questionDraft.update({
+          where: { id: c.id },
+          data: { useOnNextRound: false },
+        });
+        continue;
+      }
+      draft = c;
+      break;
+    }
+    if (!draft || !draft.category || !draft.questionText || !draft.answerFormat) return;
 
     const questionId = await submitQuestion(roundId, {
       category: draft.category,

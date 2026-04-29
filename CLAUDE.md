@@ -196,7 +196,7 @@ Required for development (see `.env.example`):
 
 ## Kanban
 
-> Last updated: 2026-04-28 (what's new modal refresh for 2026-04-28 release)
+> Last updated: 2026-04-29 (auto-submit league-scope dedup)
 
 ### Backlog
 - [ ] Replay past questions — *schema has isReplay/originalQuestionId, needs UI + API*
@@ -210,6 +210,7 @@ Required for development (see `.env.example`):
 ### In Progress
 
 ### Done
+- [x] Auto-submit league-scope dedup — *tryAutoSubmitFromBank now dedupes against the entire league (was per-game), walks bank drafts newest-first and clears useOnNextRound on any draft whose text was already played in the league. Drafts API (POST/PUT) refuses to set useOnNextRound:true if the text was already played in any of the user's leagues (returns 409). Workshop UI surfaces the 409 via alert and falls back to saving without auto-submit.*
 - [x] What's New refresh (2026-04-28) — *modal now surfaces Busted but Not Out, 24-Hour Auto-Skip, and Pause Yourself; release date bumped to 2026-04-28 so existing users see it again*
 - [x] Busted but Not Out — *busted players (0 pts) can still answer questions for +1 bonus per correct, applied to next-game starting points (same season). Schema: GamePlayerState.startingPoints + bonusEarned. Engine: submitAnswer bypasses bet gate when isEliminated; closeRound zeroes their game-points/F1 and increments bonusEarned. End-of-game F1 sort tiebreaks by bonusEarned. resolveFlagAgree decrements bonus when a busted-correct round is cancelled. Chart uses per-player startingPoints (no regression, mid-game freeze-at-0 preserved). Box score adds Busted ✓ +1 / Busted ✗ states. GuideControl renders AnswerInterface in busted mode (no bet/power-ups). Cron 24h reminder includes busted players. test-advance simulates busted answers.*
 - [x] League delete + betting polish — *manual cascade helper for league shutdown (covers Question/RoundAnswer/FlagReview relations missing onDelete), custom BetSlider with pointer-captured oversized hit area (bubble + thumb both grabbable, no first-touch delay), snappier btn-* disabled state with "Submitting..." immediately visible, format badge on its own line under category*
