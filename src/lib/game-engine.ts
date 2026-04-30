@@ -619,11 +619,79 @@ export async function submitAnswer(
 }
 
 /**
+ * Pick which queued draft (if any) should fire for the given at-bat user
+ * in the given league. Walks newest-first; clears `useOnNextRound` on any
+ * draft whose text was already played by this user in this league. Pure
+ * data shape so it can be unit-tested without invoking submitQuestion.
+ *
+ * Returns the chosen draft, or null if none are eligible.
+ */
+export async function pickAutoSubmitDraft(
+  userId: string,
+  leagueId: string
+): Promise<{
+  id: string;
+  category: string | null;
+  questionText: string | null;
+  answerFormat: string | null;
+  optionA: string | null;
+  optionB: string | null;
+  optionC: string | null;
+  optionD: string | null;
+  correctOption: string | null;
+  correctAnswer: string | null;
+  acceptableAnswers: string | null;
+  imageUrl: string | null;
+  imageSource: string | null;
+  imageAttribution: string | null;
+  orderingItems: string | null;
+  orderingCorrectOrder: string | null;
+  orderingDirection: string | null;
+  orderingItemValues: string | null;
+  originalQuestionId: string | null;
+} | null> {
+  const playedInLeague = await prisma.question.findMany({
+    where: {
+      creatorUserId: userId,
+      round: { game: { season: { leagueId } } },
+    },
+    select: { questionText: true },
+  });
+  const playedTexts = new Set(
+    playedInLeague.map((q) => q.questionText.toLowerCase().trim())
+  );
+
+  const candidates = await prisma.questionDraft.findMany({
+    where: {
+      userId,
+      useOnNextRound: true,
+      category: { not: null },
+      questionText: { not: null },
+      answerFormat: { not: null },
+    },
+    orderBy: { updatedAt: "desc" },
+  });
+
+  for (const c of candidates) {
+    const text = c.questionText?.toLowerCase().trim() ?? "";
+    if (text && playedTexts.has(text)) {
+      await prisma.questionDraft.update({
+        where: { id: c.id },
+        data: { useOnNextRound: false },
+      });
+      continue;
+    }
+    return c;
+  }
+  return null;
+}
+
+/**
  * Auto-submit a banked question when a round activates to AWAITING_QUESTION.
  * If the at-bat player has a draft with useOnNextRound=true that hasn't been
- * played in this game, submit it automatically. Non-fatal on failure.
+ * played in this league, submit it automatically. Non-fatal on failure.
  */
-async function tryAutoSubmitFromBank(roundId: string): Promise<void> {
+export async function tryAutoSubmitFromBank(roundId: string): Promise<void> {
   try {
     const round = await prisma.round.findUnique({
       where: { id: roundId },
@@ -643,43 +711,10 @@ async function tryAutoSubmitFromBank(roundId: string): Promise<void> {
     });
     if (!atBatPlayer || atBatPlayer.isFake) return;
 
-    const leagueId = round.game.season.leagueId;
-    const playedInLeague = await prisma.question.findMany({
-      where: {
-        creatorUserId: atBatPlayer.userId,
-        round: { game: { season: { leagueId } } },
-      },
-      select: { questionText: true },
-    });
-    const playedTexts = new Set(
-      playedInLeague.map((q) => q.questionText.toLowerCase().trim())
+    const draft = await pickAutoSubmitDraft(
+      atBatPlayer.userId,
+      round.game.season.leagueId
     );
-
-    // Walk drafts newest-first; skip (and clear flag on) any that were already played in this league.
-    const candidates = await prisma.questionDraft.findMany({
-      where: {
-        userId: atBatPlayer.userId,
-        useOnNextRound: true,
-        category: { not: null },
-        questionText: { not: null },
-        answerFormat: { not: null },
-      },
-      orderBy: { updatedAt: "desc" },
-    });
-
-    let draft: (typeof candidates)[number] | null = null;
-    for (const c of candidates) {
-      const text = c.questionText?.toLowerCase().trim() ?? "";
-      if (text && playedTexts.has(text)) {
-        await prisma.questionDraft.update({
-          where: { id: c.id },
-          data: { useOnNextRound: false },
-        });
-        continue;
-      }
-      draft = c;
-      break;
-    }
     if (!draft || !draft.category || !draft.questionText || !draft.answerFormat) return;
 
     const questionId = await submitQuestion(roundId, {
@@ -1424,6 +1459,8 @@ export async function revertSkip(roundId: string): Promise<void> {
       data: { skipCount: Math.max(0, playerState.skipCount - 1) },
     });
 
+    // Auto-submit banked question for the restored at-bat player
+    await tryAutoSubmitFromBank(round.id);
     // Notify restored at-bat player
     notifyAtBat(round.id).catch(console.error);
     notifyOnDeck(round.id).catch(console.error);
@@ -1459,6 +1496,8 @@ export async function revertSkip(roundId: string): Promise<void> {
       data: { totalRounds: { increment: 1 } },
     });
 
+    // Auto-submit banked question for the restored at-bat player
+    await tryAutoSubmitFromBank(roundId);
     // Notify at-bat player
     notifyAtBat(roundId).catch(console.error);
     notifyOnDeck(roundId).catch(console.error);
@@ -1999,6 +2038,8 @@ async function resolveFlagDisagree(flagReviewId: string): Promise<void> {
         where: { id: pausedRound.id },
         data: { status: ROUND_STATUS.AWAITING_QUESTION },
       });
+      // Auto-submit banked question if available
+      await tryAutoSubmitFromBank(pausedRound.id);
       notifyAtBat(pausedRound.id).catch(console.error);
       notifyOnDeck(pausedRound.id).catch(console.error);
     }

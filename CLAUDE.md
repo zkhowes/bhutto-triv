@@ -196,7 +196,7 @@ Required for development (see `.env.example`):
 
 ## Kanban
 
-> Last updated: 2026-04-30 (workshop revamp + replay + ordering ties + submit-form polish)
+> Last updated: 2026-04-30 (auto-submit gap fixes + tests + workshop revamp + replay + ordering ties + submit-form polish)
 
 ### Backlog
 - [ ] View-only public round dashboard — *currently requires auth, no anonymous mode*
@@ -209,6 +209,7 @@ Required for development (see `.env.example`):
 ### In Progress
 
 ### Done
+- [x] Auto-submit reliability — *tryAutoSubmitFromBank now also fires on revertSkip (both first- and second-skip revert paths) and resolveFlagDisagree (paused-round wake). Draft-selection logic extracted into pure pickAutoSubmitDraft helper; new auto-submit.test.ts covers eligibility, newest-first ordering, league-scoped dedup, case/whitespace insensitivity, and full-duplicate flag clearing (8 tests).*
 - [x] Submit form polish — *alt-start row (drafts + Question Workshop link) sits above a hairline divider so it reads as an optional starting point; brainstorm button vertically centered between Category and Question with a larger sparkle icon and two-line "Help me / brainstorm" label so its dual scope is obvious; image-attach icon moved to bottom-LEFT of the question textarea with a touch more bottom padding (avoids the resize grip and the icon no longer crowds the focus ring).*
 - [x] Question workshop revamp + AI assist — *new AssistButton + CategorySelect components; workshop page split into Suspense'd inner with searchParams support for league/round context; "Pick up where you left off" surfacing of recent drafts in the submit form; expanded edit chips and conversational AI flow in src/lib/ai.ts.*
 - [x] Replay past questions — *isReplay/originalQuestionId now wired through workshop UI and questions/history API; past questions surface playedLeagues so users can pick a question to replay and the system tracks the link back to the original.*
