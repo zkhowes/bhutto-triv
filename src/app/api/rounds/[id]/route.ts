@@ -182,6 +182,7 @@ export async function GET(
         orderingItems: null,
         orderingCorrectOrder: null,
         orderingDirection: null,
+        orderingItemValues: null,
       };
     } else {
       // Player has bet, show question but hide correct answer/order
@@ -191,6 +192,7 @@ export async function GET(
         correctAnswer: null,
         acceptableAnswers: null,
         orderingCorrectOrder: null,
+        orderingItemValues: null,
       };
     }
   }

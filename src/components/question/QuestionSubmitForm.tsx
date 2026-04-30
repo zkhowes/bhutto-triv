@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { CATEGORIES, isDefaultCategory } from "@/lib/constants";
-import WorkshopEmbed from "./WorkshopEmbed";
 import ImageAttachment from "./ImageAttachment";
+import CategorySelect from "./CategorySelect";
+import AssistButton, { type AssistedQuestion } from "./AssistButton";
 import Spinner from "@/components/ui/Spinner";
 
 interface QuestionSubmitFormProps {
@@ -27,6 +27,14 @@ interface Draft {
   orderingItems?: string;
   orderingCorrectOrder?: string;
   orderingDirection?: string;
+  orderingItemValues?: string;
+  imageUrl?: string;
+  imageSource?: string;
+  imageAttribution?: string;
+  useOnNextRound?: boolean;
+  isReplay?: boolean;
+  originalQuestionId?: string | null;
+  updatedAt?: string;
 }
 
 interface CustomCategory {
@@ -43,8 +51,6 @@ export default function QuestionSubmitForm({
 }: QuestionSubmitFormProps) {
   const [category, setCategory] = useState("");
   const [customCategories, setCustomCategories] = useState<CustomCategory[]>([]);
-  const [newCategoryInput, setNewCategoryInput] = useState("");
-  const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
   const [questionText, setQuestionText] = useState("");
   const [answerFormat, setAnswerFormat] = useState("multiple_choice");
   const [optionA, setOptionA] = useState("");
@@ -53,7 +59,6 @@ export default function QuestionSubmitForm({
   const [optionD, setOptionD] = useState("");
   const [correctOption, setCorrectOption] = useState("");
   const [correctAnswer, setCorrectAnswer] = useState("");
-  const [acceptableAnswers, setAcceptableAnswers] = useState("");
   // Ordering format
   const [orderingDirection, setOrderingDirection] = useState("");
   const [orderingItem1, setOrderingItem1] = useState("");
@@ -61,16 +66,23 @@ export default function QuestionSubmitForm({
   const [orderingItem3, setOrderingItem3] = useState("");
   const [orderingItem4, setOrderingItem4] = useState("");
   const [showFourthItem, setShowFourthItem] = useState(false);
+  // Optional ordering value per item (year, population, etc.). Free-text — when present,
+  // server validates that values agree with the direction and equal values count as ties.
+  const [orderingValue1, setOrderingValue1] = useState("");
+  const [orderingValue2, setOrderingValue2] = useState("");
+  const [orderingValue3, setOrderingValue3] = useState("");
+  const [orderingValue4, setOrderingValue4] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [draftLoaded, setDraftLoaded] = useState(false);
   const [autoSubmitDraftId, setAutoSubmitDraftId] = useState<string | null>(null);
+  const [originalQuestionId, setOriginalQuestionId] = useState<string | null>(null);
+  const [recentDrafts, setRecentDrafts] = useState<Draft[]>([]);
+  const [skippedFreeTextDraft, setSkippedFreeTextDraft] = useState(false);
   const [imageUrl, setImageUrl] = useState("");
   const [imageSource, setImageSource] = useState("");
   const [imageAttribution, setImageAttribution] = useState("");
-
-  // AI Workshop
-  const [showWorkshop, setShowWorkshop] = useState(false);
+  const [assistOpen, setAssistOpen] = useState(false);
 
   // Difficulty check
   const [difficultyResult, setDifficultyResult] = useState<{
@@ -81,35 +93,47 @@ export default function QuestionSubmitForm({
   } | null>(null);
   const [difficultyLoading, setDifficultyLoading] = useState(false);
 
-  // Format suggestion
-  const [formatSuggestion, setFormatSuggestion] = useState<{
-    suggestedFormat: "multiple_choice" | "price_is_right" | "ordering";
-    message: string;
-    options?: {
-      optionA: string;
-      optionB: string;
-      optionC: string;
-      optionD: string;
-      correctOption: string;
-    };
-    orderingItems?: string[];
-    orderingDirection?: string;
-  } | null>(null);
-  const [formatSuggestionLoading, setFormatSuggestionLoading] = useState(false);
-  const [formatSuggestionDismissed, setFormatSuggestionDismissed] = useState(false);
-
-  // Load auto-submit draft
+  // Load drafts (auto-submit + recent for chips)
   useEffect(() => {
     if (draftLoaded) return;
+    // Consume any "load this draft into the form" signal from the workshop handoff.
+    let preferredDraftId: string | null = null;
+    if (typeof window !== "undefined" && roundId) {
+      const key = `bwiz:loadDraft:${roundId}`;
+      preferredDraftId = window.localStorage.getItem(key);
+      if (preferredDraftId) window.localStorage.removeItem(key);
+    }
     fetch("/api/questions/drafts")
       .then((r) => r.json())
       .then((drafts: Draft[]) => {
         if (!Array.isArray(drafts)) return;
-        const autoSubmitDraft = drafts.find(
-          (d: Draft) => (d as Draft & { useOnNextRound: boolean }).useOnNextRound
-        );
-        if (autoSubmitDraft && autoSubmitDraft.category && autoSubmitDraft.answerFormat) {
+
+        // Most recent non-free-text drafts for the chip strip
+        const recent = drafts
+          .filter((d) => d.answerFormat && d.answerFormat !== "free_text" && d.questionText)
+          .slice(0, 3);
+        setRecentDrafts(recent);
+
+        // Workshop handoff: prefer a specific draft if signaled.
+        const handoffDraft = preferredDraftId
+          ? drafts.find((d) => d.id === preferredDraftId)
+          : null;
+        const autoSubmitDraft = handoffDraft || drafts.find((d) => d.useOnNextRound);
+
+        // Edge case: auto-submit draft is free_text (deprecated). Skip it,
+        // clear the flag, surface a one-line warning.
+        if (autoSubmitDraft && autoSubmitDraft.answerFormat === "free_text") {
+          fetch("/api/questions/drafts", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: autoSubmitDraft.id, useOnNextRound: false }),
+          }).catch(() => {});
+          setSkippedFreeTextDraft(true);
+        } else if (autoSubmitDraft && autoSubmitDraft.category && autoSubmitDraft.answerFormat) {
           setAutoSubmitDraftId(autoSubmitDraft.id);
+          if (autoSubmitDraft.originalQuestionId) {
+            setOriginalQuestionId(autoSubmitDraft.originalQuestionId);
+          }
           setCategory(autoSubmitDraft.category);
           setQuestionText(autoSubmitDraft.questionText || "");
           setAnswerFormat(autoSubmitDraft.answerFormat);
@@ -124,32 +148,41 @@ export default function QuestionSubmitForm({
             const order = autoSubmitDraft.orderingCorrectOrder
               ? JSON.parse(autoSubmitDraft.orderingCorrectOrder)
               : rawItems.map((_: string, i: number) => i + 1);
-            const items = order
-              .map((pos: number, idx: number) => ({ pos, item: rawItems[idx] }))
-              .sort((a: { pos: number }, b: { pos: number }) => a.pos - b.pos)
-              .map((e: { item: string }) => e.item);
+            const rawValues: Array<string | number | null> | null = autoSubmitDraft.orderingItemValues
+              ? (() => { try { const a = JSON.parse(autoSubmitDraft.orderingItemValues!); return Array.isArray(a) ? a : null; } catch { return null; } })()
+              : null;
+            const sorted = order
+              .map((pos: number, idx: number) => ({ pos, item: rawItems[idx], value: rawValues?.[idx] ?? null }))
+              .sort((a: { pos: number }, b: { pos: number }) => a.pos - b.pos);
+            const items = sorted.map((e: { item: string }) => e.item);
+            const values = sorted.map((e: { value: string | number | null }) => e.value);
             setOrderingItem1(items[0] || "");
             setOrderingItem2(items[1] || "");
             setOrderingItem3(items[2] || "");
+            setOrderingValue1(values[0] != null ? String(values[0]) : "");
+            setOrderingValue2(values[1] != null ? String(values[1]) : "");
+            setOrderingValue3(values[2] != null ? String(values[2]) : "");
             if (items[3]) {
               setOrderingItem4(items[3]);
+              setOrderingValue4(values[3] != null ? String(values[3]) : "");
               setShowFourthItem(true);
             }
             setOrderingDirection(autoSubmitDraft.orderingDirection || "");
           } else {
             setCorrectAnswer(autoSubmitDraft.correctAnswer || "");
           }
-          // price_is_right uses correctAnswer field same as free_text
-          if ((autoSubmitDraft as Draft & { imageUrl?: string }).imageUrl) {
-            setImageUrl((autoSubmitDraft as Draft & { imageUrl?: string }).imageUrl!);
-            setImageSource((autoSubmitDraft as Draft & { imageSource?: string }).imageSource || "");
-            setImageAttribution((autoSubmitDraft as Draft & { imageAttribution?: string }).imageAttribution || "");
+          // price_is_right uses correctAnswer
+          if (autoSubmitDraft.imageUrl) {
+            setImageUrl(autoSubmitDraft.imageUrl);
+            setImageSource(autoSubmitDraft.imageSource || "");
+            setImageAttribution(autoSubmitDraft.imageAttribution || "");
           }
         }
         setDraftLoaded(true);
       })
       .catch(() => setDraftLoaded(true));
-  }, [draftLoaded]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftLoaded, roundId]);
 
   // Load custom categories for this league
   useEffect(() => {
@@ -162,39 +195,7 @@ export default function QuestionSubmitForm({
       .catch(() => {});
   }, [leagueId]);
 
-  const handleNewCategorySubmit = () => {
-    const trimmed = newCategoryInput.trim();
-    if (!trimmed) return;
-    if (trimmed.length > 50) {
-      setError("Category name must be 50 characters or less");
-      return;
-    }
-    if (isDefaultCategory(trimmed)) {
-      setError(`"${trimmed}" matches a default category. Select it above.`);
-      return;
-    }
-    // Check if it matches an existing custom category (case-insensitive)
-    const existing = customCategories.find(
-      (c) => c.name.toLowerCase() === trimmed.toLowerCase()
-    );
-    if (existing) {
-      setCategory(existing.name);
-    } else {
-      setCategory(trimmed);
-    }
-    setNewCategoryInput("");
-    setShowNewCategoryInput(false);
-  };
-
   const handleSubmit = async () => {
-    // Auto-commit pending custom category input
-    if (showNewCategoryInput && newCategoryInput.trim()) {
-      handleNewCategorySubmit();
-    }
-    if (!category && !newCategoryInput.trim()) {
-      setError("Select a category");
-      return;
-    }
     if (!category) {
       setError("Select a category");
       return;
@@ -227,11 +228,6 @@ export default function QuestionSubmitForm({
         setError("Provide at least 3 items");
         return;
       }
-    } else {
-      if (!correctAnswer.trim()) {
-        setError("Provide the correct answer");
-        return;
-      }
     }
 
     setSubmitting(true);
@@ -245,6 +241,10 @@ export default function QuestionSubmitForm({
         questionText: questionText.trim(),
         answerFormat,
       };
+
+      if (originalQuestionId) {
+        body.originalQuestionId = originalQuestionId;
+      }
 
       if (imageUrl) {
         body.imageUrl = imageUrl;
@@ -261,16 +261,29 @@ export default function QuestionSubmitForm({
       } else if (answerFormat === "price_is_right") {
         body.correctAnswer = correctAnswer.trim();
       } else if (answerFormat === "ordering") {
-        const items = [orderingItem1, orderingItem2, orderingItem3, orderingItem4].filter(Boolean);
+        const items: string[] = [];
+        const rawValues: string[] = [];
+        for (const [item, val] of [
+          [orderingItem1, orderingValue1],
+          [orderingItem2, orderingValue2],
+          [orderingItem3, orderingValue3],
+          [orderingItem4, orderingValue4],
+        ] as const) {
+          if (item) {
+            items.push(item);
+            rawValues.push(val.trim());
+          }
+        }
         body.orderingItems = items;
         body.orderingCorrectOrder = items.map((_, i) => i + 1);
         body.orderingDirection = orderingDirection.trim();
-      } else {
-        body.correctAnswer = correctAnswer.trim();
-        body.acceptableAnswers = acceptableAnswers
-          .split(",")
-          .map((a) => a.trim())
-          .filter(Boolean);
+        // Only attach values when ALL items have one — partial values would be ambiguous.
+        if (rawValues.every((v) => v !== "")) {
+          body.orderingItemValues = rawValues.map((v) => {
+            const n = Number(v);
+            return !isNaN(n) && v.trim() !== "" ? n : v;
+          });
+        }
       }
 
       const res = await fetch("/api/questions", {
@@ -304,282 +317,318 @@ export default function QuestionSubmitForm({
     }
   };
 
-  const checkDifficulty = async () => {
-    setDifficultyLoading(true);
-    setDifficultyResult(null);
-    try {
-      const res = await fetch("/api/questions/difficulty", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          category,
-          questionText: questionText.trim(),
-          leagueId,
-          answerFormat,
-          correctAnswer: correctAnswer.trim() || undefined,
-          correctOption: correctOption || undefined,
-          options: answerFormat === "multiple_choice" ? { optionA, optionB, optionC, optionD } : undefined,
-        }),
-      });
-      const data = await res.json();
-      setDifficultyResult(data);
-    } catch {
+  // Debounced auto-difficulty check.
+  const orderingItemsForCheck = [orderingItem1, orderingItem2, orderingItem3].filter(Boolean);
+  const hasAnswerForDifficulty =
+    (answerFormat === "multiple_choice" && optionA && optionB && optionC && optionD && correctOption) ||
+    (answerFormat === "price_is_right" && correctAnswer.trim() !== "") ||
+    (answerFormat === "ordering" && orderingItemsForCheck.length >= 3 && orderingDirection);
+  const shouldAutoCheck = !!category && questionText.trim().length >= 20 && hasAnswerForDifficulty;
+
+  useEffect(() => {
+    if (!shouldAutoCheck) {
       setDifficultyResult(null);
-    } finally {
       setDifficultyLoading(false);
+      return;
     }
+    const controller = new AbortController();
+    const timeout = setTimeout(async () => {
+      setDifficultyLoading(true);
+      try {
+        const res = await fetch("/api/questions/difficulty", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            category,
+            questionText: questionText.trim(),
+            leagueId,
+            answerFormat,
+            correctAnswer: correctAnswer.trim() || undefined,
+            correctOption: correctOption || undefined,
+            options:
+              answerFormat === "multiple_choice"
+                ? { optionA, optionB, optionC, optionD }
+                : undefined,
+          }),
+          signal: controller.signal,
+        });
+        const data = await res.json();
+        setDifficultyResult(data);
+      } catch {
+        // ignore aborts and errors
+      } finally {
+        setDifficultyLoading(false);
+      }
+    }, 1500);
+    return () => {
+      clearTimeout(timeout);
+      controller.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    shouldAutoCheck,
+    category,
+    questionText,
+    answerFormat,
+    optionA,
+    optionB,
+    optionC,
+    optionD,
+    correctOption,
+    correctAnswer,
+    orderingItem1,
+    orderingItem2,
+    orderingItem3,
+    orderingDirection,
+    leagueId,
+  ]);
+
+  const fillFromDraft = (draft: Draft) => {
+    let orderingItems: string[] | undefined;
+    let orderingValues: Array<string | number | null> | undefined;
+    if (draft.orderingItems) {
+      try {
+        const items = JSON.parse(draft.orderingItems);
+        if (Array.isArray(items)) {
+          orderingItems = items;
+        }
+      } catch {}
+    }
+    if (draft.orderingItemValues) {
+      try {
+        const vals = JSON.parse(draft.orderingItemValues);
+        if (Array.isArray(vals)) orderingValues = vals;
+      } catch {}
+    }
+    // Drafts may carry a replay link that needs to survive into the submission.
+    setOriginalQuestionId(draft.originalQuestionId || null);
+    fillFromQuestion({
+      category: draft.category || "General Knowledge",
+      questionText: draft.questionText || "",
+      answerFormat: draft.answerFormat || "multiple_choice",
+      optionA: draft.optionA || undefined,
+      optionB: draft.optionB || undefined,
+      optionC: draft.optionC || undefined,
+      optionD: draft.optionD || undefined,
+      correctOption: draft.correctOption || undefined,
+      correctAnswer: draft.correctAnswer || undefined,
+      orderingItems,
+      orderingDirection: draft.orderingDirection || undefined,
+      orderingItemValues: orderingValues,
+      imageUrl: draft.imageUrl,
+      imageSource: draft.imageSource,
+      imageAttribution: draft.imageAttribution,
+    });
   };
 
-  const fetchFormatSuggestion = async () => {
-    if (answerFormat !== "free_text" || !questionText.trim() || !correctAnswer.trim()) return;
-    setFormatSuggestionLoading(true);
-    setFormatSuggestion(null);
-    setFormatSuggestionDismissed(false);
-    try {
-      const res = await fetch("/api/questions/suggest-format", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          questionText: questionText.trim(),
-          correctAnswer: correctAnswer.trim(),
-          acceptableAnswers: acceptableAnswers
-            .split(",")
-            .map((a) => a.trim())
-            .filter(Boolean),
-        }),
-      });
-      const data = await res.json();
-      if (data.suggestion) setFormatSuggestion(data.suggestion);
-    } catch {
-      // Silently fail — suggestion is optional
-    } finally {
-      setFormatSuggestionLoading(false);
-    }
-  };
-
-  const applyFormatSuggestion = () => {
-    if (!formatSuggestion) return;
-    if (formatSuggestion.suggestedFormat === "multiple_choice" && formatSuggestion.options) {
-      setAnswerFormat("multiple_choice");
-      setOptionA(formatSuggestion.options.optionA);
-      setOptionB(formatSuggestion.options.optionB);
-      setOptionC(formatSuggestion.options.optionC);
-      setOptionD(formatSuggestion.options.optionD);
-      setCorrectOption(formatSuggestion.options.correctOption);
-    } else if (formatSuggestion.suggestedFormat === "price_is_right") {
-      setAnswerFormat("price_is_right");
-    } else if (formatSuggestion.suggestedFormat === "ordering") {
-      setAnswerFormat("ordering");
-      const fs = formatSuggestion as { orderingItems?: string[]; orderingCorrectOrder?: number[]; orderingDirection?: string };
-      const rawItems = fs.orderingItems || [];
-      const order = fs.orderingCorrectOrder || rawItems.map((_, i) => i + 1);
-      const items = order
-        .map((pos, idx) => ({ pos, item: rawItems[idx] }))
-        .sort((a, b) => a.pos - b.pos)
-        .map(e => e.item);
+  const fillFromQuestion = (q: AssistedQuestion) => {
+    setCategory(q.category);
+    setQuestionText(q.questionText);
+    setAnswerFormat(q.answerFormat);
+    if (q.answerFormat === "multiple_choice") {
+      setOptionA(q.optionA || "");
+      setOptionB(q.optionB || "");
+      setOptionC(q.optionC || "");
+      setOptionD(q.optionD || "");
+      setCorrectOption(q.correctOption || "");
+    } else if (q.answerFormat === "ordering") {
+      const rawItems = q.orderingItems || [];
+      const rawValues = q.orderingItemValues;
+      // Server contract: orderingItems are already in correct order.
+      const items = rawItems;
+      const values = rawValues || [];
       setOrderingItem1(items[0] || "");
       setOrderingItem2(items[1] || "");
       setOrderingItem3(items[2] || "");
       setOrderingItem4(items[3] || "");
+      setOrderingValue1(values[0] != null ? String(values[0]) : "");
+      setOrderingValue2(values[1] != null ? String(values[1]) : "");
+      setOrderingValue3(values[2] != null ? String(values[2]) : "");
+      setOrderingValue4(values[3] != null ? String(values[3]) : "");
       setShowFourthItem(items.length >= 4);
-      setOrderingDirection(fs.orderingDirection || "");
+      setOrderingDirection(q.orderingDirection || "");
+    } else {
+      setCorrectAnswer(q.correctAnswer || "");
     }
-    setFormatSuggestion(null);
+    if (q.imageUrl) {
+      setImageUrl(q.imageUrl);
+      setImageSource(q.imageSource || "");
+      setImageAttribution(q.imageAttribution || "");
+    }
   };
-
-  const canCheckDifficulty = category && questionText.trim().length > 10;
 
   return (
     <div className="space-y-4">
       <div className="card p-6">
-        <div className="flex items-center justify-between mb-4">
+        <div className="mb-3 flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-lg font-bold text-[#e94560]">
-              You&apos;re Up!
-            </h2>
+            <h2 className="text-lg font-bold text-[#e94560]">You&apos;re Up!</h2>
             <p className="text-sm text-[#a0a0b8]">Submit today&apos;s question</p>
           </div>
-          <button
-            onClick={() => setShowWorkshop(!showWorkshop)}
-            className="btn-secondary text-sm"
-          >
-            {showWorkshop ? "Hide Workshop" : "Question Workshop"}
-          </button>
         </div>
 
-        {/* AI Workshop */}
-        {showWorkshop && (
-          <div className="mb-6">
-            <WorkshopEmbed
-              onSelectQuestion={(q) => {
-                setCategory(q.category);
-                setQuestionText(q.questionText);
-                setAnswerFormat(q.answerFormat);
-                if (q.answerFormat === "multiple_choice") {
-                  setOptionA(q.optionA || "");
-                  setOptionB(q.optionB || "");
-                  setOptionC(q.optionC || "");
-                  setOptionD(q.optionD || "");
-                  setCorrectOption(q.correctOption || "");
-                } else if (q.answerFormat === "ordering") {
-                  const qOrdering = q as typeof q & { orderingItems?: string[]; orderingCorrectOrder?: number[]; orderingDirection?: string };
-                  const rawItems = qOrdering.orderingItems || [];
-                  const order = qOrdering.orderingCorrectOrder || rawItems.map((_, i) => i + 1);
-                  // Reorder items into correct order so form fields match the intended sequence
-                  const items = order
-                    .map((pos, idx) => ({ pos, item: rawItems[idx] }))
-                    .sort((a, b) => a.pos - b.pos)
-                    .map(e => e.item);
-                  setOrderingItem1(items[0] || "");
-                  setOrderingItem2(items[1] || "");
-                  setOrderingItem3(items[2] || "");
-                  setOrderingItem4(items[3] || "");
-                  setShowFourthItem(items.length >= 4);
-                  setOrderingDirection(qOrdering.orderingDirection || "");
-                } else {
-                  setCorrectAnswer(q.correctAnswer || "");
-                  if (q.acceptableAnswers?.length) {
-                    setAcceptableAnswers(q.acceptableAnswers.join(", "));
-                  }
-                }
-                const qWithImage = q as typeof q & { imageUrl?: string; imageSource?: string; imageAttribution?: string };
-                if (qWithImage.imageUrl) {
-                  setImageUrl(qWithImage.imageUrl);
-                  setImageSource(qWithImage.imageSource || "");
-                  setImageAttribution(qWithImage.imageAttribution || "");
-                }
-                setShowWorkshop(false);
-              }}
-            />
+        {skippedFreeTextDraft && (
+          <div className="mb-3 text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-lg p-2">
+            A saved free-text question was skipped — open the bank to convert it.
           </div>
         )}
 
-        {/* Category */}
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-[#a0a0b8] mb-1.5">
-            Category *
-          </label>
-          <div className="grid grid-cols-2 gap-2">
-            {CATEGORIES.map((cat) => (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => setCategory(cat)}
-                className={`text-sm py-2 px-3 rounded-lg border transition-all text-left ${
-                  category === cat
-                    ? "border-[#e94560] bg-[#e94560]/10 text-white"
-                    : "border-[#1e3a5f] text-[#a0a0b8] hover:border-[#2a5a8f]"
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
+        {/* Alt-start row: pick up a draft or jump to the workshop */}
+        <div className="mb-4 pb-3 border-b border-[#1e2a4a] flex items-center gap-2 flex-wrap">
+          {recentDrafts.length > 0 && (
+            <>
+              <span className="text-xs text-[#666680]">Pick up where you left off</span>
+              {recentDrafts.map((d) => (
+                <button
+                  key={d.id}
+                  type="button"
+                  onClick={() => fillFromDraft(d)}
+                  className="text-xs px-2 py-1 rounded-full border border-solid border-[#2a5a8f] text-[#a0a0b8] hover:border-[#4a7abf] hover:text-white transition-all max-w-[180px] truncate"
+                  title={d.questionText || ""}
+                >
+                  {d.questionText || "Untitled"}
+                </button>
+              ))}
+            </>
+          )}
+          <a
+            href={
+              leagueId && roundId
+                ? `/questions/workshop?leagueId=${encodeURIComponent(leagueId)}&roundId=${encodeURIComponent(roundId)}&leaguePlayerId=${encodeURIComponent(leaguePlayerId)}&returnTo=submit`
+                : "/questions/workshop"
+            }
+            className="ml-auto text-xs text-[#4fc3f7] hover:text-white transition-colors font-medium"
+          >
+            Question Workshop →
+          </a>
+        </div>
 
-          {/* Custom Categories */}
-          {(customCategories.length > 0 || showNewCategoryInput || (category && !isDefaultCategory(category))) && (
-            <div className="mt-3 pt-3 border-t border-[#1e3a5f]">
-              <p className="text-xs text-[#666680] mb-2">Custom Categories</p>
-              <div className="flex flex-wrap gap-2">
-                {customCategories.map((cat) => (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => setCategory(cat.name)}
-                    className={`text-sm py-1.5 px-3 rounded-lg border border-dashed transition-all ${
-                      category === cat.name
-                        ? "border-[#e94560] bg-[#e94560]/10 text-white"
-                        : "border-[#2a5a8f] text-[#a0a0b8] hover:border-[#4a7abf]"
-                    }`}
-                  >
-                    {cat.name}
-                  </button>
-                ))}
-                {/* Show selected custom category that isn't in the list yet */}
-                {category && !isDefaultCategory(category) && !customCategories.some((c) => c.name === category) && (
-                  <span className="text-sm py-1.5 px-3 rounded-lg border border-dashed border-[#e94560] bg-[#e94560]/10 text-white">
-                    {category}
-                  </span>
-                )}
+        {/* Cat+Q row with brainstorm trigger flush-right. When open, the panel replaces the row. */}
+        <div className="mb-4">
+          {assistOpen ? (
+            <AssistButton
+              questionText={questionText}
+              category={category}
+              answerFormat={answerFormat}
+              optionA={optionA}
+              optionB={optionB}
+              optionC={optionC}
+              optionD={optionD}
+              correctOption={correctOption}
+              correctAnswer={correctAnswer}
+              orderingItem1={orderingItem1}
+              orderingItem2={orderingItem2}
+              orderingItem3={orderingItem3}
+              orderingDirection={orderingDirection}
+              open={assistOpen}
+              onOpenChange={setAssistOpen}
+              onAccept={(q) => {
+                // Brainstorm-accepted card is a fresh question, not a replay.
+                setOriginalQuestionId(null);
+                fillFromQuestion(q);
+                setAssistOpen(false);
+              }}
+            />
+          ) : (
+            <div className="flex items-stretch gap-3">
+              <div className="flex-1 min-w-0 space-y-4">
+                {/* Category */}
+                <div>
+                  <label className="block text-sm font-medium text-[#a0a0b8] mb-1.5">
+                    Category *
+                  </label>
+                  <CategorySelect
+                    value={category}
+                    customCategories={customCategories}
+                    onChange={setCategory}
+                    onError={setError}
+                  />
+                </div>
+
+                {/* Question Text with image icon in bottom-right corner */}
+                <div>
+                  <label className="block text-sm font-medium text-[#a0a0b8] mb-1.5">
+                    Question *
+                  </label>
+                  <div className="relative">
+                    <textarea
+                      value={questionText}
+                      onChange={(e) => setQuestionText(e.target.value)}
+                      className="input-field min-h-[80px] w-full pl-12"
+                      placeholder="Enter your trivia question..."
+                    />
+                    <div className="absolute bottom-3 left-3">
+                      <ImageAttachment
+                        compact
+                        iconOnly
+                        imageUrl={imageUrl}
+                        imageSource={imageSource}
+                        imageAttribution={imageAttribution}
+                        questionText={questionText}
+                        onChange={(img) => {
+                          if (img) {
+                            setImageUrl(img.url);
+                            setImageSource(img.source);
+                            setImageAttribution(img.attribution || "");
+                          } else {
+                            setImageUrl("");
+                            setImageSource("");
+                            setImageAttribution("");
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                  {imageUrl && (
+                    <div className="mt-2">
+                      <ImageAttachment
+                        imageUrl={imageUrl}
+                        imageSource={imageSource}
+                        imageAttribution={imageAttribution}
+                        questionText={questionText}
+                        onChange={(img) => {
+                          if (img) {
+                            setImageUrl(img.url);
+                            setImageSource(img.source);
+                            setImageAttribution(img.attribution || "");
+                          } else {
+                            setImageUrl("");
+                            setImageSource("");
+                            setImageAttribution("");
+                          }
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="flex-shrink-0 flex items-center">
+                <AssistButton
+                  questionText={questionText}
+                  category={category}
+                  answerFormat={answerFormat}
+                  optionA={optionA}
+                  optionB={optionB}
+                  optionC={optionC}
+                  optionD={optionD}
+                  correctOption={correctOption}
+                  correctAnswer={correctAnswer}
+                  orderingItem1={orderingItem1}
+                  orderingItem2={orderingItem2}
+                  orderingItem3={orderingItem3}
+                  orderingDirection={orderingDirection}
+                  open={assistOpen}
+                  onOpenChange={setAssistOpen}
+                  onAccept={(q) => {
+                    setOriginalQuestionId(null);
+                    fillFromQuestion(q);
+                    setAssistOpen(false);
+                  }}
+                />
               </div>
             </div>
           )}
-
-          {/* New custom category input */}
-          {!showNewCategoryInput ? (
-            <button
-              type="button"
-              onClick={() => setShowNewCategoryInput(true)}
-              className="mt-3 text-sm text-[#4fc3f7] hover:text-white transition-colors font-medium"
-            >
-              + Create new category
-            </button>
-          ) : (
-            <div className="mt-2 flex gap-2">
-              <input
-                type="text"
-                value={newCategoryInput}
-                onChange={(e) => setNewCategoryInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    handleNewCategorySubmit();
-                  }
-                  if (e.key === "Escape") {
-                    setShowNewCategoryInput(false);
-                    setNewCategoryInput("");
-                  }
-                }}
-                onBlur={() => {
-                  if (newCategoryInput.trim()) handleNewCategorySubmit();
-                }}
-                className="input-field flex-1 text-sm"
-                placeholder="Category name (max 50 chars)"
-                maxLength={50}
-                autoFocus
-              />
-              <button
-                type="button"
-                onClick={handleNewCategorySubmit}
-                className="btn-secondary text-sm px-3"
-              >
-                Add
-              </button>
-            </div>
-          )}
         </div>
-
-        {/* Question Text */}
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-[#a0a0b8] mb-1.5">
-            Question *
-          </label>
-          <textarea
-            value={questionText}
-            onChange={(e) => setQuestionText(e.target.value)}
-            className="input-field min-h-[80px]"
-            placeholder="Enter your trivia question..."
-          />
-        </div>
-
-        {/* Image Attachment */}
-        <ImageAttachment
-          imageUrl={imageUrl}
-          imageSource={imageSource}
-          imageAttribution={imageAttribution}
-          questionText={questionText}
-          onChange={(img) => {
-            if (img) {
-              setImageUrl(img.url);
-              setImageSource(img.source);
-              setImageAttribution(img.attribution || "");
-            } else {
-              setImageUrl("");
-              setImageSource("");
-              setImageAttribution("");
-            }
-          }}
-        />
 
         {/* Answer Format */}
         <div className="mb-4">
@@ -589,7 +638,7 @@ export default function QuestionSubmitForm({
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={() => { setAnswerFormat("multiple_choice"); setFormatSuggestion(null); setFormatSuggestionDismissed(false); }}
+              onClick={() => { setAnswerFormat("multiple_choice"); }}
               className={`flex-1 py-2 px-3 rounded-lg border text-sm ${
                 answerFormat === "multiple_choice"
                   ? "border-[#e94560] bg-[#e94560]/10 text-white"
@@ -600,18 +649,7 @@ export default function QuestionSubmitForm({
             </button>
             <button
               type="button"
-              onClick={() => { setAnswerFormat("free_text"); setFormatSuggestion(null); setFormatSuggestionDismissed(false); }}
-              className={`flex-1 py-2 px-3 rounded-lg border text-sm ${
-                answerFormat === "free_text"
-                  ? "border-[#e94560] bg-[#e94560]/10 text-white"
-                  : "border-[#1e3a5f] text-[#a0a0b8]"
-              }`}
-            >
-              Free Text
-            </button>
-            <button
-              type="button"
-              onClick={() => { setAnswerFormat("price_is_right"); setFormatSuggestion(null); setFormatSuggestionDismissed(false); }}
+              onClick={() => { setAnswerFormat("price_is_right"); }}
               className={`flex-1 py-2 px-3 rounded-lg border text-sm ${
                 answerFormat === "price_is_right"
                   ? "border-[#e94560] bg-[#e94560]/10 text-white"
@@ -622,7 +660,7 @@ export default function QuestionSubmitForm({
             </button>
             <button
               type="button"
-              onClick={() => { setAnswerFormat("ordering"); setFormatSuggestion(null); setFormatSuggestionDismissed(false); }}
+              onClick={() => { setAnswerFormat("ordering"); }}
               className={`flex-1 py-2 px-3 rounded-lg border text-sm ${
                 answerFormat === "ordering"
                   ? "border-[#e94560] bg-[#e94560]/10 text-white"
@@ -667,83 +705,6 @@ export default function QuestionSubmitForm({
             <p className="text-xs text-[#666680]">
               Click the letter to mark the correct answer (green = correct)
             </p>
-          </div>
-        )}
-
-        {/* Free Text Answer */}
-        {answerFormat === "free_text" && (
-          <div className="space-y-3 mb-4">
-            <div>
-              <label className="block text-sm font-medium text-[#a0a0b8] mb-1">
-                Correct Answer *
-              </label>
-              <input
-                type="text"
-                value={correctAnswer}
-                onChange={(e) => setCorrectAnswer(e.target.value)}
-                className="input-field"
-                placeholder="The exact correct answer"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-[#a0a0b8] mb-1">
-                Also Acceptable (comma-separated)
-              </label>
-              <input
-                type="text"
-                value={acceptableAnswers}
-                onChange={(e) => setAcceptableAnswers(e.target.value)}
-                className="input-field"
-                placeholder="alt answer 1, alt answer 2"
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Format Suggestion */}
-        {answerFormat === "free_text" && correctAnswer.trim() && questionText.trim() && (
-          <div className="mb-4">
-            {!formatSuggestion && !formatSuggestionDismissed && (
-              <button
-                type="button"
-                onClick={fetchFormatSuggestion}
-                disabled={formatSuggestionLoading}
-                className="btn-secondary text-sm w-full"
-              >
-                {formatSuggestionLoading ? "Checking..." : "Suggest Better Format"}
-              </button>
-            )}
-            {formatSuggestion && !formatSuggestionDismissed && (
-              <div className="p-3 rounded-lg border border-[#4fc3f7]/30 bg-[#4fc3f7]/10 text-sm">
-                <p className="text-[#4fc3f7] font-medium mb-2">
-                  {formatSuggestion.message}
-                </p>
-                {formatSuggestion.suggestedFormat === "multiple_choice" && formatSuggestion.options && (
-                  <div className="text-[#a0a0b8] text-xs mb-2 space-y-1">
-                    <p>A: {formatSuggestion.options.optionA}</p>
-                    <p>B: {formatSuggestion.options.optionB}</p>
-                    <p>C: {formatSuggestion.options.optionC}</p>
-                    <p>D: {formatSuggestion.options.optionD}</p>
-                  </div>
-                )}
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={applyFormatSuggestion}
-                    className="btn-primary text-sm flex-1"
-                  >
-                    Convert to {formatSuggestion.suggestedFormat === "multiple_choice" ? "Multiple Choice" : formatSuggestion.suggestedFormat === "ordering" ? "Ordering" : "Price is Right"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFormatSuggestionDismissed(true)}
-                    className="btn-secondary text-sm"
-                  >
-                    Keep Free Text
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         )}
 
@@ -797,12 +758,12 @@ export default function QuestionSubmitForm({
               </select>
             </div>
             <p className="text-xs text-[#666680]">
-              Enter items in the correct order (1st = position 1).
+              Enter items in the correct order (1st = position 1). Values are optional; when supplied, equal values count as ties when scoring.
             </p>
             {[
-              { n: 1, value: orderingItem1, setter: setOrderingItem1 },
-              { n: 2, value: orderingItem2, setter: setOrderingItem2 },
-              { n: 3, value: orderingItem3, setter: setOrderingItem3 },
+              { n: 1, value: orderingItem1, setter: setOrderingItem1, val: orderingValue1, valSetter: setOrderingValue1 },
+              { n: 2, value: orderingItem2, setter: setOrderingItem2, val: orderingValue2, valSetter: setOrderingValue2 },
+              { n: 3, value: orderingItem3, setter: setOrderingItem3, val: orderingValue3, valSetter: setOrderingValue3 },
             ].map((item) => (
               <div key={item.n} className="flex items-center gap-2">
                 <span className="w-6 h-6 rounded-full bg-[#1e3a5f] text-[#a0a0b8] flex items-center justify-center text-xs font-bold">
@@ -814,6 +775,13 @@ export default function QuestionSubmitForm({
                   onChange={(e) => item.setter(e.target.value)}
                   className="input-field flex-1"
                   placeholder={`Item ${item.n}`}
+                />
+                <input
+                  type="text"
+                  value={item.val}
+                  onChange={(e) => item.valSetter(e.target.value)}
+                  className="input-field w-24"
+                  placeholder="Value"
                 />
               </div>
             ))}
@@ -829,6 +797,13 @@ export default function QuestionSubmitForm({
                   className="input-field flex-1"
                   placeholder="Item 4"
                 />
+                <input
+                  type="text"
+                  value={orderingValue4}
+                  onChange={(e) => setOrderingValue4(e.target.value)}
+                  className="input-field w-24"
+                  placeholder="Value"
+                />
               </div>
             ) : (
               <button
@@ -842,43 +817,29 @@ export default function QuestionSubmitForm({
           </div>
         )}
 
-        {/* Difficulty Check */}
-        {canCheckDifficulty && (
-          <div className="mb-4">
-            <button
-              type="button"
-              onClick={checkDifficulty}
-              disabled={difficultyLoading}
-              className="btn-secondary text-sm w-full"
-            >
-              {difficultyLoading ? "Checking..." : "Check Difficulty"}
-            </button>
-            {difficultyResult && (
-              <>
-                {difficultyResult.categoryMismatch && difficultyResult.categoryNote && (
-                  <div className="mt-2 p-3 rounded-lg border text-sm bg-amber-500/10 border-amber-500/30 text-amber-300">
-                    <span className="font-bold">Category check:</span>{" "}
-                    That doesn&apos;t look quite right — {difficultyResult.categoryNote}
-                  </div>
-                )}
-                <div
-                  className={`mt-2 p-3 rounded-lg border text-sm ${
-                    difficultyResult.difficulty === "easy"
-                      ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
-                      : difficultyResult.difficulty === "hard"
-                        ? "bg-red-500/10 border-red-500/30 text-red-400"
-                        : "bg-amber-500/10 border-amber-500/30 text-amber-400"
-                  }`}
-                >
-                  <span className="font-bold uppercase">
-                    {difficultyResult.difficulty}
-                  </span>
-                  <span className="text-[#a0a0b8] ml-2">
-                    {difficultyResult.reasoning}
-                  </span>
-                </div>
-              </>
-            )}
+        {/* Category mismatch warning (load-bearing) */}
+        {difficultyResult?.categoryMismatch && difficultyResult.categoryNote && (
+          <div className="mb-3 p-3 rounded-lg border text-sm bg-amber-500/10 border-amber-500/30 text-amber-300">
+            <span className="font-bold">Category check:</span>{" "}
+            That doesn&apos;t look quite right — {difficultyResult.categoryNote}
+          </div>
+        )}
+
+        {/* Inline difficulty reasoning — surfaced once the auto-check completes */}
+        {difficultyResult?.reasoning && (
+          <div
+            className={`mb-3 p-3 rounded-lg border text-sm ${
+              difficultyResult.difficulty === "easy"
+                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+                : difficultyResult.difficulty === "hard"
+                  ? "border-red-500/30 bg-red-500/10 text-red-200"
+                  : "border-amber-500/30 bg-amber-500/10 text-amber-200"
+            }`}
+          >
+            <span className="font-bold uppercase text-xs tracking-wide mr-2">
+              {difficultyResult.difficulty}
+            </span>
+            <span className="text-[#e8e8e8]">{difficultyResult.reasoning}</span>
           </div>
         )}
 
@@ -888,13 +849,60 @@ export default function QuestionSubmitForm({
           </div>
         )}
 
-        <button
-          onClick={handleSubmit}
-          disabled={submitting}
-          className="btn-primary w-full"
-        >
-          {submitting ? <span className="inline-flex items-center justify-center gap-2"><Spinner /> Submitting...</span> : "Submit Question"}
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleSubmit}
+            disabled={submitting}
+            className="btn-primary flex-1"
+          >
+            {submitting ? <span className="inline-flex items-center justify-center gap-2"><Spinner /> Submitting...</span> : "Submit Question"}
+          </button>
+          {difficultyLoading && (
+            <span
+              className="flex-shrink-0 text-xs font-bold uppercase px-2 py-1.5 rounded-lg border border-[#1e3a5f] text-[#666680]"
+              title="Checking difficulty..."
+            >
+              ...
+            </span>
+          )}
+        </div>
+
+        {draftLoaded && (
+          <button
+            type="button"
+            onClick={() => {
+              if (!window.confirm("Clear all fields? This won't delete saved drafts.")) return;
+              setCategory("");
+              setQuestionText("");
+              setAnswerFormat("multiple_choice");
+              setOptionA("");
+              setOptionB("");
+              setOptionC("");
+              setOptionD("");
+              setCorrectOption("");
+              setCorrectAnswer("");
+              setOrderingDirection("");
+              setOrderingItem1("");
+              setOrderingItem2("");
+              setOrderingItem3("");
+              setOrderingItem4("");
+              setOrderingValue1("");
+              setOrderingValue2("");
+              setOrderingValue3("");
+              setOrderingValue4("");
+              setShowFourthItem(false);
+              setImageUrl("");
+              setImageSource("");
+              setImageAttribution("");
+              setDifficultyResult(null);
+              setOriginalQuestionId(null);
+              setError("");
+            }}
+            className="mt-3 text-xs text-[#666680] hover:text-[#a0a0b8] transition-colors"
+          >
+            Clear form
+          </button>
+        )}
       </div>
     </div>
   );

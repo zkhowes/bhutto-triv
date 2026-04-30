@@ -20,6 +20,7 @@ interface Draft {
   orderingItems: string | null;
   orderingCorrectOrder: string | null;
   orderingDirection: string | null;
+  orderingItemValues: string | null;
   useOnNextRound: boolean;
   updatedAt: string;
 }
@@ -38,6 +39,7 @@ interface WorkshopEmbedProps {
     acceptableAnswers?: string[];
     orderingItems?: string[];
     orderingDirection?: string;
+    orderingItemValues?: Array<string | number | null>;
     imageUrl?: string;
     imageSource?: string;
     imageAttribution?: string;
@@ -65,7 +67,6 @@ const EDIT_CHIPS = [
   "Make Harder",
   "Make Easier",
   "Change to MC",
-  "Change to Free Text",
   "Change to PiR",
   "Change to Ordering",
   "Different Angle",
@@ -209,6 +210,7 @@ export default function WorkshopEmbed({ onSelectQuestion }: WorkshopEmbedProps) 
       acceptableAnswers: v.acceptableAnswers,
       orderingItems: v.orderingItems,
       orderingDirection: v.orderingDirection,
+      orderingItemValues: v.orderingItemValues,
       imageUrl: img?.url,
       imageSource: img?.source,
       imageAttribution: img?.attribution,
@@ -247,7 +249,7 @@ export default function WorkshopEmbed({ onSelectQuestion }: WorkshopEmbedProps) 
     onSelectQuestion({
       category: draft.category || "General Knowledge",
       questionText: draft.questionText || "",
-      answerFormat: draft.answerFormat || "free_text",
+      answerFormat: draft.answerFormat || "multiple_choice",
       optionA: draft.optionA || undefined,
       optionB: draft.optionB || undefined,
       optionC: draft.optionC || undefined,
@@ -261,6 +263,9 @@ export default function WorkshopEmbed({ onSelectQuestion }: WorkshopEmbedProps) 
         ? (() => { try { const a = JSON.parse(draft.orderingItems!); return Array.isArray(a) ? a : undefined; } catch { return undefined; } })()
         : undefined,
       orderingDirection: draft.orderingDirection || undefined,
+      orderingItemValues: draft.orderingItemValues
+        ? (() => { try { const a = JSON.parse(draft.orderingItemValues!); return Array.isArray(a) ? a : undefined; } catch { return undefined; } })()
+        : undefined,
     });
   };
 

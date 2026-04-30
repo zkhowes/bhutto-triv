@@ -38,6 +38,7 @@ interface RoundControlProps {
       orderingItems?: string | null;
       orderingCorrectOrder?: string | null;
       orderingDirection?: string | null;
+      orderingItemValues?: string | null;
     } | null;
     answers: Array<{
       id: string;
@@ -204,15 +205,18 @@ export default function RoundControl({
                   const order: number[] = round.question!.orderingCorrectOrder
                     ? JSON.parse(round.question!.orderingCorrectOrder)
                     : items.map((_, i) => i + 1);
+                  const values: Array<string | number | null> | null = round.question!.orderingItemValues
+                    ? JSON.parse(round.question!.orderingItemValues)
+                    : null;
                   const sorted = order
-                    .map((pos, idx) => ({ pos, item: items[idx] }))
-                    .sort((a, b) => a.pos - b.pos)
-                    .map(e => e.item);
+                    .map((pos, idx) => ({ pos, item: items[idx], value: values?.[idx] ?? null }))
+                    .sort((a, b) => a.pos - b.pos);
                   return (
                     <div className="space-y-0.5">
-                      {sorted.map((item, i) => (
+                      {sorted.map((entry, i) => (
                         <p key={i} className="text-xs text-emerald-400">
-                          {i + 1}. {item}
+                          {i + 1}. {entry.item}
+                          {entry.value !== null && entry.value !== "" ? ` [${entry.value}]` : ""}
                         </p>
                       ))}
                     </div>

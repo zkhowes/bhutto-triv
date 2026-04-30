@@ -8,6 +8,11 @@ interface ImageAttachmentProps {
   imageSource: string;
   imageAttribution: string;
   questionText: string;
+  compact?: boolean;
+  // When true (compact mode only), only renders the icon toggle button —
+  // never the inline preview. The caller is expected to render the full
+  // preview separately (see QuestionSubmitForm).
+  iconOnly?: boolean;
   onChange: (image: {
     url: string;
     source: string;
@@ -20,6 +25,8 @@ export default function ImageAttachment({
   imageSource,
   imageAttribution,
   questionText,
+  compact = false,
+  iconOnly = false,
   onChange,
 }: ImageAttachmentProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -59,6 +66,140 @@ export default function ImageAttachment({
     setImgBroken(false);
     onChange(null);
   };
+
+  if (compact && iconOnly) {
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => setIsModalOpen(true)}
+          title={hasImage ? "Change image" : "Add image (optional)"}
+          aria-label={hasImage ? "Change image" : "Add image"}
+          className={`flex-shrink-0 w-8 h-8 rounded-md border flex items-center justify-center transition-colors ${
+            hasImage
+              ? "border-[#4a9eff] bg-[#0f1a2e] text-[#4a9eff]"
+              : "border-[#1e3a5f] bg-[#0f1a2e] hover:border-[#4a9eff] hover:text-[#4a9eff] text-[#4a6fa5]"
+          }`}
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="w-4 h-4"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={1.5}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"
+            />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z"
+            />
+          </svg>
+        </button>
+        <ImageSearchModal
+          isOpen={isModalOpen}
+          initialQuery={questionText}
+          onSelect={handleSelect}
+          onClose={() => setIsModalOpen(false)}
+        />
+      </>
+    );
+  }
+
+  if (compact) {
+    return (
+      <>
+        {!hasImage ? (
+          <button
+            type="button"
+            onClick={() => setIsModalOpen(true)}
+            title="Add image (optional)"
+            aria-label="Add image"
+            className="flex-shrink-0 w-9 h-9 rounded-lg border border-[#1e3a5f] bg-[#0f1a2e] hover:border-[#4a9eff] hover:text-[#4a9eff] text-[#4a6fa5] flex items-center justify-center transition-colors"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="w-4 h-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={1.5}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"
+              />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z"
+              />
+            </svg>
+          </button>
+        ) : (
+          <div className="flex items-center gap-2 rounded-lg border border-[#1e3a5f] bg-[#0a0f1e] p-1.5">
+            {imgBroken ? (
+              <div className="w-14 h-14 rounded bg-[#0f1a2e] flex items-center justify-center text-[#4a6fa5] text-xs flex-shrink-0">
+                ⚠
+              </div>
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={imageUrl}
+                alt="Question image"
+                className="w-14 h-14 object-cover rounded flex-shrink-0"
+                onError={handleImageError}
+              />
+            )}
+            <div className="flex-1 min-w-0 text-xs">
+              {parsedAttribution ? (
+                <a
+                  href={parsedAttribution.profileUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#4a6fa5] hover:text-[#4a9eff] truncate block"
+                >
+                  By {parsedAttribution.name}
+                </a>
+              ) : (
+                <span className="text-[#4a6fa5] truncate block">
+                  {imageSource || "Attached"}
+                </span>
+              )}
+              <div className="flex gap-2 mt-0.5">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(true)}
+                  className="text-[#8ab4d4] hover:text-[#4a9eff]"
+                >
+                  Change
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRemove}
+                  className="text-[#8ab4d4] hover:text-red-400"
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        <ImageSearchModal
+          isOpen={isModalOpen}
+          initialQuery={questionText}
+          onSelect={handleSelect}
+          onClose={() => setIsModalOpen(false)}
+        />
+      </>
+    );
+  }
 
   return (
     <>

@@ -104,6 +104,7 @@ export interface WorkshopVariation {
   orderingItems?: string[];
   orderingCorrectOrder?: number[];
   orderingDirection?: string;
+  orderingItemValues?: Array<string | number | null>;
   difficulty: "easy" | "medium" | "hard";
   hook: string;
   imageSearchTerm?: string;
@@ -121,9 +122,10 @@ When the user asks you to create a question or gives you a topic, return EXACTLY
 
 Answer formats:
 - "multiple_choice": 4 options (optionA-D), one correctOption (A/B/C/D)
-- "free_text": correctAnswer string + acceptableAnswers array of alternate phrasings
 - "price_is_right": numeric correctAnswer (as string), no acceptableAnswers needed
-- "ordering": 3-4 items in orderingItems array, orderingCorrectOrder array of positions [1,2,3,4] (items entered in correct order so positions match indices+1), plus orderingDirection string (e.g. "most to least", "earliest to latest"). Great for chronological, ranking, or sequential questions.
+- "ordering": 3-4 items in orderingItems array, orderingCorrectOrder MUST be [1,2,3,4] in strictly ascending order — that is, list orderingItems IN THE CORRECT ORDER (position 1 first). Include orderingDirection (e.g. "most to least", "earliest to latest", "least to most", "latest to earliest"). Include orderingItemValues: a parallel array of the comparable scalar each item is being ordered by (year, population, GDP, etc.) — same length and index alignment as orderingItems. CRITICAL self-check: sort orderingItemValues according to orderingDirection; the resulting order MUST match orderingItems. If "earliest to latest", orderingItems[0]'s value must be the smallest (earliest year). If you cannot produce comparable scalars, do NOT use ordering — pick a different format.
+
+DO NOT generate "free_text" variations. Only multiple_choice, price_is_right, and ordering are accepted. If a topic seems to call for an open-ended answer, reframe it as multiple_choice instead.
 
 Default categories: Geography, Sports, Politics, Science, History, Entertainment, Arts & Literature, Food & Drink, Technology, General Knowledge
 
@@ -146,9 +148,10 @@ Return this exact JSON structure:
       "category": "History",
       "questionText": "...",
       "answerFormat": "ordering",
-      "orderingItems": ["item1", "item2", "item3", "item4"],
+      "orderingItems": ["earliest item", "next item", "later item", "latest item"],
       "orderingCorrectOrder": [1, 2, 3, 4],
       "orderingDirection": "earliest to latest",
+      "orderingItemValues": [1977, 1990, 2001, 2008],
       "difficulty": "hard",
       "hook": "Put these in order...",
       "imageSearchTerm": null
@@ -168,7 +171,7 @@ Return this exact JSON structure:
 Rules:
 - "hook" is a short 5-8 word teaser for each card
 - "imageSearchTerm": a concise, specific search query for an image that enhances the question, or null if no image would add value
-- STRONGLY prefer multiple_choice, price_is_right, and ordering formats over free_text. Only use free_text when the question genuinely requires an open-ended answer (e.g., "Name the country...", "Who said..."). At least 2 of the 3 variations should be multiple_choice, price_is_right, or ordering.
+- All variations must use multiple_choice, price_is_right, or ordering. Never free_text.
 - Each variation should feel genuinely different, not a rewrite
 - Return ONLY valid JSON, no markdown fences, no extra text
 - If the user is having a conversation (not asking for a question), return: {"type": "conversation", "text": "your response here"}
@@ -194,7 +197,7 @@ export async function workshopQuestion(
     });
 
     const text = response.content[0].type === "text" ? response.content[0].text : "";
-    return parseWorkshopResponse(text);
+    return await enforceOrderingValidation(parseWorkshopResponse(text));
   } catch {
     return { type: "conversation", text: "AI workshop is temporarily unavailable. Please try again later." };
   }
@@ -230,7 +233,7 @@ Return 3 new variations. The first should be the edited version incorporating my
     });
 
     const text = response.content[0].type === "text" ? response.content[0].text : "";
-    return parseWorkshopResponse(text);
+    return await enforceOrderingValidation(parseWorkshopResponse(text));
   } catch {
     return { type: "conversation", text: "AI workshop is temporarily unavailable. Please try again later." };
   }
@@ -251,6 +254,165 @@ function parseWorkshopResponse(text: string): WorkshopResponse {
   } catch {
     return { type: "conversation", text };
   }
+}
+
+/**
+ * Compare two ordering values. Numeric strings are compared numerically.
+ */
+function compareOrderingValues(a: string | number, b: string | number): number {
+  const aNum = typeof a === "number" ? a : Number(a);
+  const bNum = typeof b === "number" ? b : Number(b);
+  if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum;
+  return String(a).localeCompare(String(b));
+}
+
+/**
+ * Validate an ordering variation. Returns null when valid, or a string
+ * describing the first problem when invalid. Equal values are treated as ties
+ * (any relative order between them is OK).
+ */
+export function validateOrderingPayload(v: WorkshopVariation): string | null {
+  if (v.answerFormat !== "ordering") return null;
+
+  const items = v.orderingItems;
+  const order = v.orderingCorrectOrder;
+  const direction = v.orderingDirection;
+  const values = v.orderingItemValues;
+
+  if (!Array.isArray(items) || items.length < 3 || items.length > 4) {
+    return "orderingItems must contain 3-4 items";
+  }
+  if (!Array.isArray(order) || order.length !== items.length) {
+    return "orderingCorrectOrder length must match orderingItems length";
+  }
+  // Contract: items are listed in correct order, so orderingCorrectOrder must be [1..n].
+  for (let i = 0; i < order.length; i++) {
+    if (order[i] !== i + 1) {
+      return `orderingCorrectOrder must be ascending [1..n] (items listed in correct order); got ${JSON.stringify(order)}`;
+    }
+  }
+  if (!direction || direction.trim().length === 0) {
+    return "orderingDirection is required";
+  }
+
+  // Values are optional; when present, they must align with the stated direction.
+  if (Array.isArray(values)) {
+    if (values.length !== items.length) {
+      return "orderingItemValues length must match orderingItems length";
+    }
+    const allPresent = values.every((x) => x !== null && x !== undefined && x !== "");
+    if (allPresent) {
+      const dir = direction.toLowerCase();
+      const ascending =
+        dir.includes("earliest to latest") ||
+        dir.includes("oldest to newest") ||
+        dir.includes("least to most") ||
+        dir.includes("smallest to largest") ||
+        dir.includes("lowest to highest") ||
+        dir.includes("shortest to longest");
+      const descending =
+        dir.includes("latest to earliest") ||
+        dir.includes("newest to oldest") ||
+        dir.includes("most to least") ||
+        dir.includes("largest to smallest") ||
+        dir.includes("highest to lowest") ||
+        dir.includes("longest to shortest");
+
+      // If we can't determine the direction, skip the value-vs-direction check
+      // (validator stays permissive on novel direction phrasings).
+      if (ascending || descending) {
+        const typed = values as Array<string | number>;
+        for (let i = 0; i < typed.length - 1; i++) {
+          const cmp = compareOrderingValues(typed[i], typed[i + 1]);
+          if (ascending && cmp > 0) {
+            return `orderingItemValues not in '${direction}' order at index ${i}: ${typed[i]} > ${typed[i + 1]}`;
+          }
+          if (descending && cmp < 0) {
+            return `orderingItemValues not in '${direction}' order at index ${i}: ${typed[i]} < ${typed[i + 1]}`;
+          }
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Ask the model to fix an ordering variation that failed validation. One retry only.
+ * Returns the corrected variation or null if the retry still fails.
+ */
+async function repairOrderingVariation(
+  v: WorkshopVariation,
+  problem: string
+): Promise<WorkshopVariation | null> {
+  if (!process.env.ANTHROPIC_API_KEY) return null;
+  try {
+    const anthropic = getClient();
+    const response = await anthropic.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 800,
+      system: WORKSHOP_SYSTEM_PROMPT,
+      messages: [
+        {
+          role: "user",
+          content: `The following ordering variation failed validation: ${problem}
+
+Original variation:
+${JSON.stringify(v, null, 2)}
+
+Return EXACTLY ONE corrected variation as JSON (not wrapped in {"variations": [...]}). Fix the order of orderingItems and/or orderingItemValues so they are consistent with orderingDirection. orderingCorrectOrder MUST be [1..n]. Return ONLY the JSON object, no commentary.`,
+        },
+      ],
+    });
+    const text = response.content[0].type === "text" ? response.content[0].text : "";
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) return null;
+    const fixed = JSON.parse(match[0]) as WorkshopVariation;
+    if (validateOrderingPayload(fixed) === null) return fixed;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Walk variations: drop any free_text (deprecated for new questions),
+ * validate ordering ones, attempt one repair pass, drop on second failure.
+ * Mutates the response in place. Logs how many variations were dropped.
+ */
+async function enforceOrderingValidation(resp: WorkshopResponse): Promise<WorkshopResponse> {
+  if (resp.type !== "questions" || !Array.isArray(resp.variations)) return resp;
+  const kept: WorkshopVariation[] = [];
+  let dropped = 0;
+  for (const v of resp.variations) {
+    if (v.answerFormat === "free_text") {
+      dropped++;
+      console.warn("[workshop] dropped free_text variation (no longer supported for new questions)");
+      continue;
+    }
+    if (v.answerFormat !== "ordering") {
+      kept.push(v);
+      continue;
+    }
+    const problem = validateOrderingPayload(v);
+    if (problem === null) {
+      kept.push(v);
+      continue;
+    }
+    const fixed = await repairOrderingVariation(v, problem);
+    if (fixed) {
+      kept.push(fixed);
+    } else {
+      dropped++;
+      console.warn("[workshop] dropped invalid ordering variation:", problem);
+    }
+  }
+  resp.variations = kept;
+  if (dropped > 0) {
+    console.warn(`[workshop] dropped ${dropped} variation(s) after filtering`);
+  }
+  return resp;
 }
 
 /**

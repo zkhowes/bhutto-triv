@@ -42,6 +42,7 @@ interface Question {
   orderingItems?: string | null;
   orderingCorrectOrder?: string | null;
   orderingDirection?: string | null;
+  orderingItemValues?: string | null;
 }
 
 interface GradingInterfaceProps {
@@ -83,6 +84,14 @@ export default function GradingInterface({
     try { return JSON.parse(question.orderingCorrectOrder); } catch { return []; }
   }, [isOrdering, question.orderingCorrectOrder]);
 
+  const orderingItemValues: Array<string | number | null> | null = useMemo(() => {
+    if (!isOrdering || !question.orderingItemValues) return null;
+    try {
+      const arr = JSON.parse(question.orderingItemValues);
+      return Array.isArray(arr) ? arr : null;
+    } catch { return null; }
+  }, [isOrdering, question.orderingItemValues]);
+
   // Compute PiR preview grades client-side
   const pirPreview = useMemo<Record<string, boolean>>(() => {
     if (!isPriceIsRight) return {};
@@ -117,13 +126,13 @@ export default function GradingInterface({
           return { id: a.id, playerOrder: [] as number[] };
         }
       });
-    const { winners } = determineOrderingWinners(orderingCorrectOrder, submissions);
+    const { winners } = determineOrderingWinners(orderingCorrectOrder, submissions, orderingItemValues);
     const preview: Record<string, boolean> = {};
     for (const a of playerAnswers) {
       preview[a.id] = winners.has(a.id);
     }
     return preview;
-  }, [isOrdering, orderingCorrectOrder, playerAnswers]);
+  }, [isOrdering, orderingCorrectOrder, orderingItemValues, playerAnswers]);
 
   const [overrides, setOverrides] = useState<Record<string, boolean>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -275,13 +284,21 @@ export default function GradingInterface({
             <div className="space-y-1">
               {(orderingCorrectOrder.length > 0
                 ? orderingCorrectOrder
-                    .map((pos, idx) => ({ pos, item: orderingItems[idx] }))
+                    .map((pos, idx) => ({
+                      pos,
+                      item: orderingItems[idx],
+                      value: orderingItemValues?.[idx] ?? null,
+                    }))
                     .sort((a, b) => a.pos - b.pos)
-                    .map(e => e.item)
-                : orderingItems
-              ).map((item, i) => (
+                : orderingItems.map((item, idx) => ({
+                    pos: idx + 1,
+                    item,
+                    value: orderingItemValues?.[idx] ?? null,
+                  }))
+              ).map((entry, i) => (
                 <p key={i} className="text-emerald-400 text-xs">
-                  {i + 1}. {item}
+                  {i + 1}. {entry.item}
+                  {entry.value !== null && entry.value !== "" ? ` [${entry.value}]` : ""}
                 </p>
               ))}
             </div>

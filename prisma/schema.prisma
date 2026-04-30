@@ -284,6 +284,7 @@ model Question {
   orderingItems        String?   // JSON: ["Brazil","India","China","USA"]
   orderingCorrectOrder String?   // JSON: [1,2,3,4] (correct position per item)
   orderingDirection    String?   // e.g. "most to least", "earliest to latest"
+  orderingItemValues   String?   // JSON: parallel to orderingItems, comparable scalars (years, populations); equal values count as ties when scoring
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -313,8 +314,12 @@ model QuestionDraft {
   orderingItems        String?
   orderingCorrectOrder String?
   orderingDirection    String?
+  orderingItemValues   String?
   useOnNextRound    Boolean @default(false)
   leagueId          String? // If associated with specific league
+
+  isReplay           Boolean @default(false)
+  originalQuestionId String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

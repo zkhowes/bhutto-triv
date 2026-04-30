@@ -215,11 +215,19 @@ export function determinePirWinners(
  *   3. If nobody all-correct, player(s) with most correct positions win (min 2 to win).
  *   4. Ties: all tying players win.
  *   5. Everyone below 2 correct: nobody wins.
+ *
+ * When `itemValues` is supplied (parallel to the original orderingItems array),
+ * a position is correct if the value at the player's placement equals the
+ * canonical value at that placement. This makes equal-value items
+ * interchangeable (e.g. two films released the same year). Null/empty values
+ * are NOT treated as equivalent to other nulls.
+ *
  * Returns the Set of winner answer IDs and a map of scores.
  */
 export function determineOrderingWinners(
   correctOrder: number[],
-  submissions: Array<{ id: string; playerOrder: number[] }>
+  submissions: Array<{ id: string; playerOrder: number[] }>,
+  itemValues?: Array<string | number | null> | null
 ): { winners: Set<string>; scores: Map<string, number> } {
   const scores = new Map<string, number>();
   const winners = new Set<string>();
@@ -228,11 +236,40 @@ export function determineOrderingWinners(
     return { winners, scores };
   }
 
-  // Score each submission: count items in correct position
+  // Build position -> canonical value lookup when values are present and complete.
+  // valueAtPosition[pos] = canonical value at 1-indexed position `pos`.
+  const useValues =
+    Array.isArray(itemValues) &&
+    itemValues.length === correctOrder.length &&
+    itemValues.every((v) => v !== null && v !== undefined && v !== "");
+  const valueAtPosition = new Map<number, string | number>();
+  if (useValues) {
+    for (let originalIdx = 0; originalIdx < correctOrder.length; originalIdx++) {
+      const pos = correctOrder[originalIdx];
+      valueAtPosition.set(pos, itemValues![originalIdx] as string | number);
+    }
+  }
+
+  // Score each submission: count items in correct position (or correct value-slot)
   for (const sub of submissions) {
     let correct = 0;
-    for (let i = 0; i < correctOrder.length; i++) {
-      if (sub.playerOrder[i] === correctOrder[i]) correct++;
+    for (let originalIdx = 0; originalIdx < correctOrder.length; originalIdx++) {
+      if (useValues) {
+        const playerPos = sub.playerOrder[originalIdx];
+        const playerValue = itemValues![originalIdx];
+        const canonicalValue = valueAtPosition.get(playerPos);
+        if (
+          playerValue !== null &&
+          playerValue !== undefined &&
+          playerValue !== "" &&
+          canonicalValue !== undefined &&
+          playerValue === canonicalValue
+        ) {
+          correct++;
+        }
+      } else {
+        if (sub.playerOrder[originalIdx] === correctOrder[originalIdx]) correct++;
+      }
     }
     scores.set(sub.id, correct);
   }

@@ -229,6 +229,8 @@ export async function submitQuestion(
     orderingItems?: string[];
     orderingCorrectOrder?: number[];
     orderingDirection?: string;
+    orderingItemValues?: Array<string | number | null>;
+    originalQuestionId?: string;
   }
 ): Promise<string> {
   const round = await prisma.round.findUnique({
@@ -259,6 +261,50 @@ export async function submitQuestion(
     if (!questionData.orderingDirection || questionData.orderingDirection.trim().length === 0) {
       throw new Error("Ordering direction is required");
     }
+    // Run the same value-vs-direction sanity check used by the workshop, so
+    // hand-edited or legacy-bank questions can't ship inconsistent orderings.
+    const { validateOrderingPayload } = await import("./ai");
+    const problem = validateOrderingPayload({
+      category: questionData.category,
+      questionText: questionData.questionText,
+      answerFormat: "ordering",
+      orderingItems: questionData.orderingItems,
+      orderingCorrectOrder: questionData.orderingCorrectOrder,
+      orderingDirection: questionData.orderingDirection,
+      orderingItemValues: questionData.orderingItemValues,
+      difficulty: "medium",
+      hook: "",
+    });
+    if (problem) throw new Error(`Ordering validation: ${problem}`);
+  }
+
+  // Replay tracking: if originalQuestionId is supplied, resolve to the root of the
+  // chain (an original — not itself a replay) and per-league dedup against this league.
+  const targetLeagueId = round.game.season.leagueId;
+  let rootOriginalId: string | null = null;
+  let isReplay = false;
+  if (questionData.originalQuestionId) {
+    const ref = await prisma.question.findUnique({
+      where: { id: questionData.originalQuestionId },
+      select: { id: true, originalQuestionId: true },
+    });
+    if (ref) {
+      rootOriginalId = ref.originalQuestionId || ref.id;
+      isReplay = true;
+    }
+  }
+
+  // Dedup: reject if the user already played this question text in this league.
+  const priorInLeague = await prisma.question.findFirst({
+    where: {
+      creatorUserId: questionData.creatorUserId,
+      questionText: { equals: questionData.questionText.trim(), mode: "insensitive" },
+      round: { game: { season: { leagueId: targetLeagueId } } },
+    },
+    select: { id: true },
+  });
+  if (priorInLeague) {
+    throw new Error("This question was already played in this league.");
   }
 
   const question = await prisma.question.create({
@@ -284,6 +330,9 @@ export async function submitQuestion(
       orderingItems: questionData.orderingItems ? JSON.stringify(questionData.orderingItems) : null,
       orderingCorrectOrder: questionData.orderingCorrectOrder ? JSON.stringify(questionData.orderingCorrectOrder) : null,
       orderingDirection: questionData.orderingDirection || null,
+      orderingItemValues: questionData.orderingItemValues ? JSON.stringify(questionData.orderingItemValues) : null,
+      isReplay,
+      originalQuestionId: rootOriginalId,
     },
   });
 
@@ -652,6 +701,9 @@ async function tryAutoSubmitFromBank(roundId: string): Promise<void> {
       orderingItems: draft.orderingItems ? JSON.parse(draft.orderingItems) : undefined,
       orderingCorrectOrder: draft.orderingCorrectOrder ? JSON.parse(draft.orderingCorrectOrder) : undefined,
       orderingDirection: draft.orderingDirection ?? undefined,
+      orderingItemValues: draft.orderingItemValues ? JSON.parse(draft.orderingItemValues) : undefined,
+      // Forward replay link if the draft was loaded from a past question.
+      originalQuestionId: draft.originalQuestionId ?? undefined,
     });
 
     // Mark question as from bank
@@ -659,7 +711,6 @@ async function tryAutoSubmitFromBank(roundId: string): Promise<void> {
       where: { id: questionId },
       data: {
         isFromBank: true,
-        originalQuestionId: draft.id,
       },
     });
 
@@ -812,6 +863,9 @@ export async function closeRound(roundId: string): Promise<void> {
   // Ordering: determine winners (most correct positions) before scoring
   if (round.question?.answerFormat === "ordering") {
     const correctOrder: number[] = JSON.parse(round.question.orderingCorrectOrder ?? "[]");
+    const itemValues: Array<string | number | null> | null = round.question.orderingItemValues
+      ? (JSON.parse(round.question.orderingItemValues) as Array<string | number | null>)
+      : null;
     const submissions = allAnswers
       .filter((a) => !a.isAbsent && a.freeTextAnswer)
       .map((a) => ({
@@ -819,7 +873,7 @@ export async function closeRound(roundId: string): Promise<void> {
         playerOrder: JSON.parse(a.freeTextAnswer!) as number[],
       }));
 
-    const { winners } = determineOrderingWinners(correctOrder, submissions);
+    const { winners } = determineOrderingWinners(correctOrder, submissions, itemValues);
 
     for (const answer of allAnswers) {
       if (answer.isAbsent) continue;
@@ -1418,7 +1472,7 @@ export async function revertSkip(roundId: string): Promise<void> {
  * Award bonus F1 points to the player with the highest average question rating in a game.
  * Called when a game completes.
  */
-async function awardQuestionQualityBonus(gameId: string): Promise<void> {
+export async function awardQuestionQualityBonus(gameId: string): Promise<void> {
   // Get all graded rounds in this game with their at-bat players and ratings
   const rounds = await prisma.round.findMany({
     where: { gameId, status: ROUND_STATUS.GRADED, isCancelled: false },

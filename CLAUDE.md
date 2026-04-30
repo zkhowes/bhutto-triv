@@ -196,10 +196,9 @@ Required for development (see `.env.example`):
 
 ## Kanban
 
-> Last updated: 2026-04-29 (auto-submit league-scope dedup)
+> Last updated: 2026-04-30 (workshop revamp + replay + ordering ties + submit-form polish)
 
 ### Backlog
-- [ ] Replay past questions — *schema has isReplay/originalQuestionId, needs UI + API*
 - [ ] View-only public round dashboard — *currently requires auth, no anonymous mode*
 - [ ] Season pause (functional) — *stub exists, shows alert()*
 
@@ -210,6 +209,10 @@ Required for development (see `.env.example`):
 ### In Progress
 
 ### Done
+- [x] Submit form polish — *alt-start row (drafts + Question Workshop link) sits above a hairline divider so it reads as an optional starting point; brainstorm button vertically centered between Category and Question with a larger sparkle icon and two-line "Help me / brainstorm" label so its dual scope is obvious; image-attach icon moved to bottom-LEFT of the question textarea with a touch more bottom padding (avoids the resize grip and the icon no longer crowds the focus ring).*
+- [x] Question workshop revamp + AI assist — *new AssistButton + CategorySelect components; workshop page split into Suspense'd inner with searchParams support for league/round context; "Pick up where you left off" surfacing of recent drafts in the submit form; expanded edit chips and conversational AI flow in src/lib/ai.ts.*
+- [x] Replay past questions — *isReplay/originalQuestionId now wired through workshop UI and questions/history API; past questions surface playedLeagues so users can pick a question to replay and the system tracks the link back to the original.*
+- [x] Ordering ties (orderingItemValues) — *Question + QuestionDraft now carry parallel comparable scalars (years, populations) alongside orderingItems; scoring treats equal values as ties so multiple correct positions are accepted. game-engine + scoring updated; workshop captures values during composition.*
 - [x] Auto-submit league-scope dedup — *tryAutoSubmitFromBank now dedupes against the entire league (was per-game), walks bank drafts newest-first and clears useOnNextRound on any draft whose text was already played in the league. Drafts API (POST/PUT) refuses to set useOnNextRound:true if the text was already played in any of the user's leagues (returns 409). Workshop UI surfaces the 409 via alert and falls back to saving without auto-submit.*
 - [x] What's New refresh (2026-04-28) — *modal now surfaces Busted but Not Out, 24-Hour Auto-Skip, and Pause Yourself; release date bumped to 2026-04-28 so existing users see it again*
 - [x] Busted but Not Out — *busted players (0 pts) can still answer questions for +1 bonus per correct, applied to next-game starting points (same season). Schema: GamePlayerState.startingPoints + bonusEarned. Engine: submitAnswer bypasses bet gate when isEliminated; closeRound zeroes their game-points/F1 and increments bonusEarned. End-of-game F1 sort tiebreaks by bonusEarned. resolveFlagAgree decrements bonus when a busted-correct round is cancelled. Chart uses per-player startingPoints (no regression, mid-game freeze-at-0 preserved). Box score adds Busted ✓ +1 / Busted ✗ states. GuideControl renders AnswerInterface in busted mode (no bet/power-ups). Cron 24h reminder includes busted players. test-advance simulates busted answers.*

@@ -34,6 +34,7 @@ interface RoundData {
     orderingItems: string | null;
     orderingCorrectOrder: string | null;
     orderingDirection: string | null;
+    orderingItemValues: string | null;
   } | null;
   answers: Array<{
     id: string;

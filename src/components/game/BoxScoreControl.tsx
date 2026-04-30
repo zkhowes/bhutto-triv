@@ -38,6 +38,7 @@ interface BoxScoreControlProps {
     optionD: string | null;
     orderingItems?: string | null;
     orderingCorrectOrder?: string | null;
+    orderingItemValues?: string | null;
   };
   myPlayerId: string | null;
   defaultOpen?: boolean;

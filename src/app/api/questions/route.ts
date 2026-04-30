@@ -32,6 +32,8 @@ export async function POST(req: NextRequest) {
     orderingItems,
     orderingCorrectOrder,
     orderingDirection,
+    orderingItemValues,
+    originalQuestionId,
   } = body;
 
   if (!roundId || !leaguePlayerId || !category || !questionText || !answerFormat) {
@@ -100,8 +102,10 @@ export async function POST(req: NextRequest) {
       orderingItems,
       orderingCorrectOrder,
       orderingDirection,
+      orderingItemValues,
       leaguePlayerId,
       creatorUserId: actingUserId,
+      originalQuestionId,
     });
     return NextResponse.json({ questionId }, { status: 201 });
   } catch (error) {

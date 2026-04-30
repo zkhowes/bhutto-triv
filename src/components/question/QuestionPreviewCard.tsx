@@ -12,6 +12,7 @@ interface QuestionPreviewCardProps {
   correctAnswer?: string;
   orderingItems?: string[];
   orderingDirection?: string;
+  orderingItemValues?: Array<string | number | null>;
   difficulty: "easy" | "medium" | "hard";
   hook: string;
   selected?: boolean;
@@ -47,6 +48,7 @@ export default function QuestionPreviewCard({
   correctAnswer,
   orderingItems,
   orderingDirection,
+  orderingItemValues,
   difficulty,
   hook,
   selected = false,
@@ -185,17 +187,24 @@ export default function QuestionPreviewCard({
             </p>
           )}
           <div className="space-y-1">
-            {orderingItems.map((item, i) => (
-              <div
-                key={i}
-                className="px-3 py-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/5 text-xs text-emerald-400"
-              >
-                {i + 1}. {item}
-              </div>
-            ))}
+            {orderingItems.map((item, i) => {
+              const value = orderingItemValues?.[i];
+              const showValue = value !== null && value !== undefined && value !== "";
+              return (
+                <div
+                  key={i}
+                  className="px-3 py-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/5 text-xs text-emerald-400 flex items-center justify-between gap-2"
+                >
+                  <span>{i + 1}. {item}</span>
+                  {showValue && (
+                    <span className="text-[#a0a0b8] tabular-nums">[{value}]</span>
+                  )}
+                </div>
+              );
+            })}
           </div>
           <p className="mt-1 text-xs text-[#666680]">
-            Most correct positions wins
+            Most correct positions wins{orderingItemValues ? " — equal values count as ties" : ""}
           </p>
         </div>
       )}

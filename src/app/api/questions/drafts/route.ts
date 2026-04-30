@@ -3,21 +3,27 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-// Returns the leagueId where the user already played this question, or null.
-async function findLeagueWhereAlreadyPlayed(
+// Returns the set of league IDs where the user has already played this question text.
+async function findLeaguesWherePlayed(
   userId: string,
   questionText: string | null | undefined
-): Promise<string | null> {
+): Promise<string[]> {
   const text = questionText?.trim();
-  if (!text) return null;
-  const prior = await prisma.question.findFirst({
+  if (!text) return [];
+  const rows = await prisma.question.findMany({
     where: {
       creatorUserId: userId,
       questionText: { equals: text, mode: "insensitive" },
     },
     select: { round: { select: { game: { select: { season: { select: { leagueId: true } } } } } } },
   });
-  return prior?.round?.game?.season?.leagueId ?? null;
+  return Array.from(
+    new Set(
+      rows
+        .map((r) => r.round?.game?.season?.leagueId)
+        .filter((id): id is string => !!id)
+    )
+  );
 }
 
 // GET - List user's drafts
@@ -45,12 +51,14 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
 
   if (body.useOnNextRound) {
-    const leagueId = await findLeagueWhereAlreadyPlayed(session.user.id, body.questionText);
-    if (leagueId) {
+    // Auto-submit can fire in any of the user's leagues, so any prior play blocks it.
+    const playedLeagueIds = await findLeaguesWherePlayed(session.user.id, body.questionText);
+    if (playedLeagueIds.length > 0) {
       return NextResponse.json(
         {
-          error: "This question has already been played in one of your leagues. Auto-submit was disabled.",
-          alreadyPlayedLeagueId: leagueId,
+          error: "This question has already been played. Auto-submit was disabled — pick a specific league via 'Use in this league' instead.",
+          playedLeagueIds,
+          alreadyPlayedLeagueId: playedLeagueIds[0], // back-compat
         },
         { status: 409 }
       );
@@ -79,11 +87,16 @@ export async function POST(req: NextRequest) {
         ? JSON.stringify(body.orderingCorrectOrder)
         : null,
       orderingDirection: body.orderingDirection || null,
+      orderingItemValues: body.orderingItemValues
+        ? JSON.stringify(body.orderingItemValues)
+        : null,
       useOnNextRound: body.useOnNextRound || false,
       leagueId: body.leagueId,
       imageUrl: body.imageUrl || null,
       imageSource: body.imageSource || null,
       imageAttribution: body.imageAttribution || null,
+      isReplay: body.isReplay === true,
+      originalQuestionId: body.originalQuestionId || null,
     },
   });
 
@@ -121,12 +134,13 @@ export async function PUT(req: NextRequest) {
   if (updateData.useOnNextRound === true) {
     const candidateText =
       "questionText" in updateData ? updateData.questionText : draft.questionText;
-    const leagueId = await findLeagueWhereAlreadyPlayed(session.user.id, candidateText);
-    if (leagueId) {
+    const playedLeagueIds = await findLeaguesWherePlayed(session.user.id, candidateText);
+    if (playedLeagueIds.length > 0) {
       return NextResponse.json(
         {
-          error: "This question has already been played in one of your leagues. Auto-submit cannot be re-enabled.",
-          alreadyPlayedLeagueId: leagueId,
+          error: "This question has already been played. Auto-submit cannot be re-enabled — pick a specific league via 'Use in this league' instead.",
+          playedLeagueIds,
+          alreadyPlayedLeagueId: playedLeagueIds[0], // back-compat
         },
         { status: 409 }
       );
@@ -135,7 +149,7 @@ export async function PUT(req: NextRequest) {
 
   // Build update payload only from keys actually sent
   const data: Record<string, unknown> = {};
-  const fields = ["category", "questionText", "answerFormat", "optionA", "optionB", "optionC", "optionD", "correctOption", "correctAnswer", "useOnNextRound", "imageUrl", "imageSource", "imageAttribution", "orderingDirection"];
+  const fields = ["category", "questionText", "answerFormat", "optionA", "optionB", "optionC", "optionD", "correctOption", "correctAnswer", "useOnNextRound", "imageUrl", "imageSource", "imageAttribution", "orderingDirection", "isReplay", "originalQuestionId"];
   for (const field of fields) {
     if (field in updateData) {
       data[field] = updateData[field];
@@ -154,6 +168,11 @@ export async function PUT(req: NextRequest) {
   if ("orderingCorrectOrder" in updateData) {
     data.orderingCorrectOrder = updateData.orderingCorrectOrder
       ? JSON.stringify(updateData.orderingCorrectOrder)
+      : null;
+  }
+  if ("orderingItemValues" in updateData) {
+    data.orderingItemValues = updateData.orderingItemValues
+      ? JSON.stringify(updateData.orderingItemValues)
       : null;
   }
 

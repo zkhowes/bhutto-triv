@@ -1,8 +1,8 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
-import { useState, useEffect, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import NavBar from "@/components/layout/NavBar";
 import QuestionPreviewCard from "@/components/question/QuestionPreviewCard";
 import ImageSearchModal from "@/components/question/ImageSearchModal";
@@ -34,6 +34,7 @@ interface Draft {
   orderingItems: string | null;
   orderingCorrectOrder: string | null;
   orderingDirection: string | null;
+  orderingItemValues: string | null;
   useOnNextRound: boolean;
   updatedAt: string;
 }
@@ -78,6 +79,10 @@ interface PastQuestion {
   successRate: number | null;
   createdAt: string;
   playerResults: PastPlayerResult[];
+  playedLeagues?: { id: string; name: string }[];
+  playedLeagueIds?: string[];
+  // Original Question id (when present we treat reuse as a replay link to this id).
+  questionId?: string;
 }
 
 type BankFilter = "all" | "drafts" | "past";
@@ -101,7 +106,6 @@ const EDIT_CHIPS = [
   "Make Harder",
   "Make Easier",
   "Change to MC",
-  "Change to Free Text",
   "Change to PiR",
   "Change to Ordering",
   "Different Angle",
@@ -133,6 +137,13 @@ function draftToVariation(draft: Draft): WorkshopVariation {
       if (Array.isArray(arr)) orderingCorrectOrder = arr;
     } catch { /* ignore */ }
   }
+  let orderingItemValues: Array<string | number | null> | undefined;
+  if (draft.orderingItemValues) {
+    try {
+      const arr = JSON.parse(draft.orderingItemValues);
+      if (Array.isArray(arr)) orderingItemValues = arr;
+    } catch { /* ignore */ }
+  }
 
   return {
     category: draft.category || "General Knowledge",
@@ -148,6 +159,7 @@ function draftToVariation(draft: Draft): WorkshopVariation {
     orderingItems,
     orderingCorrectOrder,
     orderingDirection: draft.orderingDirection || undefined,
+    orderingItemValues,
     difficulty: "medium",
     hook: "",
   };
@@ -156,8 +168,24 @@ function draftToVariation(draft: Draft): WorkshopVariation {
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function WorkshopPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen"><NavBar /></div>}>
+      <WorkshopPageInner />
+    </Suspense>
+  );
+}
+
+function WorkshopPageInner() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // League context for "Use in this league" handoff back to the at-bat submission.
+  const ctxLeagueId = searchParams.get("leagueId");
+  const ctxRoundId = searchParams.get("roundId");
+  const ctxLeaguePlayerId = searchParams.get("leaguePlayerId");
+  const ctxReturnTo = searchParams.get("returnTo");
+  const inSubmissionContext = ctxReturnTo === "submit" && !!ctxLeagueId && !!ctxRoundId;
 
   // Workshop state machine
   const [workshopState, setWorkshopState] = useState<WorkshopState>("idle");
@@ -214,13 +242,16 @@ export default function WorkshopPage() {
 
   const loadPastQuestions = useCallback(async () => {
     try {
-      const r = await fetch("/api/questions/history");
+      const url = ctxLeagueId
+        ? `/api/questions/history?excludeLeagueId=${encodeURIComponent(ctxLeagueId)}`
+        : "/api/questions/history";
+      const r = await fetch(url);
       const data = await r.json();
       setPastQuestions(Array.isArray(data.history) ? data.history : []);
     } finally {
       setPastLoading(false);
     }
-  }, []);
+  }, [ctxLeagueId]);
 
   useEffect(() => {
     if (session?.user) {
@@ -372,6 +403,7 @@ export default function WorkshopPage() {
         body.orderingItems = v.orderingItems;
         body.orderingCorrectOrder = v.orderingCorrectOrder;
         body.orderingDirection = v.orderingDirection;
+        body.orderingItemValues = v.orderingItemValues;
       } else {
         body.correctAnswer = v.correctAnswer;
         if (v.acceptableAnswers?.length) {
@@ -508,6 +540,7 @@ export default function WorkshopPage() {
         body.orderingItems = v.orderingItems;
         body.orderingCorrectOrder = v.orderingCorrectOrder;
         body.orderingDirection = v.orderingDirection;
+        body.orderingItemValues = v.orderingItemValues;
       } else {
         body.correctAnswer = v.correctAnswer;
         if (v.acceptableAnswers?.length) {
@@ -549,6 +582,10 @@ export default function WorkshopPage() {
       } else {
         body.correctAnswer = pq.question.correctAnswer;
       }
+      if (pq.questionId) {
+        body.isReplay = true;
+        body.originalQuestionId = pq.questionId;
+      }
 
       await fetch("/api/questions/drafts", {
         method: "POST",
@@ -558,6 +595,96 @@ export default function WorkshopPage() {
       await loadDrafts();
     } finally {
       setSavingPastId(null);
+    }
+  };
+
+  // Create a draft and hand off to the at-bat submission UX (load via localStorage signal).
+  const handoffToSubmission = async (
+    payload: Record<string, unknown>,
+    targetRoundId: string
+  ) => {
+    const res = await fetch("/api/questions/drafts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error || "Could not create draft.");
+      return false;
+    }
+    const draft = await res.json();
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(`bwiz:loadDraft:${targetRoundId}`, draft.id);
+    }
+    router.push(`/rounds/${targetRoundId}`);
+    return true;
+  };
+
+  const handoffPastToSubmission = async (pq: PastQuestion) => {
+    if (!ctxRoundId) return;
+    setSavingPastId(pq.roundId);
+    try {
+      const body: Record<string, unknown> = {
+        category: pq.question.category,
+        questionText: pq.question.questionText,
+        answerFormat: pq.question.answerFormat,
+      };
+      if (pq.question.answerFormat === "multiple_choice") {
+        body.optionA = pq.question.optionA;
+        body.optionB = pq.question.optionB;
+        body.optionC = pq.question.optionC;
+        body.optionD = pq.question.optionD;
+        body.correctOption = pq.question.correctOption;
+      } else {
+        body.correctAnswer = pq.question.correctAnswer;
+      }
+      if (pq.questionId) {
+        body.isReplay = true;
+        body.originalQuestionId = pq.questionId;
+      }
+      await handoffToSubmission(body, ctxRoundId);
+    } finally {
+      setSavingPastId(null);
+    }
+  };
+
+  const handoffGeneratedToSubmission = async () => {
+    if (selectedIdx === null || !ctxRoundId) return;
+    const v = variations[selectedIdx];
+    setSaving(true);
+    try {
+      const body: Record<string, unknown> = {
+        category: v.category,
+        questionText: v.questionText,
+        answerFormat: v.answerFormat,
+      };
+      if (v.answerFormat === "multiple_choice") {
+        body.optionA = v.optionA;
+        body.optionB = v.optionB;
+        body.optionC = v.optionC;
+        body.optionD = v.optionD;
+        body.correctOption = v.correctOption;
+      } else if (v.answerFormat === "ordering") {
+        body.orderingItems = v.orderingItems;
+        body.orderingCorrectOrder = v.orderingCorrectOrder;
+        body.orderingDirection = v.orderingDirection;
+        body.orderingItemValues = v.orderingItemValues;
+      } else {
+        body.correctAnswer = v.correctAnswer;
+        if (v.acceptableAnswers?.length) {
+          body.acceptableAnswers = v.acceptableAnswers;
+        }
+      }
+      const img = cardImages[selectedIdx];
+      if (img) {
+        body.imageUrl = img.url;
+        body.imageSource = img.source;
+        body.imageAttribution = img.attribution;
+      }
+      await handoffToSubmission(body, ctxRoundId);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -581,6 +708,20 @@ export default function WorkshopPage() {
     <div className="min-h-screen">
       <NavBar />
       <div className="max-w-3xl mx-auto px-4 py-6 space-y-10">
+        {inSubmissionContext && ctxRoundId && (
+          <div className="card p-3 flex items-center justify-between gap-3 bg-[#0f1a2e] border border-[#2a5a8f]">
+            <p className="text-sm text-[#a0a0b8]">
+              Workshopping a question for the current round.
+            </p>
+            <button
+              onClick={() => router.push(`/rounds/${ctxRoundId}`)}
+              className="text-xs text-[#4fc3f7] hover:text-white font-medium"
+            >
+              ← Back to submission
+            </button>
+          </div>
+        )}
+
         {/* ── Workshop ── */}
         <section>
           <div className="mb-1">
@@ -678,6 +819,7 @@ export default function WorkshopPage() {
                     correctAnswer={v.correctAnswer}
                     orderingItems={v.orderingItems}
                     orderingDirection={v.orderingDirection}
+                    orderingItemValues={v.orderingItemValues}
                     difficulty={v.difficulty}
                     hook={v.hook}
                     compact
@@ -757,13 +899,23 @@ export default function WorkshopPage() {
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                     New set
                   </button>
-                  <button
-                    onClick={() => handleSaveToBank(false)}
-                    disabled={saving}
-                    className="btn-primary text-sm"
-                  >
-                    {saving ? "Saving..." : "Add to Bank"}
-                  </button>
+                  {inSubmissionContext ? (
+                    <button
+                      onClick={handoffGeneratedToSubmission}
+                      disabled={saving}
+                      className="btn-primary text-sm"
+                    >
+                      {saving ? "Loading..." : "Use in this round"}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleSaveToBank(false)}
+                      disabled={saving}
+                      className="btn-primary text-sm"
+                    >
+                      {saving ? "Saving..." : "Add to Bank"}
+                    </button>
+                  )}
                   <button
                     onClick={handleEditFurther}
                     className="btn-secondary text-sm"
@@ -899,6 +1051,7 @@ export default function WorkshopPage() {
                         correctAnswer={draft.correctAnswer || undefined}
                         orderingItems={draft.orderingItems ? (() => { try { return JSON.parse(draft.orderingItems!); } catch { return undefined; } })() : undefined}
                         orderingDirection={draft.orderingDirection || undefined}
+                        orderingItemValues={draft.orderingItemValues ? (() => { try { const a = JSON.parse(draft.orderingItemValues!); return Array.isArray(a) ? a : undefined; } catch { return undefined; } })() : undefined}
                         difficulty="medium"
                         hook=""
                         compact
@@ -1066,13 +1219,18 @@ export default function WorkshopPage() {
                   <div key={pq.roundId} className="space-y-2">
                     <div className="card p-4">
                       {/* Header badges */}
-                      <div className="flex items-center gap-2 mb-2">
+                      <div className="flex items-center gap-2 mb-2 flex-wrap">
                         <span className="text-xs px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 font-bold uppercase">
                           Past
                         </span>
                         <span className="text-xs text-[#666680]">
                           {pq.leagueName} &middot; S{pq.seasonNumber}G{pq.gameNumber}R{pq.roundNumber}
                         </span>
+                        {pq.playedLeagues && pq.playedLeagues.length > 1 && (
+                          <span className="text-xs text-[#666680]">
+                            Played in: {pq.playedLeagues.map((l) => l.name).join(", ")}
+                          </span>
+                        )}
                         {pq.avgRating != null && (
                           <span className="ml-auto flex items-center gap-1">
                             <StarRating value={pq.avgRating} size="sm" />
@@ -1127,6 +1285,23 @@ export default function WorkshopPage() {
                           <span>{pq.playerResults.length} players</span>
                         </div>
                         <div className="flex items-center gap-2">
+                          {inSubmissionContext ? (
+                            <button
+                              onClick={() => handoffPastToSubmission(pq)}
+                              disabled={savingPastId === pq.roundId}
+                              className="btn-primary text-xs px-3 py-1"
+                            >
+                              {savingPastId === pq.roundId ? "Loading..." : "Use in this league"}
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => savePastToBank(pq)}
+                              disabled={savingPastId === pq.roundId}
+                              className="text-xs px-2 py-1 rounded bg-[#1e3a5f] text-[#a0a0b8] hover:text-white transition-colors"
+                            >
+                              {savingPastId === pq.roundId ? "Saving..." : "Save to Bank"}
+                            </button>
+                          )}
                           <button
                             onClick={() => setExpandedPastId(isExpanded ? null : pq.roundId)}
                             className="text-xs px-2 py-1 rounded bg-[#1e3a5f] text-[#a0a0b8] hover:text-white transition-colors"
