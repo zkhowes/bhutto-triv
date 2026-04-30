@@ -126,27 +126,14 @@ export default function AssistButton(props: AssistButtonProps) {
       ? "build_answer"
       : "refine";
 
-  const buttonContent =
-    mode === "brainstorm" ? (
-      <span className="flex flex-col items-center justify-center gap-1 leading-tight">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          className="w-6 h-6"
-          aria-hidden="true"
-        >
-          <path d="M12 2.5l1.6 4.6 4.6 1.6-4.6 1.6L12 14.9l-1.6-4.6L5.8 8.7l4.6-1.6L12 2.5zM18.5 13.5l.9 2.6 2.6.9-2.6.9-.9 2.6-.9-2.6-2.6-.9 2.6-.9.9-2.6zM5.5 15l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7.7-2z" />
-        </svg>
-        <span>
-          Help me
-          <br />
-          brainstorm
-        </span>
-      </span>
-    ) : (
-      <>{mode === "build_answer" ? "✨ Build the answer" : "✨ Refine"}</>
-    );
+  useEffect(() => {
+    if (!open) return;
+    if (mode === "brainstorm") return;
+    if (state !== "idle") return;
+    if (variations.length > 0) return;
+    generate("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, mode]);
 
   // Auto-search image for first card when variations arrive
   useEffect(() => {
@@ -244,21 +231,6 @@ export default function AssistButton(props: AssistButtonProps) {
     }
   };
 
-  const onClickAssist = () => {
-    if (!open) {
-      setOpen(true);
-      // For build_answer / refine, kick off immediately if user has filled enough
-      if (mode !== "brainstorm") {
-        generate("");
-      }
-      return;
-    }
-    setOpen(false);
-    setState("idle");
-    setVariations([]);
-    setConversation(null);
-  };
-
   const acceptCard = (idx: number) => {
     const v = variations[idx];
     const img = cardImages[idx];
@@ -328,18 +300,6 @@ export default function AssistButton(props: AssistButtonProps) {
 
   return (
     <div>
-      <button
-        type="button"
-        onClick={onClickAssist}
-        className={
-          mode === "brainstorm" && !open
-            ? "btn-secondary text-sm w-24 py-3 px-2 flex items-center justify-center"
-            : "btn-secondary text-sm"
-        }
-      >
-        {open ? "Back" : buttonContent}
-      </button>
-
       {open && (
         <div className="mt-3 card p-4 bg-[#0f0f23] space-y-3">
           {/* Brainstorm: prompt + chips */}

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import NavBar from "@/components/layout/NavBar";
 import Link from "next/link";
+import DashboardSkipCountdown from "@/components/game/DashboardSkipCountdown";
 
 interface LeagueSummary {
   id: string;
@@ -15,17 +16,33 @@ interface LeagueSummary {
   myRole: string;
   myLeaguePlayerId: string | null;
   gameId: string | null;
+  autoSkipEnabled: boolean;
   currentSeason: { number: number; status: string } | null;
-  currentGame: { number: number; status: string } | null;
+  currentGame: { number: number; status: string; totalRounds: number } | null;
   currentRound: { number: number; status: string } | null;
   activeRound: {
     status: string;
     atBatPlayerId: string | null;
     hasBet: boolean;
     hasAnswered: boolean;
+    updatedAt: string;
   } | null;
+  myStanding: { isBusted: boolean; place: number | null; total: number } | null;
   inviteCode: string;
 }
+
+function ordinal(n: number): string {
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 13) return `${n}th`;
+  const suffixes = ["th", "st", "nd", "rd"];
+  return `${n}${suffixes[n % 10] ?? "th"}`;
+}
+
+const SKIPPABLE_STATUSES = new Set([
+  "awaiting_question",
+  "question_submitted",
+  "category_revealed",
+]);
 
 function getLeagueAction(league: LeagueSummary): { text: string; urgent: boolean } | null {
   if (!league.activeRound) return null;
@@ -36,10 +53,14 @@ function getLeagueAction(league: LeagueSummary): { text: string; urgent: boolean
     return { text: "Your turn -- submit a question", urgent: true };
   if (status === "awaiting_question")
     return { text: "Waiting for question submission", urgent: false };
+  if (status === "question_submitted" && isAtBat)
+    return { text: "Waiting for all answers", urgent: false };
   if (status === "question_submitted" && !hasBet)
     return { text: "New question -- place your bet", urgent: true };
   if (status === "question_submitted")
     return { text: "Bet placed -- waiting for category reveal", urgent: false };
+  if (status === "category_revealed" && isAtBat)
+    return { text: "Waiting for all answers", urgent: false };
   if (status === "category_revealed" && !hasAnswered)
     return { text: "Answer the question!", urgent: true };
   if (status === "category_revealed")
@@ -192,6 +213,23 @@ export default function DashboardPage() {
                 const tileHref = league.gameId && league.currentGame?.status === "active"
                   ? `/games/${league.gameId}`
                   : `/leagues/${league.id}`;
+                const seasonActive = league.currentSeason?.status === "active";
+                const gameActive = league.currentGame?.status === "active";
+                const dotClass = !seasonActive
+                  ? "bg-red-400"
+                  : gameActive
+                    ? "bg-emerald-400"
+                    : "bg-amber-400";
+                const dotTitle = !seasonActive
+                  ? "Not started"
+                  : gameActive
+                    ? "Active"
+                    : "Between games";
+                const showCountdown =
+                  action !== null &&
+                  league.autoSkipEnabled &&
+                  league.activeRound !== null &&
+                  SKIPPABLE_STATUSES.has(league.activeRound.status);
                 return (
                   <Link
                     key={league.id}
@@ -203,44 +241,52 @@ export default function DashboardPage() {
                         <h3 className="font-semibold text-white">
                           {league.name}
                           {league.myRole === "commissioner" && (
-                            <span className="ml-2 badge bg-amber-500/20 text-amber-400">
-                              Commissioner
+                            <span
+                              className="ml-2 inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-500/20 text-amber-400 font-bold text-xs align-middle"
+                              title="Commissioner"
+                            >
+                              C
                             </span>
                           )}
                         </h3>
-                        <p className="text-sm text-[#a0a0b8] mt-0.5">
-                          {league.playerCount}/{league.maxPlayers} players
-                          {league.currentSeason && (
-                            <span>
-                              {" "}
-                              &middot; Season {league.currentSeason.number}
-                            </span>
-                          )}
-                          {league.currentGame && (
-                            <span>
-                              {" "}
-                              &middot; Game {league.currentGame.number}
-                            </span>
-                          )}
-                          {league.currentRound && (
-                            <span>
-                              {" "}
-                              &middot; Round {league.currentRound.number}
-                            </span>
-                          )}
-                        </p>
+                        {(league.currentSeason || league.currentGame || league.currentRound) && (
+                          <p className="text-sm text-[#a0a0b8] mt-0.5">
+                            {league.currentSeason && (
+                              <span>S:{league.currentSeason.number}</span>
+                            )}
+                            {league.currentGame && (
+                              <span>
+                                {league.currentSeason ? " \u00b7 " : ""}G:{league.currentGame.number}
+                              </span>
+                            )}
+                            {league.currentRound && league.currentGame && (
+                              <span>
+                                {" \u00b7 "}Round {league.currentRound.number} of {league.currentGame.totalRounds}
+                              </span>
+                            )}
+                          </p>
+                        )}
                         {action && (
                           <p className={`text-sm mt-1 ${action.urgent ? "text-[#fbbf24] font-medium" : "text-[#666680]"}`}>
                             {action.urgent && "\u2192 "}{action.text}
                           </p>
                         )}
+                        {showCountdown && (
+                          <DashboardSkipCountdown roundUpdatedAt={league.activeRound!.updatedAt} />
+                        )}
+                        {league.myStanding?.isBusted ? (
+                          <p className="text-xs mt-1 text-red-400">Busted</p>
+                        ) : league.myStanding && league.myStanding.place !== null ? (
+                          <p className="text-xs mt-1 text-[#a0a0b8]">
+                            {ordinal(league.myStanding.place)} of {league.myStanding.total}
+                          </p>
+                        ) : null}
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
-                        {league.currentSeason?.status === "active" && (
-                          <span className="badge bg-emerald-500/20 text-emerald-400">
-                            Active
-                          </span>
-                        )}
+                        <span
+                          className={`inline-block w-2.5 h-2.5 rounded-full ${dotClass}`}
+                          title={dotTitle}
+                        />
                         {league.type === "test" && (
                           <span className="badge bg-purple-500/20 text-purple-400">
                             Test

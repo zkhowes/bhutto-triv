@@ -36,6 +36,7 @@ export async function GET() {
                 orderBy: { number: "asc" },
                 take: 20,
               },
+              playerStates: true,
             },
           },
         },
@@ -50,6 +51,7 @@ export async function GET() {
     atBatPlayerId: string | null;
     myLeaguePlayerId: string;
     gameId: string;
+    updatedAt: string;
   }> = {};
 
   const roundIdsToCheck: string[] = [];
@@ -74,6 +76,7 @@ export async function GET() {
       atBatPlayerId: activeRound.atBatPlayerId,
       myLeaguePlayerId: myPlayer.id,
       gameId: currentGame.id,
+      updatedAt: activeRound.updatedAt.toISOString(),
     };
     roundIdsToCheck.push(activeRound.id);
     playerIdsToCheck.push(myPlayer.id);
@@ -109,7 +112,27 @@ export async function GET() {
         atBatPlayerId: info.atBatPlayerId,
         hasBet: !!answer?.betPlacedAt,
         hasAnswered: !!answer?.answeredAt,
+        updatedAt: info.updatedAt,
       };
+    }
+
+    let myStanding: { isBusted: boolean; place: number | null; total: number } | null = null;
+    if (currentGame && myPlayer) {
+      const myState = currentGame.playerStates.find(
+        (ps) => ps.leaguePlayerId === myPlayer.id
+      );
+      if (myState) {
+        const isBusted = myState.isEliminated || myState.points === 0;
+        if (isBusted) {
+          myStanding = { isBusted: true, place: null, total: 0 };
+        } else {
+          const alive = currentGame.playerStates.filter(
+            (ps) => !ps.isEliminated && ps.points > 0
+          );
+          const ahead = alive.filter((ps) => ps.points > myState.points).length;
+          myStanding = { isBusted: false, place: ahead + 1, total: alive.length };
+        }
+      }
     }
 
     return {
@@ -121,16 +144,22 @@ export async function GET() {
       myRole: myPlayer?.role,
       myLeaguePlayerId: myPlayer?.id ?? null,
       gameId: currentGame?.id ?? null,
+      autoSkipEnabled: league.autoSkipEnabled,
       currentSeason: currentSeason
         ? { number: currentSeason.number, status: currentSeason.status }
         : null,
       currentGame: currentGame
-        ? { number: currentGame.number, status: currentGame.status }
+        ? {
+            number: currentGame.number,
+            status: currentGame.status,
+            totalRounds: currentGame.totalRounds,
+          }
         : null,
       currentRound: currentRound
         ? { number: currentRound.number, status: currentRound.status }
         : null,
       activeRound,
+      myStanding,
       inviteCode: league.inviteCode,
     };
   });
