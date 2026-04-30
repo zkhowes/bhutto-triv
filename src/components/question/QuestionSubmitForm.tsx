@@ -474,38 +474,72 @@ export default function QuestionSubmitForm({
         )}
 
         {/* Alt-start row: pick up a draft or jump to the workshop */}
-        <div className="mb-4 pb-3 border-b border-[#1e2a4a] flex items-center gap-2 flex-wrap">
+        <div className="mb-4 pb-3 border-b border-[#1e2a4a]">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <span className="text-xs text-[#666680]">
+              {recentDrafts.length > 0 ? "Select one from your Question Bank" : "Start from scratch or"}
+            </span>
+            <a
+              href={
+                leagueId && roundId
+                  ? `/questions/workshop?leagueId=${encodeURIComponent(leagueId)}&roundId=${encodeURIComponent(roundId)}&leaguePlayerId=${encodeURIComponent(leaguePlayerId)}&returnTo=submit`
+                  : "/questions/workshop"
+              }
+              className="text-xs text-[#4fc3f7] hover:text-white transition-colors font-medium whitespace-nowrap"
+            >
+              Workshop →
+            </a>
+          </div>
           {recentDrafts.length > 0 && (
-            <>
-              <span className="text-xs text-[#666680]">Pick up where you left off</span>
+            <div className="flex flex-wrap gap-1.5">
               {recentDrafts.map((d) => (
                 <button
                   key={d.id}
                   type="button"
                   onClick={() => fillFromDraft(d)}
-                  className="text-xs px-2 py-1 rounded-full border border-solid border-[#2a5a8f] text-[#a0a0b8] hover:border-[#4a7abf] hover:text-white transition-all max-w-[180px] truncate"
+                  className="text-xs px-2 py-1 rounded-full border border-solid border-[#2a5a8f] text-[#a0a0b8] hover:border-[#4a7abf] hover:text-white transition-all max-w-full truncate"
                   title={d.questionText || ""}
                 >
                   {d.questionText || "Untitled"}
                 </button>
               ))}
-            </>
+            </div>
           )}
-          <a
-            href={
-              leagueId && roundId
-                ? `/questions/workshop?leagueId=${encodeURIComponent(leagueId)}&roundId=${encodeURIComponent(roundId)}&leaguePlayerId=${encodeURIComponent(leaguePlayerId)}&returnTo=submit`
-                : "/questions/workshop"
-            }
-            className="ml-auto text-xs text-[#4fc3f7] hover:text-white transition-colors font-medium"
-          >
-            Question Workshop →
-          </a>
         </div>
 
-        {/* Cat+Q row with brainstorm trigger flush-right. When open, the panel replaces the row. */}
-        <div className="mb-4">
-          {assistOpen ? (
+        {/* Brainstorm toggle row — sits above the form fields */}
+        <div className="mb-4 flex items-center justify-between gap-3 px-1">
+          <div className="flex items-center gap-2 min-w-0">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              className="w-5 h-5 flex-shrink-0 text-[#e94560]"
+              aria-hidden="true"
+            >
+              <path d="M12 2.5l1.6 4.6 4.6 1.6-4.6 1.6L12 14.9l-1.6-4.6L5.8 8.7l4.6-1.6L12 2.5zM18.5 13.5l.9 2.6 2.6.9-2.6.9-.9 2.6-.9-2.6-2.6-.9 2.6-.9.9-2.6zM5.5 15l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7.7-2z" />
+            </svg>
+            <span className="text-sm font-medium text-white">Help me brainstorm</span>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={assistOpen}
+            onClick={() => setAssistOpen(!assistOpen)}
+            className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
+              assistOpen ? "bg-[#e94560]" : "bg-[#1e3a5f]"
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                assistOpen ? "translate-x-6" : "translate-x-1"
+              }`}
+            />
+          </button>
+        </div>
+
+        {assistOpen ? (
+          <div className="mb-4">
             <AssistButton
               questionText={questionText}
               category={category}
@@ -523,112 +557,82 @@ export default function QuestionSubmitForm({
               open={assistOpen}
               onOpenChange={setAssistOpen}
               onAccept={(q) => {
-                // Brainstorm-accepted card is a fresh question, not a replay.
                 setOriginalQuestionId(null);
                 fillFromQuestion(q);
                 setAssistOpen(false);
               }}
             />
-          ) : (
-            <div className="flex items-stretch gap-3">
-              <div className="flex-1 min-w-0 space-y-4">
-                {/* Category */}
-                <div>
-                  <label className="block text-sm font-medium text-[#a0a0b8] mb-1.5">
-                    Category *
-                  </label>
-                  <CategorySelect
-                    value={category}
-                    customCategories={customCategories}
-                    onChange={setCategory}
-                    onError={setError}
-                  />
-                </div>
+          </div>
+        ) : (
+          <div className="mb-4 space-y-4">
+            {/* Category */}
+            <div>
+              <label className="block text-sm font-medium text-[#a0a0b8] mb-1.5">
+                Category *
+              </label>
+              <CategorySelect
+                value={category}
+                customCategories={customCategories}
+                onChange={setCategory}
+                onError={setError}
+              />
+            </div>
 
-                {/* Question Text with image icon in bottom-right corner */}
-                <div>
-                  <label className="block text-sm font-medium text-[#a0a0b8] mb-1.5">
-                    Question *
-                  </label>
-                  <div className="relative">
-                    <textarea
-                      value={questionText}
-                      onChange={(e) => setQuestionText(e.target.value)}
-                      className="input-field min-h-[80px] w-full pl-12"
-                      placeholder="Enter your trivia question..."
-                    />
-                    <div className="absolute bottom-3 left-3">
-                      <ImageAttachment
-                        compact
-                        iconOnly
-                        imageUrl={imageUrl}
-                        imageSource={imageSource}
-                        imageAttribution={imageAttribution}
-                        questionText={questionText}
-                        onChange={(img) => {
-                          if (img) {
-                            setImageUrl(img.url);
-                            setImageSource(img.source);
-                            setImageAttribution(img.attribution || "");
-                          } else {
-                            setImageUrl("");
-                            setImageSource("");
-                            setImageAttribution("");
-                          }
-                        }}
-                      />
-                    </div>
-                  </div>
-                  {imageUrl && (
-                    <div className="mt-2">
-                      <ImageAttachment
-                        imageUrl={imageUrl}
-                        imageSource={imageSource}
-                        imageAttribution={imageAttribution}
-                        questionText={questionText}
-                        onChange={(img) => {
-                          if (img) {
-                            setImageUrl(img.url);
-                            setImageSource(img.source);
-                            setImageAttribution(img.attribution || "");
-                          } else {
-                            setImageUrl("");
-                            setImageSource("");
-                            setImageAttribution("");
-                          }
-                        }}
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="flex-shrink-0 flex items-center">
-                <AssistButton
-                  questionText={questionText}
-                  category={category}
-                  answerFormat={answerFormat}
-                  optionA={optionA}
-                  optionB={optionB}
-                  optionC={optionC}
-                  optionD={optionD}
-                  correctOption={correctOption}
-                  correctAnswer={correctAnswer}
-                  orderingItem1={orderingItem1}
-                  orderingItem2={orderingItem2}
-                  orderingItem3={orderingItem3}
-                  orderingDirection={orderingDirection}
-                  open={assistOpen}
-                  onOpenChange={setAssistOpen}
-                  onAccept={(q) => {
-                    setOriginalQuestionId(null);
-                    fillFromQuestion(q);
-                    setAssistOpen(false);
-                  }}
-                />
+            {/* Question Text with image attach below */}
+            <div>
+              <label className="block text-sm font-medium text-[#a0a0b8] mb-1.5">
+                Question *
+              </label>
+              <textarea
+                value={questionText}
+                onChange={(e) => setQuestionText(e.target.value)}
+                className="input-field min-h-[80px] w-full"
+                placeholder="Enter your trivia question..."
+              />
+              <div className="mt-2">
+                {imageUrl ? (
+                  <ImageAttachment
+                    imageUrl={imageUrl}
+                    imageSource={imageSource}
+                    imageAttribution={imageAttribution}
+                    questionText={questionText}
+                    onChange={(img) => {
+                      if (img) {
+                        setImageUrl(img.url);
+                        setImageSource(img.source);
+                        setImageAttribution(img.attribution || "");
+                      } else {
+                        setImageUrl("");
+                        setImageSource("");
+                        setImageAttribution("");
+                      }
+                    }}
+                  />
+                ) : (
+                  <ImageAttachment
+                    compact
+                    iconOnly
+                    imageUrl={imageUrl}
+                    imageSource={imageSource}
+                    imageAttribution={imageAttribution}
+                    questionText={questionText}
+                    onChange={(img) => {
+                      if (img) {
+                        setImageUrl(img.url);
+                        setImageSource(img.source);
+                        setImageAttribution(img.attribution || "");
+                      } else {
+                        setImageUrl("");
+                        setImageSource("");
+                        setImageAttribution("");
+                      }
+                    }}
+                  />
+                )}
               </div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Answer Format */}
         <div className="mb-4">
