@@ -208,6 +208,85 @@ export function determinePirWinners(
 }
 
 /**
+ * Compare two ordering values. Numeric strings sort numerically; everything
+ * else falls back to localeCompare. Mirrors the helper in ai.ts.
+ */
+function compareOrderingValues(a: string | number, b: string | number): number {
+  const aNum = typeof a === "number" ? a : Number(a);
+  const bNum = typeof b === "number" ? b : Number(b);
+  if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum;
+  return String(a).localeCompare(String(b));
+}
+
+/**
+ * Classify an ordering direction string as ascending, descending, or neither
+ * based on common phrasings. Returns null when phrasing is unrecognized.
+ */
+export function classifyOrderingDirection(
+  direction: string | null | undefined
+): "ascending" | "descending" | null {
+  if (!direction) return null;
+  const dir = direction.toLowerCase();
+  if (
+    dir.includes("earliest to latest") ||
+    dir.includes("oldest to newest") ||
+    dir.includes("least to most") ||
+    dir.includes("smallest to largest") ||
+    dir.includes("lowest to highest") ||
+    dir.includes("shortest to longest")
+  ) return "ascending";
+  if (
+    dir.includes("latest to earliest") ||
+    dir.includes("newest to oldest") ||
+    dir.includes("most to least") ||
+    dir.includes("largest to smallest") ||
+    dir.includes("highest to lowest") ||
+    dir.includes("longest to shortest")
+  ) return "descending";
+  return null;
+}
+
+/**
+ * Derive the canonical position-per-item array from `orderingItemValues` and
+ * `orderingDirection`. Returns null when values are missing/incomplete or the
+ * direction phrasing isn't recognized — in which case the caller should fall
+ * back to the stored `orderingCorrectOrder`.
+ *
+ * Example: items=[Nigeria, SA, Algeria, DRC], values=[923k, 1.2m, 2.38m, 2.34m],
+ * direction="largest to smallest" → returns [4, 3, 1, 2] (Nigeria last,
+ * Algeria first by area).
+ *
+ * This is defense-in-depth against the bug where stored items are inverted
+ * relative to the stated direction (Yap S4G2R1, 2026-04-30): when values are
+ * present, they are the source of truth, not the stored item order.
+ */
+export function deriveCanonicalOrder(
+  itemValues: Array<string | number | null> | null | undefined,
+  direction: string | null | undefined
+): number[] | null {
+  if (!Array.isArray(itemValues) || itemValues.length === 0) return null;
+  if (!itemValues.every((v) => v !== null && v !== undefined && v !== "")) return null;
+  const sense = classifyOrderingDirection(direction);
+  if (sense === null) return null;
+
+  const typed = itemValues as Array<string | number>;
+  // Sort indices by value, ties broken by original index for stability.
+  const indices = typed.map((_, i) => i);
+  indices.sort((a, b) => {
+    const cmp = compareOrderingValues(typed[a], typed[b]);
+    if (cmp !== 0) return sense === "ascending" ? cmp : -cmp;
+    return a - b;
+  });
+  // indices[posIdx] = original index that belongs at position posIdx+1.
+  // Invert: positionByOriginalIdx[origIdx] = posIdx+1.
+  const positionByOriginalIdx = new Array<number>(typed.length);
+  for (let posIdx = 0; posIdx < indices.length; posIdx++) {
+    positionByOriginalIdx[indices[posIdx]] = posIdx + 1;
+  }
+  return positionByOriginalIdx;
+}
+
+/**
  * Determine Ordering question winners.
  * Rules:
  *   1. Score = number of items in correct position.

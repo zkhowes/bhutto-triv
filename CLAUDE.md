@@ -196,7 +196,7 @@ Required for development (see `.env.example`):
 
 ## Kanban
 
-> Last updated: 2026-04-30 (dashboard tile polish + submit-form Back button removal)
+> Last updated: 2026-04-30 (ordering grading hardening — require values, derive canonical order from values+direction)
 
 ### Backlog
 - [ ] View-only public round dashboard — *currently requires auth, no anonymous mode*
@@ -209,6 +209,7 @@ Required for development (see `.env.example`):
 ### In Progress
 
 ### Done
+- [x] Ordering grading hardening — *root-caused Yap S4G2R1 bug (items stored smallest→largest while direction said largest→smallest, so grader's canonical answer was inverted; only the lone player who answered the wrong direction "won"). validateOrderingPayload now requires orderingItemValues (length-matched, no nulls); direction-vs-values monotonicity check runs unconditionally. Workshop system prompt + QuestionSubmitForm preflight + drafts API all enforce the requirement. Defense-in-depth at grade time: closeRound + fun-fact rendering now derive canonical order from values+direction via new deriveCanonicalOrder() helper (falls back to stored orderingCorrectOrder when values absent or direction unrecognized). New shared classifyOrderingDirection() helper deduped between scoring.ts and ai.ts. 23 new tests across validate-ordering.test.ts and scoring.test.ts (152 total passing).*
 - [x] Dashboard tile polish + redundant Back removed — *Question submit: AssistButton's "Back" button removed (the brainstorm toggle already opens/closes the panel); auto-trigger of generate("") for build_answer/refine modes preserved via useEffect. Dashboard: at-bat player now sees "Waiting for all answers" on question_submitted/category_revealed (was buggy "place your bet" / "Answer the question!"). Tile header: word badges replaced — "Commissioner" → C circle, "Active" → green/yellow/red dot (season+game active / between games / not started). Player count removed; status condensed to "S:1 · G:3 · Round 5 of 7". New auto-skip countdown line under the action when autoSkipEnabled and round is in skippable state, reusing AutoSkipCountdown's 3h amber / 1h red+pulse thresholds. New standings line shows ordinal place "1st of 8" or red "Busted". /api/leagues now returns updatedAt, autoSkipEnabled, currentGame.totalRounds, and computed myStanding (loads playerStates, bounded by maxPlayers ≤10).*
 - [x] Submit form mobile polish — *alt-start row split into label/Workshop link header above the draft chips so chips wrap cleanly without weird right-side gap; "Help me brainstorm" tall side-button replaced with a horizontal toggle row (sparkle icon + label + switch) above the form fields, swapping in the brainstorm panel when on; image-attach icon moved below the question textarea (was overlaid bottom-left, which pushed text right of the icon on mobile).*
 - [x] Auto-submit reliability — *tryAutoSubmitFromBank now also fires on revertSkip (both first- and second-skip revert paths) and resolveFlagDisagree (paused-round wake). Draft-selection logic extracted into pure pickAutoSubmitDraft helper; new auto-submit.test.ts covers eligibility, newest-first ordering, league-scoped dedup, case/whitespace insensitivity, and full-duplicate flag clearing (8 tests).*

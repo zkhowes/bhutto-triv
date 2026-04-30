@@ -2,6 +2,36 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { validateOrderingPayload } from "@/lib/ai";
+
+// Block enabling auto-submit on an ordering draft that wouldn't pass submit-time
+// validation — otherwise auto-submit fires at round start, silently fails (logged
+// only to server console), and the at-bat player has to manually re-submit.
+function orderingProblemForAutoSubmit(d: {
+  answerFormat?: string | null;
+  category?: string | null;
+  questionText?: string | null;
+  orderingItems?: unknown;
+  orderingCorrectOrder?: unknown;
+  orderingDirection?: string | null;
+  orderingItemValues?: unknown;
+}): string | null {
+  if (d.answerFormat !== "ordering") return null;
+  const items = Array.isArray(d.orderingItems) ? d.orderingItems : null;
+  const order = Array.isArray(d.orderingCorrectOrder) ? d.orderingCorrectOrder : null;
+  const values = Array.isArray(d.orderingItemValues) ? d.orderingItemValues : null;
+  return validateOrderingPayload({
+    category: d.category ?? "",
+    questionText: d.questionText ?? "",
+    answerFormat: "ordering",
+    orderingItems: items as string[] | undefined ?? undefined,
+    orderingCorrectOrder: order as number[] | undefined ?? undefined,
+    orderingDirection: d.orderingDirection ?? undefined,
+    orderingItemValues: values as Array<string | number | null> | undefined ?? undefined,
+    difficulty: "medium",
+    hook: "",
+  });
+}
 
 // Returns the set of league IDs where the user has already played this question text.
 async function findLeaguesWherePlayed(
@@ -51,6 +81,13 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
 
   if (body.useOnNextRound) {
+    const orderingProblem = orderingProblemForAutoSubmit(body);
+    if (orderingProblem) {
+      return NextResponse.json(
+        { error: `Cannot enable auto-submit on this ordering draft: ${orderingProblem}` },
+        { status: 400 }
+      );
+    }
     // Auto-submit can fire in any of the user's leagues, so any prior play blocks it.
     const playedLeagueIds = await findLeaguesWherePlayed(session.user.id, body.questionText);
     if (playedLeagueIds.length > 0) {
@@ -132,6 +169,43 @@ export async function PUT(req: NextRequest) {
   }
 
   if (updateData.useOnNextRound === true) {
+    const merged = {
+      answerFormat:
+        "answerFormat" in updateData ? updateData.answerFormat : draft.answerFormat,
+      category: "category" in updateData ? updateData.category : draft.category,
+      questionText:
+        "questionText" in updateData ? updateData.questionText : draft.questionText,
+      orderingItems:
+        "orderingItems" in updateData
+          ? updateData.orderingItems
+          : draft.orderingItems
+            ? JSON.parse(draft.orderingItems)
+            : null,
+      orderingCorrectOrder:
+        "orderingCorrectOrder" in updateData
+          ? updateData.orderingCorrectOrder
+          : draft.orderingCorrectOrder
+            ? JSON.parse(draft.orderingCorrectOrder)
+            : null,
+      orderingDirection:
+        "orderingDirection" in updateData
+          ? updateData.orderingDirection
+          : draft.orderingDirection,
+      orderingItemValues:
+        "orderingItemValues" in updateData
+          ? updateData.orderingItemValues
+          : draft.orderingItemValues
+            ? JSON.parse(draft.orderingItemValues)
+            : null,
+    };
+    const orderingProblem = orderingProblemForAutoSubmit(merged);
+    if (orderingProblem) {
+      return NextResponse.json(
+        { error: `Cannot enable auto-submit on this ordering draft: ${orderingProblem}` },
+        { status: 400 }
+      );
+    }
+
     const candidateText =
       "questionText" in updateData ? updateData.questionText : draft.questionText;
     const playedLeagueIds = await findLeaguesWherePlayed(session.user.id, candidateText);

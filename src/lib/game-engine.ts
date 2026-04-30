@@ -11,7 +11,7 @@ import {
   MIN_PLAYERS_FOR_FLAG,
   isDefaultCategory,
 } from "./constants";
-import { scoreRound, calculateAbsenteePenalty, getF1PointsForPlacement, determinePirWinners, determineOrderingWinners } from "./scoring";
+import { scoreRound, calculateAbsenteePenalty, getF1PointsForPlacement, determinePirWinners, determineOrderingWinners, deriveCanonicalOrder } from "./scoring";
 import {
   notifyAtBat,
   notifyNewQuestion,
@@ -897,10 +897,18 @@ export async function closeRound(roundId: string): Promise<void> {
 
   // Ordering: determine winners (most correct positions) before scoring
   if (round.question?.answerFormat === "ordering") {
-    const correctOrder: number[] = JSON.parse(round.question.orderingCorrectOrder ?? "[]");
+    const storedCorrectOrder: number[] = JSON.parse(round.question.orderingCorrectOrder ?? "[]");
     const itemValues: Array<string | number | null> | null = round.question.orderingItemValues
       ? (JSON.parse(round.question.orderingItemValues) as Array<string | number | null>)
       : null;
+
+    // Defense-in-depth: when values + a recognized direction are present,
+    // derive the canonical order from values rather than trusting stored
+    // orderingCorrectOrder. This catches questions where items were entered
+    // in the wrong direction relative to orderingDirection (the Yap bug).
+    const derived = deriveCanonicalOrder(itemValues, round.question.orderingDirection);
+    const correctOrder = derived ?? storedCorrectOrder;
+
     const submissions = allAnswers
       .filter((a) => !a.isAbsent && a.freeTextAnswer)
       .map((a) => ({
@@ -1032,7 +1040,14 @@ export async function closeRound(roundId: string): Promise<void> {
       if (q.orderingItems && q.orderingDirection) {
         try {
           const items = JSON.parse(q.orderingItems) as string[];
-          const order = q.orderingCorrectOrder ? JSON.parse(q.orderingCorrectOrder) as number[] : items.map((_, i) => i + 1);
+          const values = q.orderingItemValues
+            ? (JSON.parse(q.orderingItemValues) as Array<string | number | null>)
+            : null;
+          // Same defense-in-depth as the grader: prefer values+direction over
+          // stored orderingCorrectOrder for canonical positions.
+          const derivedOrder = deriveCanonicalOrder(values, q.orderingDirection);
+          const order = derivedOrder
+            ?? (q.orderingCorrectOrder ? (JSON.parse(q.orderingCorrectOrder) as number[]) : items.map((_, i) => i + 1));
           const sorted = order.map((pos, idx) => ({ pos, item: items[idx] })).sort((a, b) => a.pos - b.pos).map(e => e.item);
           correctAnswerText = `Correct order (${q.orderingDirection}): ${sorted.join(", ")}`;
         } catch {

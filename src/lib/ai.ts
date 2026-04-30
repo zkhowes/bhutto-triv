@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { classifyOrderingDirection } from "./scoring";
 
 let client: Anthropic | null = null;
 
@@ -123,7 +124,7 @@ When the user asks you to create a question or gives you a topic, return EXACTLY
 Answer formats:
 - "multiple_choice": 4 options (optionA-D), one correctOption (A/B/C/D)
 - "price_is_right": numeric correctAnswer (as string), no acceptableAnswers needed
-- "ordering": 3-4 items in orderingItems array, orderingCorrectOrder MUST be [1,2,3,4] in strictly ascending order — that is, list orderingItems IN THE CORRECT ORDER (position 1 first). Include orderingDirection (e.g. "most to least", "earliest to latest", "least to most", "latest to earliest"). Include orderingItemValues: a parallel array of the comparable scalar each item is being ordered by (year, population, GDP, etc.) — same length and index alignment as orderingItems. CRITICAL self-check: sort orderingItemValues according to orderingDirection; the resulting order MUST match orderingItems. If "earliest to latest", orderingItems[0]'s value must be the smallest (earliest year). If you cannot produce comparable scalars, do NOT use ordering — pick a different format.
+- "ordering": 3-4 items in orderingItems array, orderingCorrectOrder MUST be [1,2,3,4] in strictly ascending order — that is, list orderingItems IN THE CORRECT ORDER (position 1 first). orderingDirection is REQUIRED (e.g. "most to least", "earliest to latest", "least to most", "latest to earliest"). orderingItemValues is REQUIRED: a parallel array of the comparable scalar each item is being ordered by (year, population, GDP, etc.) — same length and index alignment as orderingItems, every entry non-null. CRITICAL self-check: sort orderingItemValues according to orderingDirection; the resulting order MUST match orderingItems. If "earliest to latest", orderingItems[0]'s value must be the smallest (earliest year); if "largest to smallest", orderingItems[0]'s value must be the largest. If you cannot produce comparable scalars for every item, do NOT use ordering — pick a different format.
 
 DO NOT generate "free_text" variations. Only multiple_choice, price_is_right, and ordering are accepted. If a topic seems to call for an open-ended answer, reframe it as multiple_choice instead.
 
@@ -295,42 +296,32 @@ export function validateOrderingPayload(v: WorkshopVariation): string | null {
     return "orderingDirection is required";
   }
 
-  // Values are optional; when present, they must align with the stated direction.
-  if (Array.isArray(values)) {
-    if (values.length !== items.length) {
-      return "orderingItemValues length must match orderingItems length";
-    }
-    const allPresent = values.every((x) => x !== null && x !== undefined && x !== "");
-    if (allPresent) {
-      const dir = direction.toLowerCase();
-      const ascending =
-        dir.includes("earliest to latest") ||
-        dir.includes("oldest to newest") ||
-        dir.includes("least to most") ||
-        dir.includes("smallest to largest") ||
-        dir.includes("lowest to highest") ||
-        dir.includes("shortest to longest");
-      const descending =
-        dir.includes("latest to earliest") ||
-        dir.includes("newest to oldest") ||
-        dir.includes("most to least") ||
-        dir.includes("largest to smallest") ||
-        dir.includes("highest to lowest") ||
-        dir.includes("longest to shortest");
+  // orderingItemValues is required: without comparable scalars per item we
+  // can't verify that orderingItems actually align with orderingDirection,
+  // and a silently-inverted question would grade the wrong way (see Yap
+  // S4G2R1, 2026-04-30).
+  if (!Array.isArray(values)) {
+    return "orderingItemValues is required (parallel array of comparable scalars per item)";
+  }
+  if (values.length !== items.length) {
+    return "orderingItemValues length must match orderingItems length";
+  }
+  if (!values.every((x) => x !== null && x !== undefined && x !== "")) {
+    return "orderingItemValues must have a value for every item";
+  }
 
-      // If we can't determine the direction, skip the value-vs-direction check
-      // (validator stays permissive on novel direction phrasings).
-      if (ascending || descending) {
-        const typed = values as Array<string | number>;
-        for (let i = 0; i < typed.length - 1; i++) {
-          const cmp = compareOrderingValues(typed[i], typed[i + 1]);
-          if (ascending && cmp > 0) {
-            return `orderingItemValues not in '${direction}' order at index ${i}: ${typed[i]} > ${typed[i + 1]}`;
-          }
-          if (descending && cmp < 0) {
-            return `orderingItemValues not in '${direction}' order at index ${i}: ${typed[i]} < ${typed[i + 1]}`;
-          }
-        }
+  const sense = classifyOrderingDirection(direction);
+  // Recognized direction → enforce values align with it. Unrecognized direction
+  // phrasings (e.g. "by alphabet") still pass — values are just opaque.
+  if (sense) {
+    const typed = values as Array<string | number>;
+    for (let i = 0; i < typed.length - 1; i++) {
+      const cmp = compareOrderingValues(typed[i], typed[i + 1]);
+      if (sense === "ascending" && cmp > 0) {
+        return `orderingItemValues not in '${direction}' order at index ${i}: ${typed[i]} > ${typed[i + 1]}`;
+      }
+      if (sense === "descending" && cmp < 0) {
+        return `orderingItemValues not in '${direction}' order at index ${i}: ${typed[i]} < ${typed[i + 1]}`;
       }
     }
   }

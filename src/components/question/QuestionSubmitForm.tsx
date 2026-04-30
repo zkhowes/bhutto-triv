@@ -223,9 +223,18 @@ export default function QuestionSubmitForm({
         setError("Provide a direction (e.g. 'most to least')");
         return;
       }
-      const items = [orderingItem1, orderingItem2, orderingItem3, orderingItem4].filter(Boolean);
-      if (items.length < 3) {
+      const pairs = [
+        [orderingItem1, orderingValue1],
+        [orderingItem2, orderingValue2],
+        [orderingItem3, orderingValue3],
+        [orderingItem4, orderingValue4],
+      ].filter(([item]) => item);
+      if (pairs.length < 3) {
         setError("Provide at least 3 items");
+        return;
+      }
+      if (pairs.some(([, val]) => !val.trim())) {
+        setError("Provide a value for every item — values are how the grader checks the order");
         return;
       }
     }
@@ -277,13 +286,10 @@ export default function QuestionSubmitForm({
         body.orderingItems = items;
         body.orderingCorrectOrder = items.map((_, i) => i + 1);
         body.orderingDirection = orderingDirection.trim();
-        // Only attach values when ALL items have one — partial values would be ambiguous.
-        if (rawValues.every((v) => v !== "")) {
-          body.orderingItemValues = rawValues.map((v) => {
-            const n = Number(v);
-            return !isNaN(n) && v.trim() !== "" ? n : v;
-          });
-        }
+        body.orderingItemValues = rawValues.map((v) => {
+          const n = Number(v);
+          return !isNaN(n) && v.trim() !== "" ? n : v;
+        });
       }
 
       const res = await fetch("/api/questions", {

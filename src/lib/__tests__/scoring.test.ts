@@ -6,6 +6,8 @@ import {
   determinePirWinners,
   determineOrderingWinners,
   calculateAbsenteePenalty,
+  classifyOrderingDirection,
+  deriveCanonicalOrder,
 } from "../scoring";
 
 describe("determinePirWinners", () => {
@@ -319,6 +321,89 @@ describe("determineOrderingWinners", () => {
     const { winners, scores } = determineOrderingWinners([1, 2, 3], []);
     expect(winners.size).toBe(0);
     expect(scores.size).toBe(0);
+  });
+});
+
+describe("classifyOrderingDirection", () => {
+  it("classifies ascending phrasings", () => {
+    expect(classifyOrderingDirection("earliest to latest")).toBe("ascending");
+    expect(classifyOrderingDirection("least to most")).toBe("ascending");
+    expect(classifyOrderingDirection("smallest to largest")).toBe("ascending");
+    expect(classifyOrderingDirection("Lowest to Highest")).toBe("ascending");
+  });
+
+  it("classifies descending phrasings", () => {
+    expect(classifyOrderingDirection("largest to smallest")).toBe("descending");
+    expect(classifyOrderingDirection("most to least")).toBe("descending");
+    expect(classifyOrderingDirection("newest to oldest")).toBe("descending");
+  });
+
+  it("returns null for unrecognized phrasings", () => {
+    expect(classifyOrderingDirection("by alphabet")).toBeNull();
+    expect(classifyOrderingDirection("")).toBeNull();
+    expect(classifyOrderingDirection(null)).toBeNull();
+    expect(classifyOrderingDirection(undefined)).toBeNull();
+  });
+});
+
+describe("deriveCanonicalOrder", () => {
+  it("derives correct positions for descending direction", () => {
+    // Items: [Algeria, DRC, SA, Nigeria], values are areas (km²).
+    expect(
+      deriveCanonicalOrder(
+        [2381741, 2344858, 1221037, 923768],
+        "largest to smallest"
+      )
+    ).toEqual([1, 2, 3, 4]);
+  });
+
+  it("derives correct positions when stored items are in wrong direction", () => {
+    // The Yap bug: items stored smallest→largest but direction says descending.
+    // Items: [Nigeria, SA, Algeria, DRC]
+    expect(
+      deriveCanonicalOrder(
+        [923768, 1221037, 2381741, 2344858],
+        "largest to smallest"
+      )
+    ).toEqual([4, 3, 1, 2]);
+  });
+
+  it("derives correct positions for ascending direction", () => {
+    // Films released [1990, 1977, 2010] in items order — direction earliest first.
+    expect(
+      deriveCanonicalOrder([1990, 1977, 2010], "earliest to latest")
+    ).toEqual([2, 1, 3]);
+  });
+
+  it("returns null when values are missing", () => {
+    expect(deriveCanonicalOrder(null, "largest to smallest")).toBeNull();
+    expect(deriveCanonicalOrder(undefined, "largest to smallest")).toBeNull();
+    expect(deriveCanonicalOrder([], "largest to smallest")).toBeNull();
+  });
+
+  it("returns null when any value is null/empty", () => {
+    expect(
+      deriveCanonicalOrder([3, null, 1], "largest to smallest")
+    ).toBeNull();
+    expect(deriveCanonicalOrder([3, "", 1], "largest to smallest")).toBeNull();
+  });
+
+  it("returns null when direction is unrecognized", () => {
+    expect(deriveCanonicalOrder([3, 2, 1], "by alphabet")).toBeNull();
+    expect(deriveCanonicalOrder([3, 2, 1], null)).toBeNull();
+  });
+
+  it("breaks value ties by original index (stable)", () => {
+    // Two items share the same value; the lower original index gets the lower position.
+    expect(
+      deriveCanonicalOrder([2000, 2000, 2010], "earliest to latest")
+    ).toEqual([1, 2, 3]);
+  });
+
+  it("compares numeric strings numerically", () => {
+    expect(
+      deriveCanonicalOrder(["100", "20", "3"], "largest to smallest")
+    ).toEqual([1, 2, 3]);
   });
 });
 
