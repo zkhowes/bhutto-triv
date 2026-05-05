@@ -269,6 +269,7 @@ model Question {
   // Free text
   correctAnswer     String?
   acceptableAnswers String? // JSON array of acceptable variations
+  correctAnswerUnit String? // Closest-guess only: unit shown to answerers (e.g. "miles", "tons")
 
   // Image attachment (optional)
   imageUrl         String?
@@ -308,6 +309,7 @@ model QuestionDraft {
   correctOption     String?
   correctAnswer     String?
   acceptableAnswers String?
+  correctAnswerUnit String?
   imageUrl         String?
   imageSource      String?
   imageAttribution String?

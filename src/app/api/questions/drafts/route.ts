@@ -117,6 +117,7 @@ export async function POST(req: NextRequest) {
       acceptableAnswers: body.acceptableAnswers
         ? JSON.stringify(body.acceptableAnswers)
         : null,
+      correctAnswerUnit: body.correctAnswerUnit ?? null,
       orderingItems: body.orderingItems
         ? JSON.stringify(body.orderingItems)
         : null,
@@ -223,7 +224,7 @@ export async function PUT(req: NextRequest) {
 
   // Build update payload only from keys actually sent
   const data: Record<string, unknown> = {};
-  const fields = ["category", "questionText", "answerFormat", "optionA", "optionB", "optionC", "optionD", "correctOption", "correctAnswer", "useOnNextRound", "imageUrl", "imageSource", "imageAttribution", "orderingDirection", "isReplay", "originalQuestionId"];
+  const fields = ["category", "questionText", "answerFormat", "optionA", "optionB", "optionC", "optionD", "correctOption", "correctAnswer", "correctAnswerUnit", "useOnNextRound", "imageUrl", "imageSource", "imageAttribution", "orderingDirection", "isReplay", "originalQuestionId"];
   for (const field of fields) {
     if (field in updateData) {
       data[field] = updateData[field];

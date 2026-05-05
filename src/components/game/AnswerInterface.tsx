@@ -21,6 +21,7 @@ interface AnswerInterfaceProps {
     imageAttribution?: string | null;
     orderingItems?: string | null;
     orderingDirection?: string | null;
+    correctAnswerUnit?: string | null;
   };
   betAmount: number;
   playerPoints: number; // current points before the bet
@@ -342,11 +343,16 @@ export default function AnswerInterface({
           {question.questionText}
         </h2>
         {isPriceIsRight && (
-          <div className="mt-3 flex items-center gap-2">
+          <div className="mt-3 flex items-center gap-2 flex-wrap">
             <span className="text-xs font-bold text-amber-400 bg-amber-400/15 rounded px-2 py-1 uppercase tracking-wide">
-              Price is Right
+              Closest Guess
             </span>
-            <span className="text-xs text-[#a0a0b8]">Closest without going over wins</span>
+            <span className="text-xs text-[#a0a0b8]">Closest to the answer wins (over or under)</span>
+            {question.correctAnswerUnit && (
+              <span className="text-xs font-semibold text-amber-300 bg-amber-400/10 rounded px-2 py-1">
+                Unit: {question.correctAnswerUnit}
+              </span>
+            )}
           </div>
         )}
         {isOrdering && (
@@ -388,18 +394,27 @@ export default function AnswerInterface({
         </div>
       ) : isPriceIsRight ? (
         <div className="mb-4">
-          <label className="block text-sm font-medium text-amber-400 mb-2">Your guess (closest without going over wins)</label>
-          <input
-            type="number"
-            value={priceAnswer}
-            onChange={(e) => setPriceAnswer(e.target.value)}
-            className="input-field text-lg"
-            placeholder="Enter your number..."
-            step="any"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !submitting) handleSubmit();
-            }}
-          />
+          <label className="block text-sm font-medium text-amber-400 mb-2">
+            Your guess{question.correctAnswerUnit ? ` (in ${question.correctAnswerUnit})` : ""}
+          </label>
+          <div className="relative">
+            <input
+              type="number"
+              value={priceAnswer}
+              onChange={(e) => setPriceAnswer(e.target.value)}
+              className={`input-field text-lg ${question.correctAnswerUnit ? "pr-20" : ""}`}
+              placeholder="Enter your number..."
+              step="any"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !submitting) handleSubmit();
+              }}
+            />
+            {question.correctAnswerUnit && (
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-[#a0a0b8] pointer-events-none">
+                {question.correctAnswerUnit}
+              </span>
+            )}
+          </div>
           {highLowResult && (
             <div
               className={`mt-2 p-2 rounded-lg text-sm font-semibold text-center ${
@@ -411,9 +426,9 @@ export default function AnswerInterface({
               }`}
             >
               {highLowResult === "high"
-                ? "Too High — adjust your guess down"
+                ? "Higher than the answer"
                 : highLowResult === "low"
-                  ? "Too Low — adjust your guess up"
+                  ? "Lower than the answer"
                   : "Exact match!"}
             </div>
           )}

@@ -221,6 +221,7 @@ export async function submitQuestion(
     correctOption?: string;
     correctAnswer?: string;
     acceptableAnswers?: string[];
+    correctAnswerUnit?: string;
     leaguePlayerId: string;
     creatorUserId: string;
     imageUrl?: string;
@@ -324,6 +325,7 @@ export async function submitQuestion(
       acceptableAnswers: questionData.acceptableAnswers
         ? JSON.stringify(questionData.acceptableAnswers)
         : null,
+      correctAnswerUnit: questionData.correctAnswerUnit?.trim() || null,
       imageUrl: questionData.imageUrl || null,
       imageSource: questionData.imageSource || null,
       imageAttribution: questionData.imageAttribution || null,
@@ -641,6 +643,7 @@ export async function pickAutoSubmitDraft(
   correctOption: string | null;
   correctAnswer: string | null;
   acceptableAnswers: string | null;
+  correctAnswerUnit: string | null;
   imageUrl: string | null;
   imageSource: string | null;
   imageAttribution: string | null;
@@ -728,6 +731,7 @@ export async function tryAutoSubmitFromBank(roundId: string): Promise<void> {
       correctOption: draft.correctOption ?? undefined,
       correctAnswer: draft.correctAnswer ?? undefined,
       acceptableAnswers: draft.acceptableAnswers ? JSON.parse(draft.acceptableAnswers) : undefined,
+      correctAnswerUnit: draft.correctAnswerUnit ?? undefined,
       leaguePlayerId: atBatPlayer.id,
       creatorUserId: atBatPlayer.userId,
       imageUrl: draft.imageUrl ?? undefined,
@@ -859,7 +863,7 @@ export async function closeRound(roundId: string): Promise<void> {
     },
   });
 
-  // Price is Right: determine winners (closest without going over) before scoring
+  // Closest Guess (price_is_right): determine winners (smallest absolute distance) before scoring
   if (round.question?.answerFormat === "price_is_right") {
     const target = parseFloat(round.question.correctAnswer ?? "NaN");
     if (!isNaN(target)) {
@@ -991,12 +995,12 @@ export async function closeRound(roundId: string): Promise<void> {
       continue;
     }
 
-    const blindMultiplier = existingAnswer.isBlindBet ? 2 : 1;
+    const winMultiplier = existingAnswer.isBlindBet ? 2 : 1;
     const rawBetPointChange = existingAnswer.isAbsent
       ? existingAnswer.pointsWon
       : existingAnswer.isCorrect
-        ? (existingAnswer.betAmount || 0) * blindMultiplier
-        : -(existingAnswer.betAmount || 0) * blindMultiplier;
+        ? (existingAnswer.betAmount || 0) * winMultiplier
+        : -(existingAnswer.betAmount || 0);
 
     // Clamp negative betPointChange so player doesn't show losing more than they have
     const betPointChange = rawBetPointChange < 0 && playerState

@@ -170,8 +170,8 @@ describe("computePowerUpCost", () => {
   });
 });
 
-describe("determinePirWinners", () => {
-  it("returns exact matches as winners", () => {
+describe("determinePirWinners (closest guess)", () => {
+  it("returns exact match as winner over near-misses", () => {
     const winners = determinePirWinners(100, [
       { id: "a", value: 100 },
       { id: "b", value: 50 },
@@ -180,28 +180,30 @@ describe("determinePirWinners", () => {
     expect(winners.has("a")).toBe(true);
   });
 
-  it("returns closest-without-going-over when no exact match", () => {
+  it("picks closest by absolute distance, even if over", () => {
     const winners = determinePirWinners(100, [
       { id: "a", value: 90 },
       { id: "b", value: 80 },
-      { id: "c", value: 110 },
+      { id: "c", value: 105 },
+    ]);
+    // 105 is closest (off by 5); 90 is off by 10
+    expect(winners.size).toBe(1);
+    expect(winners.has("c")).toBe(true);
+  });
+
+  it("everyone over: closest-over still wins", () => {
+    const winners = determinePirWinners(100, [
+      { id: "a", value: 101 },
+      { id: "b", value: 200 },
     ]);
     expect(winners.size).toBe(1);
     expect(winners.has("a")).toBe(true);
   });
 
-  it("returns empty set when all guesses go over", () => {
-    const winners = determinePirWinners(100, [
-      { id: "a", value: 101 },
-      { id: "b", value: 200 },
-    ]);
-    expect(winners.size).toBe(0);
-  });
-
-  it("handles ties for closest-without-going-over", () => {
+  it("ties multiple equidistant guesses", () => {
     const winners = determinePirWinners(100, [
       { id: "a", value: 90 },
-      { id: "b", value: 90 },
+      { id: "b", value: 110 },
     ]);
     expect(winners.size).toBe(2);
   });

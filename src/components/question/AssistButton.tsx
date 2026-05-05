@@ -15,6 +15,7 @@ export interface AssistedQuestion {
   optionD?: string;
   correctOption?: string;
   correctAnswer?: string;
+  correctAnswerUnit?: string;
   orderingItems?: string[];
   orderingDirection?: string;
   orderingItemValues?: Array<string | number | null>;
@@ -244,6 +245,7 @@ export default function AssistButton(props: AssistButtonProps) {
       optionD: v.optionD,
       correctOption: v.correctOption,
       correctAnswer: v.correctAnswer,
+      correctAnswerUnit: v.correctAnswerUnit,
       orderingItems: v.orderingItems,
       orderingDirection: v.orderingDirection,
       orderingItemValues: v.orderingItemValues,

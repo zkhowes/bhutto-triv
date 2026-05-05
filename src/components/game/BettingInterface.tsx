@@ -24,7 +24,7 @@ interface BettingInterfaceProps {
 const FORMAT_LABELS: Record<string, string> = {
   multiple_choice: "Multiple Choice",
   free_text: "Free Text Answer",
-  price_is_right: "Price is Right",
+  price_is_right: "Closest Guess",
   ordering: "Ordering",
 };
 
@@ -186,7 +186,7 @@ export default function BettingInterface({
             Go Blind?
           </p>
           <p className="text-xs text-[#a0a0b8] mb-3">
-            Your bet of {betAmount} point{betAmount === 1 ? "" : "s"} will be doubled -- win or lose!
+            Win {betAmount * 2} point{betAmount * 2 === 1 ? "" : "s"} if correct, lose {betAmount} if not.
             This can only be used once per game.
           </p>
           <div className="flex gap-2">
@@ -195,7 +195,7 @@ export default function BettingInterface({
               disabled={placing}
               className="btn-gold text-sm flex-1"
             >
-              {placing ? <span className="inline-flex items-center justify-center gap-2"><Spinner /> Placing...</span> : `Confirm Blind Bet (${betAmount} x2)`}
+              {placing ? <span className="inline-flex items-center justify-center gap-2"><Spinner /> Placing...</span> : `Confirm Blind Bet (win ${betAmount * 2} / lose ${betAmount})`}
             </button>
             <button
               onClick={() => setShowBlindConfirm(false)}
@@ -215,7 +215,7 @@ export default function BettingInterface({
             disabled={placing || betAmount < 1}
             className="flex-1 text-lg font-bold py-3 rounded-lg transition-colors bg-amber-500/20 border border-amber-500/40 text-amber-400 hover:bg-amber-500/30"
           >
-            Blind Bet {betAmount} point{betAmount === 1 ? "" : "s"} (2x)
+            Blind Bet {betAmount} point{betAmount === 1 ? "" : "s"} (win 2x / lose 1x)
           </button>
           <button
             onClick={() => setCategoryRevealed(true)}

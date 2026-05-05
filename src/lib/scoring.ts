@@ -176,11 +176,10 @@ export function computePowerUpCost(
 }
 
 /**
- * Determine Price is Right winners.
+ * Determine Closest-Guess winners (formerly Price is Right).
  * Rules:
- *   1. All exact matches win.
- *   2. If no exact match, all tied for closest-without-going-over win.
- *   3. If every guess goes over, nobody wins.
+ *   1. Closest guess by absolute distance wins (over or under both fine).
+ *   2. All ties at the minimum distance win.
  * Returns the Set of winner IDs.
  */
 export function determinePirWinners(
@@ -190,18 +189,17 @@ export function determinePirWinners(
   const winnerIds = new Set<string>();
   if (isNaN(target) || guesses.length === 0) return winnerIds;
 
-  const underOrEqual = guesses.filter((g) => g.value <= target);
-  if (underOrEqual.length === 0) return winnerIds;
+  let minDistance = Infinity;
+  for (const g of guesses) {
+    const d = Math.abs(g.value - target);
+    if (d < minDistance) minDistance = d;
+  }
 
-  const exactMatches = underOrEqual.filter((g) => g.value === target);
-  if (exactMatches.length > 0) {
-    exactMatches.forEach((g) => winnerIds.add(g.id));
-  } else {
-    const sorted = [...underOrEqual].sort((a, b) => b.value - a.value);
-    const closestValue = sorted[0].value;
-    sorted
-      .filter((g) => g.value === closestValue)
-      .forEach((g) => winnerIds.add(g.id));
+  // Tolerance handles floating-point noise (e.g. |3.14 - 3.13| vs |3.15 - 3.14|),
+  // and accepts user-intent ties when the magnitudes are similar.
+  const tolerance = Math.max(1e-9, Math.abs(minDistance) * 1e-9);
+  for (const g of guesses) {
+    if (Math.abs(g.value - target) - minDistance <= tolerance) winnerIds.add(g.id);
   }
 
   return winnerIds;

@@ -24,6 +24,7 @@ interface Draft {
   optionD: string | null;
   correctOption: string | null;
   correctAnswer: string | null;
+  correctAnswerUnit?: string | null;
   orderingItems?: string;
   orderingCorrectOrder?: string;
   orderingDirection?: string;
@@ -59,6 +60,7 @@ export default function QuestionSubmitForm({
   const [optionD, setOptionD] = useState("");
   const [correctOption, setCorrectOption] = useState("");
   const [correctAnswer, setCorrectAnswer] = useState("");
+  const [correctAnswerUnit, setCorrectAnswerUnit] = useState("");
   // Ordering format
   const [orderingDirection, setOrderingDirection] = useState("");
   const [orderingItem1, setOrderingItem1] = useState("");
@@ -170,8 +172,9 @@ export default function QuestionSubmitForm({
             setOrderingDirection(autoSubmitDraft.orderingDirection || "");
           } else {
             setCorrectAnswer(autoSubmitDraft.correctAnswer || "");
+            setCorrectAnswerUnit(autoSubmitDraft.correctAnswerUnit || "");
           }
-          // price_is_right uses correctAnswer
+          // price_is_right uses correctAnswer (+ optional correctAnswerUnit)
           if (autoSubmitDraft.imageUrl) {
             setImageUrl(autoSubmitDraft.imageUrl);
             setImageSource(autoSubmitDraft.imageSource || "");
@@ -269,6 +272,7 @@ export default function QuestionSubmitForm({
         body.correctOption = correctOption;
       } else if (answerFormat === "price_is_right") {
         body.correctAnswer = correctAnswer.trim();
+        if (correctAnswerUnit.trim()) body.correctAnswerUnit = correctAnswerUnit.trim();
       } else if (answerFormat === "ordering") {
         const items: string[] = [];
         const rawValues: string[] = [];
@@ -455,6 +459,7 @@ export default function QuestionSubmitForm({
       setOrderingDirection(q.orderingDirection || "");
     } else {
       setCorrectAnswer(q.correctAnswer || "");
+      setCorrectAnswerUnit(q.correctAnswerUnit || "");
     }
     if (q.imageUrl) {
       setImageUrl(q.imageUrl);
@@ -666,7 +671,7 @@ export default function QuestionSubmitForm({
                   : "border-[#1e3a5f] text-[#a0a0b8]"
               }`}
             >
-              Price is Right
+              Closest Guess
             </button>
             <button
               type="button"
@@ -718,24 +723,39 @@ export default function QuestionSubmitForm({
           </div>
         )}
 
-        {/* Price is Right Answer */}
+        {/* Closest Guess Answer */}
         {answerFormat === "price_is_right" && (
           <div className="space-y-3 mb-4">
-            <div>
-              <label className="block text-sm font-medium text-[#a0a0b8] mb-1">
-                Correct Answer (number) *
-              </label>
-              <input
-                type="number"
-                value={correctAnswer}
-                onChange={(e) => setCorrectAnswer(e.target.value)}
-                className="input-field"
-                placeholder="e.g. 116 or 116.5"
-                step="any"
-              />
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-[#a0a0b8] mb-1">
+                  Correct Answer (number) *
+                </label>
+                <input
+                  type="number"
+                  value={correctAnswer}
+                  onChange={(e) => setCorrectAnswer(e.target.value)}
+                  className="input-field"
+                  placeholder="e.g. 1907"
+                  step="any"
+                />
+              </div>
+              <div className="w-32">
+                <label className="block text-sm font-medium text-[#a0a0b8] mb-1">
+                  Unit
+                </label>
+                <input
+                  type="text"
+                  value={correctAnswerUnit}
+                  onChange={(e) => setCorrectAnswerUnit(e.target.value)}
+                  className="input-field"
+                  placeholder="miles, tons…"
+                  maxLength={24}
+                />
+              </div>
             </div>
             <p className="text-xs text-[#666680]">
-              Players guess a number — closest without going over wins. If everyone goes over, nobody wins.
+              Players guess a number — closest to the answer wins (over or under). The unit is shown to answerers so guesses use the same scale.
             </p>
           </div>
         )}

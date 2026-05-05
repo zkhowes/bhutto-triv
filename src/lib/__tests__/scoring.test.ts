@@ -10,8 +10,8 @@ import {
   deriveCanonicalOrder,
 } from "../scoring";
 
-describe("determinePirWinners", () => {
-  it("picks the closest guess without going over", () => {
+describe("determinePirWinners (closest guess)", () => {
+  it("picks the closest guess by absolute distance", () => {
     const target = 151;
     const guesses = [
       { id: "a", value: 89 },
@@ -26,7 +26,17 @@ describe("determinePirWinners", () => {
     expect(winners.has("f")).toBe(true);
   });
 
-  it("picks exact match over closer-without-going-over", () => {
+  it("does not penalize going over — closest wins regardless of side", () => {
+    // Real-world example: target 1907, guess 1911 (off by 4) beats guess 1200 (off by 707)
+    const winners = determinePirWinners(1907, [
+      { id: "a", value: 1911 },
+      { id: "b", value: 1200 },
+    ]);
+    expect(winners.size).toBe(1);
+    expect(winners.has("a")).toBe(true);
+  });
+
+  it("picks exact match over near-misses", () => {
     const winners = determinePirWinners(100, [
       { id: "a", value: 99 },
       { id: "b", value: 100 },
@@ -48,7 +58,18 @@ describe("determinePirWinners", () => {
     expect(winners.has("c")).toBe(false);
   });
 
-  it("awards all tied closest-without-going-over as winners", () => {
+  it("ties when guesses are equidistant on opposite sides", () => {
+    const winners = determinePirWinners(100, [
+      { id: "a", value: 95 },
+      { id: "b", value: 105 },
+      { id: "c", value: 80 },
+    ]);
+    expect(winners.size).toBe(2);
+    expect(winners.has("a")).toBe(true);
+    expect(winners.has("b")).toBe(true);
+  });
+
+  it("ties multiple guesses at the same distance on the same side", () => {
     const winners = determinePirWinners(100, [
       { id: "a", value: 95 },
       { id: "b", value: 95 },
@@ -59,13 +80,14 @@ describe("determinePirWinners", () => {
     expect(winners.has("b")).toBe(true);
   });
 
-  it("returns empty set when all guesses go over", () => {
+  it("everyone over: closest-over still wins (no auto-loss)", () => {
     const winners = determinePirWinners(50, [
       { id: "a", value: 51 },
       { id: "b", value: 100 },
       { id: "c", value: 200 },
     ]);
-    expect(winners.size).toBe(0);
+    expect(winners.size).toBe(1);
+    expect(winners.has("a")).toBe(true);
   });
 
   it("returns empty set for no guesses", () => {
@@ -92,7 +114,8 @@ describe("determinePirWinners", () => {
     const winners = determinePirWinners(100, [
       { id: "a", value: 101 },
     ]);
-    expect(winners.size).toBe(0);
+    expect(winners.size).toBe(1);
+    expect(winners.has("a")).toBe(true);
   });
 
   it("handles single exact match", () => {
@@ -109,8 +132,10 @@ describe("determinePirWinners", () => {
       { id: "b", value: 3.15 },
       { id: "c", value: 3.0 },
     ]);
-    expect(winners.size).toBe(1);
+    // 3.13 and 3.15 are both 0.01 away
+    expect(winners.size).toBe(2);
     expect(winners.has("a")).toBe(true);
+    expect(winners.has("b")).toBe(true);
   });
 
   it("handles zero as target", () => {
@@ -119,7 +144,7 @@ describe("determinePirWinners", () => {
       { id: "b", value: 1 },
       { id: "c", value: -1 },
     ]);
-    // Exact match at 0 wins; -1 is under, 1 is over
+    expect(winners.size).toBe(1);
     expect(winners.has("a")).toBe(true);
   });
 
@@ -129,7 +154,6 @@ describe("determinePirWinners", () => {
       { id: "b", value: -10 },
       { id: "c", value: -5 },
     ]);
-    // -10 is exact, -5 is over (> -10), -15 is under
     expect(winners.size).toBe(1);
     expect(winners.has("b")).toBe(true);
   });

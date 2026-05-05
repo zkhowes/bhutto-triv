@@ -29,6 +29,7 @@ interface RoundControlProps {
       answerFormat: string;
       correctOption: string | null;
       correctAnswer: string | null;
+      correctAnswerUnit?: string | null;
       optionA: string | null;
       optionB: string | null;
       optionC: string | null;
@@ -186,7 +187,7 @@ export default function RoundControl({
                 )}
               </p>
               {myAnswer.isBlindBet && (
-                <p className="text-xs text-amber-400 font-bold mt-0.5">BLIND 2x</p>
+                <p className="text-xs text-amber-400 font-bold mt-0.5">BLIND BET</p>
               )}
             </div>
           )}
@@ -228,6 +229,7 @@ export default function RoundControl({
             <div>
               <p className="text-sm text-emerald-400">
                 Target: {round.question.correctAnswer}
+                {round.question.correctAnswerUnit ? ` ${round.question.correctAnswerUnit}` : ""}
               </p>
               {(() => {
                 const winner = sortedAnswers.find((a) => a.isCorrect);
@@ -248,11 +250,7 @@ export default function RoundControl({
                     </p>
                   );
                 }
-                return (
-                  <p className="text-xs text-red-400 mt-0.5">
-                    Everyone went over
-                  </p>
-                );
+                return null;
               })()}
             </div>
           ) : (

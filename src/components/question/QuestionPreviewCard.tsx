@@ -10,6 +10,7 @@ interface QuestionPreviewCardProps {
   optionD?: string;
   correctOption?: string;
   correctAnswer?: string;
+  correctAnswerUnit?: string;
   orderingItems?: string[];
   orderingDirection?: string;
   orderingItemValues?: Array<string | number | null>;
@@ -32,7 +33,7 @@ const difficultyColors = {
 const formatLabels: Record<string, string> = {
   multiple_choice: "MC",
   free_text: "Free Text",
-  price_is_right: "PiR",
+  price_is_right: "Closest",
   ordering: "Order",
 };
 
@@ -46,6 +47,7 @@ export default function QuestionPreviewCard({
   optionD,
   correctOption,
   correctAnswer,
+  correctAnswerUnit,
   orderingItems,
   orderingDirection,
   orderingItemValues,
@@ -166,15 +168,15 @@ export default function QuestionPreviewCard({
       {answerFormat === "price_is_right" && (
         <div className={compact ? "" : "mb-1"}>
           <div className="px-3 py-2 rounded-lg border border-[#1e3a5f] bg-[#0f0f23] text-sm text-[#444460]">
-            Enter your number...
+            Enter your number{correctAnswerUnit ? ` (${correctAnswerUnit})` : "..."}
           </div>
           {correctAnswer && (
             <p className="mt-1.5 text-xs text-emerald-400">
-              Answer: {correctAnswer}
+              Answer: {correctAnswer}{correctAnswerUnit ? ` ${correctAnswerUnit}` : ""}
             </p>
           )}
           <p className="mt-1 text-xs text-[#666680]">
-            Closest without going over wins
+            Closest guess wins
           </p>
         </div>
       )}

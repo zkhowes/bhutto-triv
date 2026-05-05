@@ -101,6 +101,7 @@ export interface WorkshopVariation {
   optionD?: string;
   correctOption?: string;
   correctAnswer?: string;
+  correctAnswerUnit?: string;
   acceptableAnswers?: string[];
   orderingItems?: string[];
   orderingCorrectOrder?: number[];
@@ -123,7 +124,7 @@ When the user asks you to create a question or gives you a topic, return EXACTLY
 
 Answer formats:
 - "multiple_choice": 4 options (optionA-D), one correctOption (A/B/C/D)
-- "price_is_right": numeric correctAnswer (as string), no acceptableAnswers needed
+- "price_is_right" (Closest Guess): numeric correctAnswer (as string). Closest guess by absolute distance wins — going over does NOT lose. ALWAYS include correctAnswerUnit when the answer has a natural unit (miles, tons, years, °F, %, dollars, etc.); use a short noun phrase. Omit only when the number is truly unitless (a count). Never embed the unit in correctAnswer itself.
 - "ordering": 3-4 items in orderingItems array, orderingCorrectOrder MUST be [1,2,3,4] in strictly ascending order — that is, list orderingItems IN THE CORRECT ORDER (position 1 first). orderingDirection is REQUIRED (e.g. "most to least", "earliest to latest", "least to most", "latest to earliest"). orderingItemValues is REQUIRED: a parallel array of the comparable scalar each item is being ordered by (year, population, GDP, etc.) — same length and index alignment as orderingItems, every entry non-null. CRITICAL self-check: sort orderingItemValues according to orderingDirection; the resulting order MUST match orderingItems. If "earliest to latest", orderingItems[0]'s value must be the smallest (earliest year); if "largest to smallest", orderingItems[0]'s value must be the largest. If you cannot produce comparable scalars for every item, do NOT use ordering — pick a different format.
 
 DO NOT generate "free_text" variations. Only multiple_choice, price_is_right, and ordering are accepted. If a topic seems to call for an open-ended answer, reframe it as multiple_choice instead.
@@ -161,7 +162,8 @@ Return this exact JSON structure:
       "category": "Geography",
       "questionText": "...",
       "answerFormat": "price_is_right",
-      "correctAnswer": "42",
+      "correctAnswer": "1907",
+      "correctAnswerUnit": "miles",
       "difficulty": "easy",
       "hook": "How well do you know...",
       "imageSearchTerm": "a short search query for an accompanying image, or null if the question doesn't benefit from one"
@@ -606,6 +608,7 @@ export interface FormatSuggestion {
     optionD: string;
     correctOption: "A" | "B" | "C" | "D";
   };
+  correctAnswerUnit?: string;
   orderingItems?: string[];
   orderingDirection?: string;
 }
@@ -627,14 +630,14 @@ export async function suggestFormat(
           role: "user",
           content: `You are helping a trivia game question submitter pick the best answer format.
 
-The submitter wrote a free-text question. Analyze whether it would work better as multiple choice or Price is Right.
+The submitter wrote a free-text question. Analyze whether it would work better as multiple choice or Closest Guess (numeric, closest by absolute distance wins).
 
 Question: ${questionText}
 Correct answer: ${correctAnswer}
 ${acceptableAnswers.length > 0 ? `Also acceptable: ${acceptableAnswers.join(", ")}` : ""}
 
 Rules:
-- If the answer is a number (year, count, measurement, price, distance, etc.), suggest "price_is_right"
+- If the answer is a number (year, count, measurement, price, distance, etc.), suggest "price_is_right" and ALWAYS include a correctAnswerUnit (e.g. "miles", "tons", "years", "%", "$") unless the number is truly unitless. Strip any unit out of the number itself.
 - If the answer is one of a clear set of options (a person, place, thing where you can generate 3 plausible wrong answers), suggest "multiple_choice" and provide 4 options (A-D) with the correct one marked
 - If the question involves ranking, ordering, chronology, or sequencing (e.g. "which came first", "rank these", "order from biggest to smallest"), suggest "ordering" with 3-4 items and a direction
 - If the question genuinely needs an open-ended text answer (the answer space is too large for MC, and is not numeric), return null
@@ -642,7 +645,7 @@ Rules:
 Respond with JSON only. Either:
 {"suggestedFormat": "multiple_choice", "message": "This would work great as multiple choice!", "options": {"optionA": "...", "optionB": "...", "optionC": "...", "optionD": "...", "correctOption": "A"}}
 or:
-{"suggestedFormat": "price_is_right", "message": "That number would make a great Price is Right question!"}
+{"suggestedFormat": "price_is_right", "message": "That number would make a great Closest Guess question!", "correctAnswerUnit": "miles"}
 or:
 {"suggestedFormat": "ordering", "message": "This would make a great ordering question!", "orderingItems": ["item1", "item2", "item3"], "orderingDirection": "earliest to latest"}
 or:
@@ -757,7 +760,7 @@ export async function assessQuestionDifficulty(
       if (leagueStats.correctOption) answerContext += `\nCorrect: ${leagueStats.correctOption}`;
     } else if (leagueStats.answerFormat === "price_is_right" && leagueStats.correctAnswer) {
       answerContext += `\nCorrect answer (numeric): ${leagueStats.correctAnswer}`;
-      answerContext += `\nPlayers must guess closest without going over — consider how guessable the number is`;
+      answerContext += `\nPlayers must guess closest by absolute distance (over or under both fine) — consider how guessable the number is`;
     } else if (leagueStats.correctAnswer) {
       answerContext += `\nCorrect answer: ${leagueStats.correctAnswer}`;
     }

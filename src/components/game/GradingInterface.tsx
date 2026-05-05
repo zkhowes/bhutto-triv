@@ -33,6 +33,7 @@ interface Question {
   category: string;
   correctOption: string | null;
   correctAnswer: string | null;
+  correctAnswerUnit?: string | null;
   optionA: string | null;
   optionB: string | null;
   optionC: string | null;
@@ -239,7 +240,7 @@ export default function GradingInterface({
       <h2 className="text-lg font-bold text-[#e94560] mb-1">Review Answers</h2>
       <p className="text-sm text-[#a0a0b8] mb-4">
         {isPriceIsRight
-          ? "Closest guess without going over wins. Review the auto-grades below and override if needed."
+          ? "Closest guess wins (over or under). Review the auto-grades below and override if needed."
           : isOrdering
             ? "Most correct positions wins. Review the auto-grades below and override if needed."
             : "All players have answered. Review the grades below and override if needed."}
@@ -309,6 +310,7 @@ export default function GradingInterface({
             {question.answerFormat === "multiple_choice"
               ? `${question.correctOption}. ${getOptionText(question.correctOption || "")}`
               : question.correctAnswer}
+            {isPriceIsRight && question.correctAnswerUnit ? ` ${question.correctAnswerUnit}` : ""}
           </p>
         )}
         {/* Question rating from submitted player ratings */}

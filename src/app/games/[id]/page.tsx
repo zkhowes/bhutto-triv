@@ -381,8 +381,8 @@ export default function GamePage() {
     const answer = currentRoundData.answers.find((a) => a.leaguePlayerId === leaguePlayerId);
     if (!answer) return "Not bet";
     if (answer.isAbsent) return "Missed";
-    if (answer.answeredAt) return answer.isBlindBet ? `Answered (BLIND 2x)` : "Answered";
-    if (answer.betPlacedAt) return answer.isBlindBet ? `Bet: ${answer.betAmount} (BLIND 2x)` : `Bet: ${answer.betAmount}`;
+    if (answer.answeredAt) return answer.isBlindBet ? `Answered (BLIND)` : "Answered";
+    if (answer.betPlacedAt) return answer.isBlindBet ? `Bet: ${answer.betAmount} (BLIND)` : `Bet: ${answer.betAmount}`;
     return "Not bet";
   };
 
