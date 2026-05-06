@@ -308,35 +308,111 @@ export async function submitQuestion(
     throw new Error("This question was already played in this league.");
   }
 
+  // Run the at-submit reviewer agent (silent fact-check). Never blocks
+  // submission — if the reviewer is unavailable or errors, persist as-is.
+  // Replay submissions skip the reviewer because the original payload was
+  // already reviewed and is presumed canonical.
+  const beforePayload = {
+    category: questionData.category,
+    questionText: questionData.questionText,
+    answerFormat: questionData.answerFormat,
+    optionA: questionData.optionA,
+    optionB: questionData.optionB,
+    optionC: questionData.optionC,
+    optionD: questionData.optionD,
+    correctOption: questionData.correctOption,
+    correctAnswer: questionData.correctAnswer,
+    correctAnswerUnit: questionData.correctAnswerUnit,
+    acceptableAnswers: questionData.acceptableAnswers,
+    orderingItems: questionData.orderingItems,
+    orderingCorrectOrder: questionData.orderingCorrectOrder,
+    orderingDirection: questionData.orderingDirection,
+    orderingItemValues: questionData.orderingItemValues,
+  };
+
+  const { reviewQuestion } = await import("./ai");
+  const review = isReplay
+    ? null
+    : await reviewQuestion(beforePayload);
+  const finalPayload = review?.corrected ?? beforePayload;
+
+  // Defense: if the reviewer corrected an ordering payload, re-run the
+  // workshop's structural validator on the corrected version. If it now fails
+  // validation (e.g. reviewer broke direction monotonicity), drop the
+  // correction and ship the original.
+  let usedReviewerCorrection = !!review?.changed;
+  if (review?.changed && finalPayload.answerFormat === "ordering") {
+    const { validateOrderingPayload } = await import("./ai");
+    const problem = validateOrderingPayload({
+      category: finalPayload.category,
+      questionText: finalPayload.questionText,
+      answerFormat: "ordering",
+      orderingItems: finalPayload.orderingItems,
+      orderingCorrectOrder: finalPayload.orderingCorrectOrder,
+      orderingDirection: finalPayload.orderingDirection,
+      orderingItemValues: finalPayload.orderingItemValues,
+      difficulty: "medium",
+      hook: "",
+    });
+    if (problem) {
+      console.warn(`[reviewer] dropped correction (validation failed): ${problem}`);
+      usedReviewerCorrection = false;
+    }
+  }
+  const persistPayload = usedReviewerCorrection ? finalPayload : beforePayload;
+
   const question = await prisma.question.create({
     data: {
       roundId,
       leaguePlayerId: questionData.leaguePlayerId,
       creatorUserId: questionData.creatorUserId,
-      category: questionData.category,
-      questionText: questionData.questionText,
-      answerFormat: questionData.answerFormat,
-      optionA: questionData.optionA,
-      optionB: questionData.optionB,
-      optionC: questionData.optionC,
-      optionD: questionData.optionD,
-      correctOption: questionData.correctOption,
-      correctAnswer: questionData.correctAnswer,
-      acceptableAnswers: questionData.acceptableAnswers
-        ? JSON.stringify(questionData.acceptableAnswers)
+      category: persistPayload.category,
+      questionText: persistPayload.questionText,
+      answerFormat: persistPayload.answerFormat,
+      optionA: persistPayload.optionA,
+      optionB: persistPayload.optionB,
+      optionC: persistPayload.optionC,
+      optionD: persistPayload.optionD,
+      correctOption: persistPayload.correctOption,
+      correctAnswer: persistPayload.correctAnswer,
+      acceptableAnswers: persistPayload.acceptableAnswers
+        ? JSON.stringify(persistPayload.acceptableAnswers)
         : null,
-      correctAnswerUnit: questionData.correctAnswerUnit?.trim() || null,
+      correctAnswerUnit: persistPayload.correctAnswerUnit?.trim() || null,
       imageUrl: questionData.imageUrl || null,
       imageSource: questionData.imageSource || null,
       imageAttribution: questionData.imageAttribution || null,
-      orderingItems: questionData.orderingItems ? JSON.stringify(questionData.orderingItems) : null,
-      orderingCorrectOrder: questionData.orderingCorrectOrder ? JSON.stringify(questionData.orderingCorrectOrder) : null,
-      orderingDirection: questionData.orderingDirection || null,
-      orderingItemValues: questionData.orderingItemValues ? JSON.stringify(questionData.orderingItemValues) : null,
+      orderingItems: persistPayload.orderingItems ? JSON.stringify(persistPayload.orderingItems) : null,
+      orderingCorrectOrder: persistPayload.orderingCorrectOrder ? JSON.stringify(persistPayload.orderingCorrectOrder) : null,
+      orderingDirection: persistPayload.orderingDirection || null,
+      orderingItemValues: persistPayload.orderingItemValues ? JSON.stringify(persistPayload.orderingItemValues) : null,
       isReplay,
       originalQuestionId: rootOriginalId,
     },
   });
+
+  // Forensic log of the reviewer pass (skip when replay — reviewer didn't run).
+  if (review) {
+    try {
+      await prisma.questionReviewLog.create({
+        data: {
+          questionId: question.id,
+          format: persistPayload.answerFormat,
+          category: persistPayload.category,
+          questionText: persistPayload.questionText,
+          beforeJson: JSON.stringify(beforePayload),
+          afterJson: JSON.stringify(persistPayload),
+          changed: usedReviewerCorrection,
+          notes: review.notes || null,
+          modelUsed: review.modelUsed,
+          status: review.status,
+          latencyMs: review.latencyMs,
+        },
+      });
+    } catch (err) {
+      console.error("[reviewer] failed to write QuestionReviewLog:", err);
+    }
+  }
 
   // Upsert custom category if not a default
   if (!isDefaultCategory(trimmedCategory)) {

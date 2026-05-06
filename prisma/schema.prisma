@@ -294,6 +294,28 @@ model Question {
   leaguePlayer LeaguePlayer  @relation(fields: [leaguePlayerId], references: [id])
   creator      User          @relation(fields: [creatorUserId], references: [id])
   answers      RoundAnswer[]
+  reviewLogs   QuestionReviewLog[]
+}
+
+// Forensic log of the at-submit reviewer agent's pass on each question.
+// One row per submission attempt, capturing the AI/submitter payload before
+// review and the final (possibly corrected) payload that hit production.
+model QuestionReviewLog {
+  id           String   @id @default(cuid())
+  questionId   String
+  format       String   // "multiple_choice" | "price_is_right" | "ordering"
+  category     String
+  questionText String
+  beforeJson   String   // serialized payload pre-review
+  afterJson    String   // serialized payload post-review (may equal before)
+  changed      Boolean  // did the reviewer rewrite anything?
+  notes        String?  // reviewer's free-text rationale
+  modelUsed    String   // e.g. "claude-haiku-4-5-20251001"
+  status       String   // "ok" | "review_unavailable" | "review_error"
+  latencyMs    Int
+  createdAt    DateTime @default(now())
+
+  question     Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
 }
 
 model QuestionDraft {

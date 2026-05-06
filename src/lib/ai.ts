@@ -859,3 +859,157 @@ export async function suggestLeagueNames(): Promise<string[]> {
     ];
   }
 }
+
+// ── At-submit reviewer agent ──────────────────────────────────────────────
+// Second pass over a question right before it ships to a round. Catches
+// AI-hallucinated facts (e.g. years bound to the wrong items) that the
+// workshop validator can't detect because the workshop only checks internal
+// consistency, not real-world correctness. Silent — corrects in place,
+// logs everything for forensics. Never blocks submission.
+
+export const REVIEWER_MODEL = "claude-haiku-4-5-20251001";
+const REVIEWER_TIMEOUT_MS = 3000;
+
+export interface ReviewablePayload {
+  category: string;
+  questionText: string;
+  answerFormat: string;
+  optionA?: string;
+  optionB?: string;
+  optionC?: string;
+  optionD?: string;
+  correctOption?: string;
+  correctAnswer?: string;
+  correctAnswerUnit?: string;
+  acceptableAnswers?: string[];
+  orderingItems?: string[];
+  orderingCorrectOrder?: number[];
+  orderingDirection?: string;
+  orderingItemValues?: Array<string | number | null>;
+}
+
+export interface ReviewerResult {
+  changed: boolean;
+  corrected: ReviewablePayload;
+  notes: string;          // free-text rationale (<= 240 chars)
+  modelUsed: string;
+  latencyMs: number;
+  status: "ok" | "review_unavailable" | "review_error";
+}
+
+const REVIEWER_SYSTEM_PROMPT = `You are a fact-checking trivia question reviewer for "Bhutto Wisdom".
+
+A first-pass AI generated a question and a human submitter is about to ship it. Your job: catch factual errors before it goes live. Be conservative — only correct things you are highly confident about. If unsure, leave the field unchanged.
+
+You will receive a JSON payload with one of these answerFormats:
+- "multiple_choice": optionA-D + correctOption (A/B/C/D). Verify correctOption identifies the actually-correct option. If a different option is correct, change correctOption to match it. Do NOT rewrite the option texts unless one contains a clear factual error.
+- "price_is_right": correctAnswer (numeric string) + optional correctAnswerUnit. Verify the number is roughly correct for the question. Only correct if the stored value is materially wrong (>20% off for measurements, or wrong by year/integer count).
+- "ordering": orderingItems (3-4 items, in correct order per orderingDirection) + orderingItemValues (parallel comparable scalars per item — years, populations, etc.) + orderingDirection. CRITICAL: each value must be the ACTUAL value for THAT item. Common AI failure mode: years/values bound to the wrong items. If you find this, fix the values. Then re-sort orderingItems + orderingItemValues so they match orderingDirection (orderingCorrectOrder must remain [1..n]).
+
+Return EXACTLY this JSON, nothing else:
+{
+  "changed": true | false,
+  "notes": "one short sentence describing what you fixed and why, or 'no issues found'",
+  "corrected": {
+    // include the FULL payload, with any corrections applied. Even unchanged fields must be present.
+  }
+}
+
+Rules:
+- "notes" must be <= 240 characters.
+- Only set changed=true if you actually modified a field's value.
+- For ordering: when you correct values, verify the items+values pair makes sense, then sort both arrays so they're in orderingDirection order. orderingCorrectOrder MUST remain [1, 2, 3] or [1, 2, 3, 4].
+- Return ONLY the JSON object — no markdown fences, no commentary.`;
+
+/**
+ * Run the reviewer on a question payload. Never throws; falls back to
+ * { changed: false, status: "review_unavailable" | "review_error" }.
+ *
+ * Caller persists payload (corrected if changed) and writes a QuestionReviewLog row.
+ */
+export async function reviewQuestion(
+  payload: ReviewablePayload
+): Promise<ReviewerResult> {
+  const start = Date.now();
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return {
+      changed: false,
+      corrected: payload,
+      notes: "AI unavailable; reviewer skipped",
+      modelUsed: REVIEWER_MODEL,
+      latencyMs: Date.now() - start,
+      status: "review_unavailable",
+    };
+  }
+
+  // Build the user message — strip undefined fields so the model isn't confused.
+  const cleaned: ReviewablePayload = JSON.parse(JSON.stringify(payload));
+
+  try {
+    const anthropic = getClient();
+    const response = await Promise.race([
+      anthropic.messages.create({
+        model: REVIEWER_MODEL,
+        max_tokens: 800,
+        system: REVIEWER_SYSTEM_PROMPT,
+        messages: [
+          {
+            role: "user",
+            content: `Review this question payload:\n\n${JSON.stringify(cleaned, null, 2)}`,
+          },
+        ],
+      }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("reviewer_timeout")), REVIEWER_TIMEOUT_MS)
+      ),
+    ]);
+
+    const text = response.content[0]?.type === "text" ? response.content[0].text : "";
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) {
+      return {
+        changed: false,
+        corrected: payload,
+        notes: "reviewer returned no JSON",
+        modelUsed: REVIEWER_MODEL,
+        latencyMs: Date.now() - start,
+        status: "review_error",
+      };
+    }
+    const parsed = JSON.parse(match[0]) as {
+      changed?: boolean;
+      notes?: string;
+      corrected?: ReviewablePayload;
+    };
+
+    const corrected = parsed.corrected ?? payload;
+    // Defensive: keep critical invariants in place even if the model drifts.
+    if (
+      corrected.answerFormat === "ordering" &&
+      Array.isArray(corrected.orderingItems) &&
+      Array.isArray(corrected.orderingCorrectOrder)
+    ) {
+      const n = corrected.orderingItems.length;
+      corrected.orderingCorrectOrder = Array.from({ length: n }, (_, i) => i + 1);
+    }
+
+    return {
+      changed: !!parsed.changed,
+      corrected,
+      notes: (parsed.notes ?? "").slice(0, 240),
+      modelUsed: REVIEWER_MODEL,
+      latencyMs: Date.now() - start,
+      status: "ok",
+    };
+  } catch (err) {
+    const isTimeout = err instanceof Error && err.message === "reviewer_timeout";
+    return {
+      changed: false,
+      corrected: payload,
+      notes: isTimeout ? "reviewer timed out" : "reviewer error",
+      modelUsed: REVIEWER_MODEL,
+      latencyMs: Date.now() - start,
+      status: "review_error",
+    };
+  }
+}

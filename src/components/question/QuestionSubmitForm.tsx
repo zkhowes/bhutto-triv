@@ -788,7 +788,7 @@ export default function QuestionSubmitForm({
               </select>
             </div>
             <p className="text-xs text-[#666680]">
-              Enter items in the correct order (1st = position 1). Values are optional; when supplied, equal values count as ties when scoring.
+              Enter items in the correct order (1st = position 1). The <span className="font-semibold text-[#a0a0b8]">value</span> next to each item (year, population, etc.) is what the grader checks against — make sure each item&apos;s value is the right one for that item. Equal values count as ties.
             </p>
             {[
               { n: 1, value: orderingItem1, setter: setOrderingItem1, val: orderingValue1, valSetter: setOrderingValue1 },
