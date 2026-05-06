@@ -2,9 +2,30 @@
 
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { Fragment, useState, useEffect, useMemo, useCallback } from "react";
 import NavBar from "@/components/layout/NavBar";
 import ChartCard from "@/components/admin/ChartCard";
+
+type TabName =
+  | "monitoring"
+  | "leagues"
+  | "players"
+  | "commissioners"
+  | "games"
+  | "rounds"
+  | "questions"
+  | "notifications"
+  | "test";
+
+interface TabFilter {
+  leagueId?: string;
+  leagueName?: string;
+  gameId?: string;
+  gameNumber?: number;
+  playerUserId?: string;
+  playerName?: string;
+  commissionerUserId?: string;
+}
 
 interface AdminData {
   overview: {
@@ -20,59 +41,101 @@ interface AdminData {
     avgLeagueSize: number;
     gameCompletionRate: number;
   };
-  recentLeagues: Array<{
+  leagues: Array<{
     id: string;
     name: string;
     type: string;
     commissioner: string;
+    commissionerUserId: string | null;
     playerCount: number;
     currentSeason: number;
+    currentSeasonId: string | null;
     currentGame: number;
+    currentGameId: string | null;
     createdAt: string;
     isActive: boolean;
-  }>;
-  recentPlayers: Array<{
-    id: string;
-    nickname: string;
-    email: string;
-    leagueCount: number;
-    createdAt: string;
-    lastLogin: string | null;
-    questionSuccessRate: number | null;
-    questionAnswerCount: number;
+    notificationMode: string;
   }>;
   commissioners: Array<{
     id: string;
     nickname: string;
     email: string;
     leagueCount: number;
+    leagues: Array<{ id: string; name: string }>;
     totalPlayers: number;
     createdAt: string;
   }>;
-  recentGames: Array<{
+}
+
+interface PlayerMembership {
+  leaguePlayerId: string;
+  leagueId: string;
+  leagueName: string;
+  leagueIsActive: boolean;
+  leagueNotificationMode: string;
+  role: string;
+  isActive: boolean;
+  isPaused: boolean;
+  isFake: boolean;
+  effectiveLevel: string;
+}
+
+interface PlayerRow {
+  id: string;
+  nickname: string | null;
+  email: string | null;
+  phoneNumber: string | null;
+  hasPhone: boolean;
+  notificationPreference: string | null;
+  profileComplete: boolean;
+  createdAt: string;
+  lastLogin: string | null;
+  leagueCount: number;
+  memberships: PlayerMembership[];
+  recentNotifications: Array<{
     id: string;
-    number: number;
-    status: string;
-    league: { id: string; name: string };
-    season: { id: string; number: number };
-    totalRounds: number;
-    completedRounds: number;
-    startedAt: string | null;
-    completedAt: string | null;
+    type: string;
+    smsStatus: string | null;
+    smsSentAt: string | null;
+    createdAt: string;
   }>;
-  recentRounds: Array<{
-    id: string;
-    number: number;
-    status: string;
-    game: {
-      id: string;
-      number: number;
-      league: { id: string; name: string };
-    };
-    atBatPlayer: { nickname: string } | null;
-    category: string | null;
-    deadlineAt: string;
-  }>;
+  questionSuccessRate: number | null;
+  questionAnswerCount: number;
+}
+
+interface PlayersResponse {
+  players: PlayerRow[];
+  total: number;
+  page: number;
+  totalPages: number;
+  globalOverride: string;
+}
+
+interface GameRow {
+  id: string;
+  number: number;
+  status: string;
+  league: { id: string; name: string };
+  season: { id: string; number: number };
+  totalRounds: number;
+  completedRounds: number;
+  startedAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+}
+
+interface RoundRow {
+  id: string;
+  number: number;
+  status: string;
+  game: { id: string; number: number; league: { id: string; name: string } };
+  atBatPlayer: {
+    userId: string;
+    leaguePlayerId: string;
+    nickname: string;
+  } | null;
+  category: string | null;
+  deadlineAt: string;
 }
 
 interface SearchResult {
@@ -115,27 +178,41 @@ interface QuestionAnswer {
   answeredAt: string | null;
 }
 
+function formatPhone(p: string | null): string {
+  if (!p) return "";
+  const digits = p.replace(/\D/g, "");
+  if (digits.length === 10)
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  if (digits.length === 11 && digits.startsWith("1"))
+    return `(${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`;
+  return p;
+}
+
 export default function AdminPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [data, setData] = useState<AdminData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<
-    | "monitoring"
-    | "leagues"
-    | "players"
-    | "commissioners"
-    | "games"
-    | "rounds"
-    | "questions"
-    | "notifications"
-    | "test"
-  >("monitoring");
+  const [tab, setTab] = useState<TabName>("monitoring");
+  const [tabFilter, setTabFilter] = useState<TabFilter>({});
+
+  // Cross-tab navigation helper
+  const goTo = useCallback((nextTab: TabName, nextFilter: TabFilter = {}) => {
+    setTabFilter(nextFilter);
+    setTab(nextTab);
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, []);
+
+  const clearFilter = useCallback(() => setTabFilter({}), []);
 
   // Test tab state
   const [testPhone, setTestPhone] = useState("");
   const [testAppend, setTestAppend] = useState("");
-  const [testStatus, setTestStatus] = useState<Record<string, "idle" | "sending" | "sent" | "failed">>({});
+  const [testStatus, setTestStatus] = useState<
+    Record<string, "idle" | "sending" | "sent" | "failed">
+  >({});
 
   // Admin authentication derived from session
   const isAuthenticated = session?.user?.isSuperAdmin ?? null;
@@ -144,6 +221,34 @@ export default function AdminPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
+
+  // Per-tab text filters (client-side)
+  const [leaguesFilter, setLeaguesFilter] = useState("");
+  const [commissionersFilter, setCommissionersFilter] = useState("");
+
+  // Players tab state (server-side paginated/searched)
+  const [players, setPlayers] = useState<PlayerRow[]>([]);
+  const [playersTotal, setPlayersTotal] = useState(0);
+  const [playersTotalPages, setPlayersTotalPages] = useState(1);
+  const [playersPage, setPlayersPage] = useState(1);
+  const [playersQuery, setPlayersQuery] = useState("");
+  const [playersLoading, setPlayersLoading] = useState(false);
+  const [globalOverride, setGlobalOverride] = useState("commissioner");
+  const [expandedPlayerId, setExpandedPlayerId] = useState<string | null>(null);
+
+  // Games tab state
+  const [games, setGames] = useState<GameRow[]>([]);
+  const [gamesTotalPages, setGamesTotalPages] = useState(1);
+  const [gamesPage, setGamesPage] = useState(1);
+  const [gamesLoading, setGamesLoading] = useState(false);
+  const [gamesFilter, setGamesFilter] = useState("");
+
+  // Rounds tab state
+  const [rounds, setRounds] = useState<RoundRow[]>([]);
+  const [roundsTotalPages, setRoundsTotalPages] = useState(1);
+  const [roundsPage, setRoundsPage] = useState(1);
+  const [roundsLoading, setRoundsLoading] = useState(false);
+  const [roundsFilter, setRoundsFilter] = useState("");
 
   // Questions tab state
   const [questions, setQuestions] = useState<QuestionData[]>([]);
@@ -154,7 +259,10 @@ export default function AdminPage() {
   const [filterCategory, setFilterCategory] = useState("");
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
-  const [filterImage, setFilterImage] = useState<"all" | "with" | "without">("all");
+  const [filterImage, setFilterImage] = useState<"all" | "with" | "without">(
+    "all"
+  );
+  const [questionsTextFilter, setQuestionsTextFilter] = useState("");
 
   // Question details modal state
   const [selectedQuestion, setSelectedQuestion] = useState<QuestionData | null>(
@@ -169,7 +277,12 @@ export default function AdminPage() {
     totalSms: number;
     totalClicks: number;
     clickRate: number;
-    byType: Array<{ type: string; count: number; smsCount: number; clickCount: number }>;
+    byType: Array<{
+      type: string;
+      count: number;
+      smsCount: number;
+      clickCount: number;
+    }>;
     dailyTrend: Array<{ date: string; count: number; smsCount: number }>;
     globalOverride: string;
     recentNotifications: Array<{
@@ -192,7 +305,7 @@ export default function AdminPage() {
     if (status === "unauthenticated") router.push("/");
   }, [status, router]);
 
-  // Fetch admin data once authenticated
+  // Fetch admin overview data once authenticated
   useEffect(() => {
     if (isAuthenticated && session?.user) {
       fetch("/api/admin")
@@ -206,33 +319,112 @@ export default function AdminPage() {
     }
   }, [isAuthenticated, session]);
 
-  // Load questions when tab changes to questions
-  useEffect(() => {
-    if (tab === "questions" && isAuthenticated) {
-      loadQuestions();
+  // Players loader
+  const loadPlayers = useCallback(async () => {
+    setPlayersLoading(true);
+    try {
+      const params = new URLSearchParams({
+        page: playersPage.toString(),
+        limit: "50",
+      });
+      if (playersQuery.trim()) params.append("q", playersQuery.trim());
+      if (tabFilter.leagueId) params.append("leagueId", tabFilter.leagueId);
+      const res = await fetch(`/api/admin/players?${params}`);
+      const json: PlayersResponse = await res.json();
+      setPlayers(json.players || []);
+      setPlayersTotal(json.total || 0);
+      setPlayersTotalPages(json.totalPages || 1);
+      setGlobalOverride(json.globalOverride || "commissioner");
+    } catch (e) {
+      console.error("loadPlayers failed", e);
+    } finally {
+      setPlayersLoading(false);
     }
-  }, [tab, questionsPage, filterLeague, filterCategory, filterDateFrom, filterDateTo, isAuthenticated]);
+  }, [playersPage, playersQuery, tabFilter.leagueId]);
 
-  // Load notification stats when tab changes to notifications
   useEffect(() => {
-    if (tab === "notifications" && isAuthenticated) {
-      setNotifLoading(true);
-      fetch("/api/admin/notification-stats")
-        .then((r) => r.json())
-        .then((d) => setNotifStats(d))
-        .catch(() => {})
-        .finally(() => setNotifLoading(false));
+    if (tab === "players" && isAuthenticated) {
+      loadPlayers();
     }
-  }, [tab, isAuthenticated]);
+  }, [tab, isAuthenticated, loadPlayers]);
 
-  const loadQuestions = async () => {
+  // Reset page when filter changes
+  useEffect(() => {
+    setPlayersPage(1);
+  }, [playersQuery, tabFilter.leagueId]);
+
+  // Games loader
+  const loadGames = useCallback(async () => {
+    setGamesLoading(true);
+    try {
+      const params = new URLSearchParams({
+        page: gamesPage.toString(),
+        limit: "50",
+      });
+      if (tabFilter.leagueId) params.append("leagueId", tabFilter.leagueId);
+      const res = await fetch(`/api/admin/games?${params}`);
+      const json = await res.json();
+      setGames(json.games || []);
+      setGamesTotalPages(json.totalPages || 1);
+    } catch (e) {
+      console.error("loadGames failed", e);
+    } finally {
+      setGamesLoading(false);
+    }
+  }, [gamesPage, tabFilter.leagueId]);
+
+  useEffect(() => {
+    if (tab === "games" && isAuthenticated) loadGames();
+  }, [tab, isAuthenticated, loadGames]);
+
+  useEffect(() => {
+    setGamesPage(1);
+  }, [tabFilter.leagueId]);
+
+  // Rounds loader
+  const loadRounds = useCallback(async () => {
+    setRoundsLoading(true);
+    try {
+      const params = new URLSearchParams({
+        page: roundsPage.toString(),
+        limit: "50",
+      });
+      if (tabFilter.gameId) params.append("gameId", tabFilter.gameId);
+      else if (tabFilter.leagueId)
+        params.append("leagueId", tabFilter.leagueId);
+      if (tabFilter.playerUserId)
+        params.append("playerId", tabFilter.playerUserId);
+      const res = await fetch(`/api/admin/rounds?${params}`);
+      const json = await res.json();
+      setRounds(json.rounds || []);
+      setRoundsTotalPages(json.totalPages || 1);
+    } catch (e) {
+      console.error("loadRounds failed", e);
+    } finally {
+      setRoundsLoading(false);
+    }
+  }, [roundsPage, tabFilter.gameId, tabFilter.leagueId, tabFilter.playerUserId]);
+
+  useEffect(() => {
+    if (tab === "rounds" && isAuthenticated) loadRounds();
+  }, [tab, isAuthenticated, loadRounds]);
+
+  useEffect(() => {
+    setRoundsPage(1);
+  }, [tabFilter.gameId, tabFilter.leagueId, tabFilter.playerUserId]);
+
+  // Questions loader
+  const loadQuestions = useCallback(async () => {
     setQuestionsLoading(true);
     try {
       const params = new URLSearchParams({
         page: questionsPage.toString(),
         limit: "50",
       });
-      if (filterLeague) params.append("league", filterLeague);
+      const effectiveLeague = filterLeague || tabFilter.leagueId || "";
+      if (effectiveLeague) params.append("league", effectiveLeague);
+      if (tabFilter.playerUserId)
+        params.append("creatorUserId", tabFilter.playerUserId);
       if (filterCategory) params.append("category", filterCategory);
       if (filterDateFrom) params.append("dateFrom", filterDateFrom);
       if (filterDateTo) params.append("dateTo", filterDateTo);
@@ -246,48 +438,79 @@ export default function AdminPage() {
     } finally {
       setQuestionsLoading(false);
     }
-  };
+  }, [
+    questionsPage,
+    filterLeague,
+    filterCategory,
+    filterDateFrom,
+    filterDateTo,
+    tabFilter.leagueId,
+    tabFilter.playerUserId,
+  ]);
 
-  // Debounced search handler
-  const handleSearch = useCallback(
-    async (query: string) => {
-      if (query.length < 2) {
-        setSearchResults([]);
-        setShowSearchResults(false);
-        return;
-      }
+  useEffect(() => {
+    if (tab === "questions" && isAuthenticated) loadQuestions();
+  }, [tab, isAuthenticated, loadQuestions]);
 
-      try {
-        const res = await fetch(
-          `/api/admin/search?q=${encodeURIComponent(query)}&limit=20`
-        );
-        const data = await res.json();
-        setSearchResults(data.results || []);
-        setShowSearchResults(true);
-      } catch (error) {
-        console.error("Search error:", error);
-      }
-    },
-    []
-  );
+  useEffect(() => {
+    setQuestionsPage(1);
+  }, [tabFilter.leagueId, tabFilter.playerUserId]);
 
-  // Debounce search
+  // Load notification stats when tab changes to notifications
+  useEffect(() => {
+    if (tab === "notifications" && isAuthenticated) {
+      setNotifLoading(true);
+      fetch("/api/admin/notification-stats")
+        .then((r) => r.json())
+        .then((d) => setNotifStats(d))
+        .catch(() => {})
+        .finally(() => setNotifLoading(false));
+    }
+  }, [tab, isAuthenticated]);
+
+  // Debounced search
+  const handleSearch = useCallback(async (query: string) => {
+    if (query.length < 2) {
+      setSearchResults([]);
+      setShowSearchResults(false);
+      return;
+    }
+    try {
+      const res = await fetch(
+        `/api/admin/search?q=${encodeURIComponent(query)}&limit=20`
+      );
+      const data = await res.json();
+      setSearchResults(data.results || []);
+      setShowSearchResults(true);
+    } catch (error) {
+      console.error("Search error:", error);
+    }
+  }, []);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       handleSearch(searchQuery);
     }, 300);
-
     return () => clearTimeout(timer);
   }, [searchQuery, handleSearch]);
 
-  // Filtered questions by image filter
+  // Filtered questions by image filter and text
   const filteredQuestions = useMemo(() => {
-    if (filterImage === "with") return questions.filter((q) => q.imageUrl);
-    if (filterImage === "without") return questions.filter((q) => !q.imageUrl);
-    return questions;
-  }, [questions, filterImage]);
+    let q = questions;
+    if (filterImage === "with") q = q.filter((x) => x.imageUrl);
+    if (filterImage === "without") q = q.filter((x) => !x.imageUrl);
+    if (questionsTextFilter.trim()) {
+      const f = questionsTextFilter.trim().toLowerCase();
+      q = q.filter(
+        (x) =>
+          x.questionText.toLowerCase().includes(f) ||
+          (x.creator?.nickname?.toLowerCase().includes(f) ?? false) ||
+          (x.league?.name?.toLowerCase().includes(f) ?? false)
+      );
+    }
+    return q;
+  }, [questions, filterImage, questionsTextFilter]);
 
-  // Image stats computed from loaded questions
   const imageStats = useMemo(() => {
     const total = questions.length;
     const withImage = questions.filter((q) => q.imageUrl).length;
@@ -300,20 +523,70 @@ export default function AdminPage() {
     return { total, withImage, sources };
   }, [questions]);
 
+  // Filtered leagues / commissioners / games / rounds (client-side text filter)
+  const filteredLeagues = useMemo(() => {
+    if (!data) return [];
+    const f = leaguesFilter.trim().toLowerCase();
+    if (!f) return data.leagues;
+    return data.leagues.filter(
+      (l) =>
+        l.name.toLowerCase().includes(f) ||
+        l.commissioner.toLowerCase().includes(f) ||
+        l.type.toLowerCase().includes(f)
+    );
+  }, [data, leaguesFilter]);
+
+  const filteredCommissioners = useMemo(() => {
+    if (!data) return [];
+    const f = commissionersFilter.trim().toLowerCase();
+    if (!f) return data.commissioners;
+    return data.commissioners.filter(
+      (c) =>
+        (c.nickname?.toLowerCase().includes(f) ?? false) ||
+        (c.email?.toLowerCase().includes(f) ?? false)
+    );
+  }, [data, commissionersFilter]);
+
+  const filteredGames = useMemo(() => {
+    const f = gamesFilter.trim().toLowerCase();
+    if (!f) return games;
+    return games.filter(
+      (g) =>
+        g.league.name.toLowerCase().includes(f) ||
+        g.status.toLowerCase().includes(f) ||
+        `game ${g.number}`.toLowerCase().includes(f)
+    );
+  }, [games, gamesFilter]);
+
+  const filteredRounds = useMemo(() => {
+    const f = roundsFilter.trim().toLowerCase();
+    if (!f) return rounds;
+    return rounds.filter(
+      (r) =>
+        r.game.league.name.toLowerCase().includes(f) ||
+        r.status.toLowerCase().includes(f) ||
+        (r.atBatPlayer?.nickname.toLowerCase().includes(f) ?? false) ||
+        (r.category?.toLowerCase().includes(f) ?? false) ||
+        `r${r.number}`.includes(f)
+    );
+  }, [rounds, roundsFilter]);
+
   const handleResultClick = (result: SearchResult) => {
     switch (result.type) {
       case "player":
-        setTab("players");
+        goTo("players", { playerUserId: result.id, playerName: result.title });
+        setPlayersQuery(result.title.split(" ")[0] || "");
         break;
       case "league":
-        setTab("leagues");
+        goTo("leagues");
+        setLeaguesFilter(result.title);
         break;
       case "question":
-        setTab("questions");
-        // Could also open modal directly
+        goTo("questions");
+        setQuestionsTextFilter(result.title.slice(0, 30));
         break;
       case "game":
-        setTab("games");
+        goTo("games");
         break;
     }
     setShowSearchResults(false);
@@ -348,7 +621,8 @@ export default function AdminPage() {
   const [removingImage, setRemovingImage] = useState(false);
 
   const handleRemoveImage = async (questionId: string) => {
-    if (!confirm("Remove image from this question? This cannot be undone.")) return;
+    if (!confirm("Remove image from this question? This cannot be undone."))
+      return;
     setRemovingImage(true);
     try {
       const res = await fetch(`/api/admin/questions/${questionId}/image`, {
@@ -359,7 +633,6 @@ export default function AdminPage() {
         alert(`Failed: ${data.error || "Unknown error"}`);
         return;
       }
-      // Update local state
       setQuestions((prev) =>
         prev.map((q) =>
           q.id === questionId
@@ -392,13 +665,14 @@ export default function AdminPage() {
         alert(d.error || "Failed to rename league");
         return;
       }
-      // Update local state
       setData((prev) =>
         prev
           ? {
               ...prev,
-              recentLeagues: prev.recentLeagues.map((l) =>
-                l.id === leagueId ? { ...l, name: editingLeagueName.trim() } : l
+              leagues: prev.leagues.map((l) =>
+                l.id === leagueId
+                  ? { ...l, name: editingLeagueName.trim() }
+                  : l
               ),
             }
           : prev
@@ -421,10 +695,7 @@ export default function AdminPage() {
       }
       setData((prev) =>
         prev
-          ? {
-              ...prev,
-              recentLeagues: prev.recentLeagues.filter((l) => l.id !== leagueId),
-            }
+          ? { ...prev, leagues: prev.leagues.filter((l) => l.id !== leagueId) }
           : prev
       );
       setDeletingLeagueId(null);
@@ -444,7 +715,6 @@ export default function AdminPage() {
     );
   }
 
-  // Show access denied if not the admin user
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen">
@@ -477,6 +747,17 @@ export default function AdminPage() {
   }
 
   const { overview } = data;
+  const filterChip = (() => {
+    if (tabFilter.leagueName)
+      return { label: `League: ${tabFilter.leagueName}` };
+    if (tabFilter.gameNumber !== undefined && tabFilter.gameId)
+      return {
+        label: `Game ${tabFilter.gameNumber}`,
+      };
+    if (tabFilter.playerName)
+      return { label: `Player: ${tabFilter.playerName}` };
+    return null;
+  })();
 
   return (
     <div className="min-h-screen">
@@ -493,7 +774,9 @@ export default function AdminPage() {
             placeholder="Search players, leagues, games, questions..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            onFocus={() => searchResults.length > 0 && setShowSearchResults(true)}
+            onFocus={() =>
+              searchResults.length > 0 && setShowSearchResults(true)
+            }
             className="w-full px-4 py-3 bg-[#1e3a5f] border border-[#2a4a6f] rounded-lg text-white placeholder-[#666680] focus:outline-none focus:border-amber-500"
           />
           {showSearchResults && searchResults.length > 0 && (
@@ -530,7 +813,7 @@ export default function AdminPage() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-2 mb-6 overflow-x-auto">
+        <div className="flex gap-2 mb-4 overflow-x-auto">
           {(
             [
               "monitoring",
@@ -546,10 +829,12 @@ export default function AdminPage() {
           ).map((t) => (
             <button
               key={t}
-              onClick={() => setTab(t)}
+              onClick={() => goTo(t)}
               className={`px-4 py-2 rounded-lg text-sm font-medium capitalize whitespace-nowrap ${
                 tab === t
-                  ? t === "test" ? "bg-[#e94560] text-white" : "bg-amber-500 text-black"
+                  ? t === "test"
+                    ? "bg-[#e94560] text-white"
+                    : "bg-amber-500 text-black"
                   : "bg-[#1e3a5f] text-[#a0a0b8]"
               }`}
             >
@@ -558,9 +843,24 @@ export default function AdminPage() {
           ))}
         </div>
 
+        {/* Active filter chip */}
+        {filterChip && (
+          <div className="mb-4 flex items-center gap-2">
+            <span className="px-3 py-1 bg-amber-500/20 text-amber-400 rounded-full text-xs flex items-center gap-2">
+              {filterChip.label}
+              <button
+                onClick={clearFilter}
+                className="text-amber-400 hover:text-amber-300"
+                aria-label="Clear filter"
+              >
+                ✕
+              </button>
+            </span>
+          </div>
+        )}
+
         {tab === "monitoring" && (
           <>
-            {/* Stat Cards */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-8">
               {[
                 { label: "Total Players", value: overview.totalPlayers },
@@ -588,7 +888,6 @@ export default function AdminPage() {
               ))}
             </div>
 
-            {/* Charts */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <ChartCard title="New Players" metric="players" />
               <ChartCard title="Active Leagues" metric="leagues" />
@@ -599,316 +898,910 @@ export default function AdminPage() {
         )}
 
         {tab === "leagues" && (
-          <div className="card overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-[#1e3a5f]">
-                  <th className="table-header p-3 text-left">League</th>
-                  <th className="table-header p-3 text-left">Commissioner</th>
-                  <th className="table-header p-3 text-center">Players</th>
-                  <th className="table-header p-3 text-center">Type</th>
-                  <th className="table-header p-3 text-center">Season</th>
-                  <th className="table-header p-3 text-right">Created</th>
-                  <th className="table-header p-3 text-center">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.recentLeagues.map((l) => (
-                  <tr key={l.id} className="table-row">
-                    <td className="p-3 text-white text-sm">
-                      {editingLeagueId === l.id ? (
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            value={editingLeagueName}
-                            onChange={(e) => setEditingLeagueName(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") handleRenameLeague(l.id);
-                              if (e.key === "Escape") setEditingLeagueId(null);
-                            }}
-                            className="px-2 py-1 bg-[#0f0f23] border border-[#2a4a6f] rounded text-white text-sm focus:outline-none focus:border-amber-500 w-40"
-                            autoFocus
-                          />
-                          <button
-                            onClick={() => handleRenameLeague(l.id)}
-                            className="text-xs text-emerald-400 hover:text-emerald-300"
-                          >
-                            Save
-                          </button>
-                          <button
-                            onClick={() => setEditingLeagueId(null)}
-                            className="text-xs text-[#666680] hover:text-[#a0a0b8]"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
-                        l.name
-                      )}
-                    </td>
-                    <td className="p-3 text-[#a0a0b8] text-sm">
-                      {l.commissioner}
-                    </td>
-                    <td className="p-3 text-center text-sm text-[#a0a0b8]">
-                      {l.playerCount}
-                    </td>
-                    <td className="p-3 text-center">
-                      <span
-                        className={`badge ${
-                          l.type === "test"
-                            ? "bg-purple-500/20 text-purple-400"
-                            : "bg-blue-500/20 text-blue-400"
-                        }`}
-                      >
-                        {l.type}
-                      </span>
-                    </td>
-                    <td className="p-3 text-center text-sm text-[#a0a0b8]">
-                      S{l.currentSeason} G{l.currentGame}
-                    </td>
-                    <td className="p-3 text-right text-sm text-[#666680]">
-                      {new Date(l.createdAt).toLocaleDateString()}
-                    </td>
-                    <td className="p-3 text-center">
-                      {deletingLeagueId === l.id ? (
-                        <div className="flex items-center justify-center gap-2">
-                          <span className="text-xs text-red-400">Delete?</span>
-                          <button
-                            onClick={() => handleDeleteLeague(l.id)}
-                            className="px-2 py-1 bg-red-500/20 text-red-400 rounded text-xs hover:bg-red-500/30"
-                          >
-                            Yes
-                          </button>
-                          <button
-                            onClick={() => setDeletingLeagueId(null)}
-                            className="px-2 py-1 bg-[#1e3a5f] text-[#a0a0b8] rounded text-xs hover:bg-[#2a4a6f]"
-                          >
-                            No
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-center gap-2">
-                          <button
-                            onClick={() => {
-                              setEditingLeagueId(l.id);
-                              setEditingLeagueName(l.name);
-                            }}
-                            className="px-2 py-1 bg-amber-500/20 text-amber-400 rounded text-xs hover:bg-amber-500/30"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => setDeletingLeagueId(l.id)}
-                            className="px-2 py-1 bg-red-500/20 text-red-400 rounded text-xs hover:bg-red-500/30"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      )}
-                    </td>
+          <>
+            <div className="mb-3 flex flex-wrap gap-2 items-center">
+              <input
+                type="text"
+                placeholder="Filter leagues by name, commissioner, type…"
+                value={leaguesFilter}
+                onChange={(e) => setLeaguesFilter(e.target.value)}
+                className="px-3 py-2 bg-[#1e3a5f] border border-[#2a4a6f] rounded-lg text-white text-sm placeholder-[#666680] focus:outline-none focus:border-amber-500 flex-1 min-w-[260px]"
+              />
+              <span className="text-xs text-[#666680]">
+                {filteredLeagues.length} of {data.leagues.length}
+              </span>
+            </div>
+            <div className="card overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-[#1e3a5f]">
+                    <th className="table-header p-3 text-left">League</th>
+                    <th className="table-header p-3 text-left">Commissioner</th>
+                    <th className="table-header p-3 text-center">Players</th>
+                    <th className="table-header p-3 text-center">Type</th>
+                    <th className="table-header p-3 text-center">Notif Mode</th>
+                    <th className="table-header p-3 text-center">Season / Game</th>
+                    <th className="table-header p-3 text-right">Created</th>
+                    <th className="table-header p-3 text-center">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {filteredLeagues.map((l) => (
+                    <tr key={l.id} className="table-row">
+                      <td className="p-3 text-white text-sm">
+                        {editingLeagueId === l.id ? (
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={editingLeagueName}
+                              onChange={(e) =>
+                                setEditingLeagueName(e.target.value)
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") handleRenameLeague(l.id);
+                                if (e.key === "Escape")
+                                  setEditingLeagueId(null);
+                              }}
+                              className="px-2 py-1 bg-[#0f0f23] border border-[#2a4a6f] rounded text-white text-sm focus:outline-none focus:border-amber-500 w-40"
+                              autoFocus
+                            />
+                            <button
+                              onClick={() => handleRenameLeague(l.id)}
+                              className="text-xs text-emerald-400 hover:text-emerald-300"
+                            >
+                              Save
+                            </button>
+                            <button
+                              onClick={() => setEditingLeagueId(null)}
+                              className="text-xs text-[#666680] hover:text-[#a0a0b8]"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          l.name
+                        )}
+                      </td>
+                      <td className="p-3 text-[#a0a0b8] text-sm">
+                        {l.commissionerUserId ? (
+                          <button
+                            onClick={() =>
+                              goTo("players", {
+                                playerUserId: l.commissionerUserId!,
+                                playerName: l.commissioner,
+                              })
+                            }
+                            className="hover:text-amber-400 transition underline-offset-2 hover:underline text-left"
+                          >
+                            {l.commissioner}
+                          </button>
+                        ) : (
+                          l.commissioner
+                        )}
+                      </td>
+                      <td className="p-3 text-center text-sm">
+                        <button
+                          onClick={() =>
+                            goTo("players", {
+                              leagueId: l.id,
+                              leagueName: l.name,
+                            })
+                          }
+                          className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition text-xs"
+                          title={`Players in ${l.name}`}
+                        >
+                          {l.playerCount}
+                        </button>
+                      </td>
+                      <td className="p-3 text-center">
+                        <span
+                          className={`badge ${
+                            l.type === "test"
+                              ? "bg-purple-500/20 text-purple-400"
+                              : "bg-blue-500/20 text-blue-400"
+                          }`}
+                        >
+                          {l.type}
+                        </span>
+                      </td>
+                      <td className="p-3 text-center">
+                        <span
+                          className={`badge ${
+                            l.notificationMode === "none"
+                              ? "bg-red-500/20 text-red-400"
+                              : l.notificationMode === "high"
+                              ? "bg-amber-500/20 text-amber-400"
+                              : "bg-emerald-500/20 text-emerald-400"
+                          }`}
+                        >
+                          {l.notificationMode}
+                        </span>
+                      </td>
+                      <td className="p-3 text-center text-sm text-[#a0a0b8]">
+                        {l.currentGameId ? (
+                          <button
+                            onClick={() =>
+                              goTo("rounds", {
+                                gameId: l.currentGameId!,
+                                gameNumber: l.currentGame,
+                              })
+                            }
+                            className="hover:text-amber-400 transition underline-offset-2 hover:underline"
+                          >
+                            S{l.currentSeason} G{l.currentGame}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() =>
+                              goTo("games", {
+                                leagueId: l.id,
+                                leagueName: l.name,
+                              })
+                            }
+                            className="hover:text-amber-400 transition underline-offset-2 hover:underline"
+                          >
+                            S{l.currentSeason} G{l.currentGame}
+                          </button>
+                        )}
+                      </td>
+                      <td className="p-3 text-right text-sm text-[#666680]">
+                        {new Date(l.createdAt).toLocaleDateString()}
+                      </td>
+                      <td className="p-3 text-center">
+                        {deletingLeagueId === l.id ? (
+                          <div className="flex items-center justify-center gap-2">
+                            <span className="text-xs text-red-400">
+                              Delete?
+                            </span>
+                            <button
+                              onClick={() => handleDeleteLeague(l.id)}
+                              className="px-2 py-1 bg-red-500/20 text-red-400 rounded text-xs hover:bg-red-500/30"
+                            >
+                              Yes
+                            </button>
+                            <button
+                              onClick={() => setDeletingLeagueId(null)}
+                              className="px-2 py-1 bg-[#1e3a5f] text-[#a0a0b8] rounded text-xs hover:bg-[#2a4a6f]"
+                            >
+                              No
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => {
+                                setEditingLeagueId(l.id);
+                                setEditingLeagueName(l.name);
+                              }}
+                              className="px-2 py-1 bg-amber-500/20 text-amber-400 rounded text-xs hover:bg-amber-500/30"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => setDeletingLeagueId(l.id)}
+                              className="px-2 py-1 bg-red-500/20 text-red-400 rounded text-xs hover:bg-red-500/30"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
 
         {tab === "players" && (
-          <div className="card overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-[#1e3a5f]">
-                  <th className="table-header p-3 text-left">Player</th>
-                  <th className="table-header p-3 text-left">Email</th>
-                  <th className="table-header p-3 text-center">Leagues</th>
-                  <th className="table-header p-3 text-center">Q Success %</th>
-                  <th className="table-header p-3 text-right">Joined</th>
-                  <th className="table-header p-3 text-right">Last Login</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.recentPlayers.map((p) => (
-                  <tr key={p.id} className="table-row">
-                    <td className="p-3 text-white text-sm">
-                      {p.nickname || "—"}
-                    </td>
-                    <td className="p-3 text-[#a0a0b8] text-sm">{p.email}</td>
-                    <td className="p-3 text-center text-sm text-[#a0a0b8]">
-                      {p.leagueCount}
-                    </td>
-                    <td className="p-3 text-center text-sm text-[#a0a0b8]">
-                      {p.questionSuccessRate != null ? (
-                        <span title={`${p.questionAnswerCount} answers to their questions`}>
-                          {p.questionSuccessRate}%
-                        </span>
-                      ) : (
-                        <span className="text-[#666680]">—</span>
-                      )}
-                    </td>
-                    <td className="p-3 text-right text-sm text-[#666680]">
-                      {new Date(p.createdAt).toLocaleDateString()}
-                    </td>
-                    <td className="p-3 text-right text-sm text-[#666680]">
-                      {p.lastLogin
-                        ? new Date(p.lastLogin).toLocaleDateString()
-                        : "Never"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <>
+            <div className="mb-3 flex flex-wrap gap-2 items-center">
+              <input
+                type="text"
+                placeholder="Search players by name, email, phone…"
+                value={playersQuery}
+                onChange={(e) => setPlayersQuery(e.target.value)}
+                className="px-3 py-2 bg-[#1e3a5f] border border-[#2a4a6f] rounded-lg text-white text-sm placeholder-[#666680] focus:outline-none focus:border-amber-500 flex-1 min-w-[260px]"
+              />
+              <span className="text-xs text-[#666680]">
+                {playersTotal} player{playersTotal === 1 ? "" : "s"}
+                {globalOverride === "none" && (
+                  <span className="ml-2 text-red-400">
+                    Global override: NONE (all SMS suppressed)
+                  </span>
+                )}
+              </span>
+            </div>
+
+            {playersLoading ? (
+              <div className="card p-8 text-center">
+                <div className="animate-pulse text-[#a0a0b8]">Loading…</div>
+              </div>
+            ) : players.length === 0 ? (
+              <div className="card p-8 text-center text-[#666680]">
+                No players found
+              </div>
+            ) : (
+              <>
+                <div className="card overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-[#1e3a5f]">
+                        <th className="table-header p-3 text-left">Player</th>
+                        <th className="table-header p-3 text-left">Email</th>
+                        <th className="table-header p-3 text-left">Phone</th>
+                        <th
+                          className="table-header p-3 text-center"
+                          title="User-level notification preference (overrides league)"
+                        >
+                          Notif Pref
+                        </th>
+                        <th className="table-header p-3 text-center">
+                          Leagues
+                        </th>
+                        <th className="table-header p-3 text-center">
+                          Q Success %
+                        </th>
+                        <th className="table-header p-3 text-right">
+                          Last Login
+                        </th>
+                        <th className="table-header p-3 text-center"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {players.map((p) => {
+                        const expanded = expandedPlayerId === p.id;
+                        const anyMembershipInactive = p.memberships.some(
+                          (m) => !m.isActive
+                        );
+                        const lastSms = p.recentNotifications.find(
+                          (n) => n.smsStatus
+                        );
+                        return (
+                          <Fragment key={p.id}>
+                            <tr
+                              className="table-row cursor-pointer"
+                              onClick={() =>
+                                setExpandedPlayerId(expanded ? null : p.id)
+                              }
+                            >
+                              <td className="p-3 text-white text-sm">
+                                <div className="flex items-center gap-2">
+                                  <span>{p.nickname || "—"}</span>
+                                  {!p.profileComplete && (
+                                    <span
+                                      title="Profile incomplete"
+                                      className="text-xs text-amber-400"
+                                    >
+                                      ⚠
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="p-3 text-[#a0a0b8] text-sm">
+                                {p.email}
+                              </td>
+                              <td className="p-3 text-sm">
+                                {p.hasPhone ? (
+                                  <span className="text-[#a0a0b8]">
+                                    {formatPhone(p.phoneNumber)}
+                                  </span>
+                                ) : (
+                                  <span className="text-red-400 text-xs">
+                                    no phone
+                                  </span>
+                                )}
+                                {lastSms && (
+                                  <span
+                                    className={`ml-2 text-xs ${
+                                      lastSms.smsStatus === "sent"
+                                        ? "text-emerald-400"
+                                        : "text-red-400"
+                                    }`}
+                                    title={`Last SMS: ${lastSms.smsStatus}`}
+                                  >
+                                    {lastSms.smsStatus === "sent"
+                                      ? "✓"
+                                      : "✗"}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="p-3 text-center text-xs">
+                                {p.notificationPreference ? (
+                                  <span
+                                    className={`badge ${
+                                      p.notificationPreference === "none"
+                                        ? "bg-red-500/20 text-red-400"
+                                        : p.notificationPreference === "high"
+                                        ? "bg-amber-500/20 text-amber-400"
+                                        : "bg-emerald-500/20 text-emerald-400"
+                                    }`}
+                                  >
+                                    {p.notificationPreference}
+                                  </span>
+                                ) : (
+                                  <span className="text-[#666680]">—</span>
+                                )}
+                              </td>
+                              <td className="p-3 text-center text-sm">
+                                <span
+                                  className={
+                                    anyMembershipInactive
+                                      ? "text-amber-400"
+                                      : "text-[#a0a0b8]"
+                                  }
+                                  title={
+                                    anyMembershipInactive
+                                      ? "Has inactive league memberships"
+                                      : ""
+                                  }
+                                >
+                                  {p.leagueCount}
+                                  {anyMembershipInactive && " ⚠"}
+                                </span>
+                              </td>
+                              <td className="p-3 text-center text-sm">
+                                {p.questionSuccessRate != null ? (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      goTo("questions", {
+                                        playerUserId: p.id,
+                                        playerName:
+                                          p.nickname || p.email || "Player",
+                                      });
+                                    }}
+                                    className="text-[#a0a0b8] hover:text-amber-400 transition underline-offset-2 hover:underline"
+                                    title={`${p.questionAnswerCount} answers to their questions — view all`}
+                                  >
+                                    {p.questionSuccessRate}%
+                                  </button>
+                                ) : (
+                                  <span className="text-[#666680]">—</span>
+                                )}
+                              </td>
+                              <td className="p-3 text-right text-sm text-[#666680]">
+                                {p.lastLogin
+                                  ? new Date(p.lastLogin).toLocaleDateString()
+                                  : "Never"}
+                              </td>
+                              <td className="p-3 text-center text-xs text-[#666680]">
+                                {expanded ? "▾" : "▸"}
+                              </td>
+                            </tr>
+                            {expanded && (
+                              <tr className="bg-[#0f1d31]">
+                                <td colSpan={8} className="p-4">
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {/* Memberships */}
+                                    <div>
+                                      <h4 className="text-xs uppercase tracking-wider text-[#a0a0b8] mb-2">
+                                        League Memberships
+                                      </h4>
+                                      {p.memberships.length === 0 ? (
+                                        <div className="text-xs text-[#666680]">
+                                          Not in any league
+                                        </div>
+                                      ) : (
+                                        <div className="space-y-1">
+                                          {p.memberships.map((m) => (
+                                            <div
+                                              key={m.leaguePlayerId}
+                                              className="flex items-center justify-between gap-2 px-3 py-2 bg-[#1e3a5f] rounded text-xs"
+                                            >
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  goTo("leagues");
+                                                  setLeaguesFilter(
+                                                    m.leagueName
+                                                  );
+                                                }}
+                                                className="text-white hover:text-amber-400 transition text-left flex-1 truncate"
+                                              >
+                                                {m.leagueName}
+                                                {m.role === "commissioner" && (
+                                                  <span className="ml-1 text-amber-400">
+                                                    (C)
+                                                  </span>
+                                                )}
+                                              </button>
+                                              <div className="flex items-center gap-1">
+                                                {!m.isActive && (
+                                                  <span className="px-1.5 py-0.5 bg-red-500/20 text-red-400 rounded text-[10px]">
+                                                    inactive
+                                                  </span>
+                                                )}
+                                                {m.isPaused && (
+                                                  <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-400 rounded text-[10px]">
+                                                    paused
+                                                  </span>
+                                                )}
+                                                {m.isFake && (
+                                                  <span className="px-1.5 py-0.5 bg-purple-500/20 text-purple-400 rounded text-[10px]">
+                                                    fake
+                                                  </span>
+                                                )}
+                                                <span
+                                                  className={`px-1.5 py-0.5 rounded text-[10px] ${
+                                                    m.effectiveLevel === "none"
+                                                      ? "bg-red-500/20 text-red-400"
+                                                      : m.effectiveLevel ===
+                                                        "high"
+                                                      ? "bg-amber-500/20 text-amber-400"
+                                                      : "bg-emerald-500/20 text-emerald-400"
+                                                  }`}
+                                                  title={`Effective notification level (league mode: ${m.leagueNotificationMode})`}
+                                                >
+                                                  {m.effectiveLevel}
+                                                </span>
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {/* Recent notifications */}
+                                    <div>
+                                      <h4 className="text-xs uppercase tracking-wider text-[#a0a0b8] mb-2">
+                                        Recent Notifications (last 5)
+                                      </h4>
+                                      {p.recentNotifications.length === 0 ? (
+                                        <div className="text-xs text-[#666680]">
+                                          No notifications recorded
+                                        </div>
+                                      ) : (
+                                        <div className="space-y-1">
+                                          {p.recentNotifications.map((n) => (
+                                            <div
+                                              key={n.id}
+                                              className="flex items-center justify-between gap-2 px-3 py-2 bg-[#1e3a5f] rounded text-xs"
+                                            >
+                                              <span className="text-[#a0a0b8] capitalize">
+                                                {n.type.replace(/_/g, " ")}
+                                              </span>
+                                              <div className="flex items-center gap-2">
+                                                <span
+                                                  className={`text-[10px] ${
+                                                    n.smsStatus === "sent"
+                                                      ? "text-emerald-400"
+                                                      : n.smsStatus === "failed"
+                                                      ? "text-red-400"
+                                                      : "text-[#666680]"
+                                                  }`}
+                                                >
+                                                  SMS {n.smsStatus ?? "—"}
+                                                </span>
+                                                <span className="text-[#666680] text-[10px]">
+                                                  {new Date(
+                                                    n.createdAt
+                                                  ).toLocaleDateString()}
+                                                </span>
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Diagnostic banner */}
+                                  {(!p.hasPhone ||
+                                    anyMembershipInactive ||
+                                    p.notificationPreference === "none") && (
+                                    <div className="mt-3 p-3 bg-amber-500/10 border border-amber-500/30 rounded text-xs text-amber-300">
+                                      <strong>Diagnosis:</strong>{" "}
+                                      {!p.hasPhone &&
+                                        "No phone number on file — SMS will never send. "}
+                                      {p.notificationPreference === "none" &&
+                                        "User has notifications disabled at profile level. "}
+                                      {anyMembershipInactive &&
+                                        "Has at least one inactive LeaguePlayer record — recipient filters will skip them in those leagues."}
+                                    </div>
+                                  )}
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {playersTotalPages > 1 && (
+                  <div className="mt-4 flex justify-center items-center gap-2">
+                    <button
+                      onClick={() =>
+                        setPlayersPage((p) => Math.max(1, p - 1))
+                      }
+                      disabled={playersPage === 1}
+                      className="px-3 py-1 bg-[#1e3a5f] text-white rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#2a4a6f] transition"
+                    >
+                      Previous
+                    </button>
+                    <span className="text-sm text-[#a0a0b8]">
+                      Page {playersPage} of {playersTotalPages}
+                    </span>
+                    <button
+                      onClick={() =>
+                        setPlayersPage((p) =>
+                          Math.min(playersTotalPages, p + 1)
+                        )
+                      }
+                      disabled={playersPage === playersTotalPages}
+                      className="px-3 py-1 bg-[#1e3a5f] text-white rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#2a4a6f] transition"
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </>
         )}
 
         {tab === "commissioners" && (
-          <div className="card overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-[#1e3a5f]">
-                  <th className="table-header p-3 text-left">Name</th>
-                  <th className="table-header p-3 text-left">Email</th>
-                  <th className="table-header p-3 text-center">
-                    Leagues Managed
-                  </th>
-                  <th className="table-header p-3 text-center">
-                    Total Players
-                  </th>
-                  <th className="table-header p-3 text-right">Joined</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.commissioners.map((c) => (
-                  <tr key={c.id} className="table-row">
-                    <td className="p-3 text-white text-sm">
-                      {c.nickname || "—"}
-                    </td>
-                    <td className="p-3 text-[#a0a0b8] text-sm">{c.email}</td>
-                    <td className="p-3 text-center text-sm text-[#a0a0b8]">
-                      {c.leagueCount}
-                    </td>
-                    <td className="p-3 text-center text-sm text-[#a0a0b8]">
-                      {c.totalPlayers}
-                    </td>
-                    <td className="p-3 text-right text-sm text-[#666680]">
-                      {new Date(c.createdAt).toLocaleDateString()}
-                    </td>
+          <>
+            <div className="mb-3 flex flex-wrap gap-2 items-center">
+              <input
+                type="text"
+                placeholder="Filter commissioners…"
+                value={commissionersFilter}
+                onChange={(e) => setCommissionersFilter(e.target.value)}
+                className="px-3 py-2 bg-[#1e3a5f] border border-[#2a4a6f] rounded-lg text-white text-sm placeholder-[#666680] focus:outline-none focus:border-amber-500 flex-1 min-w-[260px]"
+              />
+              <span className="text-xs text-[#666680]">
+                {filteredCommissioners.length} of {data.commissioners.length}
+              </span>
+            </div>
+            <div className="card overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-[#1e3a5f]">
+                    <th className="table-header p-3 text-left">Name</th>
+                    <th className="table-header p-3 text-left">Email</th>
+                    <th className="table-header p-3 text-center">
+                      Leagues Managed
+                    </th>
+                    <th className="table-header p-3 text-center">
+                      Total Players
+                    </th>
+                    <th className="table-header p-3 text-right">Joined</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {filteredCommissioners.map((c) => (
+                    <tr key={c.id} className="table-row">
+                      <td className="p-3 text-white text-sm">
+                        <button
+                          onClick={() =>
+                            goTo("players", {
+                              playerUserId: c.id,
+                              playerName: c.nickname || c.email || "Player",
+                            })
+                          }
+                          className="hover:text-amber-400 transition underline-offset-2 hover:underline text-left"
+                        >
+                          {c.nickname || "—"}
+                        </button>
+                      </td>
+                      <td className="p-3 text-[#a0a0b8] text-sm">{c.email}</td>
+                      <td className="p-3 text-center text-sm text-[#a0a0b8]">
+                        <div className="flex flex-wrap justify-center gap-1">
+                          {c.leagues.map((l) => (
+                            <button
+                              key={l.id}
+                              onClick={() => {
+                                goTo("leagues");
+                                setLeaguesFilter(l.name);
+                              }}
+                              className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 text-xs"
+                            >
+                              {l.name}
+                            </button>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="p-3 text-center text-sm text-[#a0a0b8]">
+                        {c.totalPlayers}
+                      </td>
+                      <td className="p-3 text-right text-sm text-[#666680]">
+                        {new Date(c.createdAt).toLocaleDateString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
 
         {tab === "games" && (
-          <div className="card overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-[#1e3a5f]">
-                  <th className="table-header p-3 text-left">Game</th>
-                  <th className="table-header p-3 text-left">League</th>
-                  <th className="table-header p-3 text-center">Season</th>
-                  <th className="table-header p-3 text-center">Status</th>
-                  <th className="table-header p-3 text-center">Rounds</th>
-                  <th className="table-header p-3 text-right">Started</th>
-                  <th className="table-header p-3 text-right">Completed</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.recentGames.map((g) => (
-                  <tr key={g.id} className="table-row">
-                    <td className="p-3 text-white text-sm">Game {g.number}</td>
-                    <td className="p-3 text-[#a0a0b8] text-sm">
-                      {g.league.name}
-                    </td>
-                    <td className="p-3 text-center text-sm text-[#a0a0b8]">
-                      {g.season.number}
-                    </td>
-                    <td className="p-3 text-center">
-                      <span
-                        className={`badge ${
-                          g.status === "completed"
-                            ? "bg-green-500/20 text-green-400"
-                            : g.status === "active"
-                            ? "bg-blue-500/20 text-blue-400"
-                            : "bg-gray-500/20 text-gray-400"
-                        }`}
-                      >
-                        {g.status}
-                      </span>
-                    </td>
-                    <td className="p-3 text-center text-sm text-[#a0a0b8]">
-                      {g.completedRounds} / {g.totalRounds}
-                    </td>
-                    <td className="p-3 text-right text-sm text-[#666680]">
-                      {g.startedAt
-                        ? new Date(g.startedAt).toLocaleDateString()
-                        : "—"}
-                    </td>
-                    <td className="p-3 text-right text-sm text-[#666680]">
-                      {g.completedAt
-                        ? new Date(g.completedAt).toLocaleDateString()
-                        : "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <>
+            <div className="mb-3 flex flex-wrap gap-2 items-center">
+              <input
+                type="text"
+                placeholder="Filter games by league, status…"
+                value={gamesFilter}
+                onChange={(e) => setGamesFilter(e.target.value)}
+                className="px-3 py-2 bg-[#1e3a5f] border border-[#2a4a6f] rounded-lg text-white text-sm placeholder-[#666680] focus:outline-none focus:border-amber-500 flex-1 min-w-[260px]"
+              />
+            </div>
+            {gamesLoading ? (
+              <div className="card p-8 text-center">
+                <div className="animate-pulse text-[#a0a0b8]">Loading…</div>
+              </div>
+            ) : (
+              <>
+                <div className="card overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-[#1e3a5f]">
+                        <th className="table-header p-3 text-left">Game</th>
+                        <th className="table-header p-3 text-left">League</th>
+                        <th className="table-header p-3 text-center">Season</th>
+                        <th className="table-header p-3 text-center">Status</th>
+                        <th className="table-header p-3 text-center">Rounds</th>
+                        <th className="table-header p-3 text-right">Started</th>
+                        <th className="table-header p-3 text-right">
+                          Completed
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredGames.map((g) => (
+                        <tr key={g.id} className="table-row">
+                          <td className="p-3 text-white text-sm">
+                            <button
+                              onClick={() =>
+                                goTo("rounds", {
+                                  gameId: g.id,
+                                  gameNumber: g.number,
+                                })
+                              }
+                              className="hover:text-amber-400 transition underline-offset-2 hover:underline"
+                            >
+                              Game {g.number}
+                            </button>
+                          </td>
+                          <td className="p-3 text-[#a0a0b8] text-sm">
+                            <button
+                              onClick={() => {
+                                goTo("leagues");
+                                setLeaguesFilter(g.league.name);
+                              }}
+                              className="hover:text-amber-400 transition underline-offset-2 hover:underline"
+                            >
+                              {g.league.name}
+                            </button>
+                          </td>
+                          <td className="p-3 text-center text-sm text-[#a0a0b8]">
+                            {g.season.number}
+                          </td>
+                          <td className="p-3 text-center">
+                            <span
+                              className={`badge ${
+                                g.status === "completed"
+                                  ? "bg-green-500/20 text-green-400"
+                                  : g.status === "active"
+                                  ? "bg-blue-500/20 text-blue-400"
+                                  : "bg-gray-500/20 text-gray-400"
+                              }`}
+                            >
+                              {g.status}
+                            </span>
+                          </td>
+                          <td className="p-3 text-center text-sm">
+                            <button
+                              onClick={() =>
+                                goTo("rounds", {
+                                  gameId: g.id,
+                                  gameNumber: g.number,
+                                })
+                              }
+                              className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 text-xs"
+                            >
+                              {g.completedRounds} / {g.totalRounds}
+                            </button>
+                          </td>
+                          <td className="p-3 text-right text-sm text-[#666680]">
+                            {g.startedAt
+                              ? new Date(g.startedAt).toLocaleDateString()
+                              : "—"}
+                          </td>
+                          <td className="p-3 text-right text-sm text-[#666680]">
+                            {g.completedAt
+                              ? new Date(g.completedAt).toLocaleDateString()
+                              : "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {gamesTotalPages > 1 && (
+                  <div className="mt-4 flex justify-center items-center gap-2">
+                    <button
+                      onClick={() => setGamesPage((p) => Math.max(1, p - 1))}
+                      disabled={gamesPage === 1}
+                      className="px-3 py-1 bg-[#1e3a5f] text-white rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#2a4a6f] transition"
+                    >
+                      Previous
+                    </button>
+                    <span className="text-sm text-[#a0a0b8]">
+                      Page {gamesPage} of {gamesTotalPages}
+                    </span>
+                    <button
+                      onClick={() =>
+                        setGamesPage((p) => Math.min(gamesTotalPages, p + 1))
+                      }
+                      disabled={gamesPage === gamesTotalPages}
+                      className="px-3 py-1 bg-[#1e3a5f] text-white rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#2a4a6f] transition"
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </>
         )}
 
         {tab === "rounds" && (
-          <div className="card overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-[#1e3a5f]">
-                  <th className="table-header p-3 text-left">Round</th>
-                  <th className="table-header p-3 text-left">Game / League</th>
-                  <th className="table-header p-3 text-left">At Bat</th>
-                  <th className="table-header p-3 text-center">Status</th>
-                  <th className="table-header p-3 text-left">Category</th>
-                  <th className="table-header p-3 text-right">Deadline</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.recentRounds.map((r) => (
-                  <tr key={r.id} className="table-row">
-                    <td className="p-3 text-white text-sm">R{r.number}</td>
-                    <td className="p-3 text-[#a0a0b8] text-sm">
-                      {r.game.league.name} (G{r.game.number})
-                    </td>
-                    <td className="p-3 text-[#a0a0b8] text-sm">
-                      {r.atBatPlayer?.nickname || "—"}
-                    </td>
-                    <td className="p-3 text-center">
-                      <span
-                        className={`badge ${
-                          r.status === "graded"
-                            ? "bg-green-500/20 text-green-400"
-                            : r.status === "category_revealed"
-                            ? "bg-blue-500/20 text-blue-400"
-                            : "bg-gray-500/20 text-gray-400"
-                        }`}
-                      >
-                        {r.status}
-                      </span>
-                    </td>
-                    <td className="p-3 text-[#a0a0b8] text-sm">
-                      {r.category || "—"}
-                    </td>
-                    <td className="p-3 text-right text-sm text-[#666680]">
-                      {new Date(r.deadlineAt).toLocaleDateString()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <>
+            <div className="mb-3 flex flex-wrap gap-2 items-center">
+              <input
+                type="text"
+                placeholder="Filter rounds by league, status, player, category…"
+                value={roundsFilter}
+                onChange={(e) => setRoundsFilter(e.target.value)}
+                className="px-3 py-2 bg-[#1e3a5f] border border-[#2a4a6f] rounded-lg text-white text-sm placeholder-[#666680] focus:outline-none focus:border-amber-500 flex-1 min-w-[260px]"
+              />
+            </div>
+            {roundsLoading ? (
+              <div className="card p-8 text-center">
+                <div className="animate-pulse text-[#a0a0b8]">Loading…</div>
+              </div>
+            ) : (
+              <>
+                <div className="card overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-[#1e3a5f]">
+                        <th className="table-header p-3 text-left">Round</th>
+                        <th className="table-header p-3 text-left">
+                          Game / League
+                        </th>
+                        <th className="table-header p-3 text-left">At Bat</th>
+                        <th className="table-header p-3 text-center">Status</th>
+                        <th className="table-header p-3 text-left">Category</th>
+                        <th className="table-header p-3 text-right">
+                          Deadline
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredRounds.map((r) => (
+                        <tr key={r.id} className="table-row">
+                          <td className="p-3 text-white text-sm">
+                            <a
+                              href={`/games/${r.game.id}?round=${r.id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="hover:text-amber-400 transition underline-offset-2 hover:underline"
+                              title="Open round in new tab"
+                            >
+                              R{r.number}
+                            </a>
+                          </td>
+                          <td className="p-3 text-[#a0a0b8] text-sm">
+                            <button
+                              onClick={() => {
+                                goTo("leagues");
+                                setLeaguesFilter(r.game.league.name);
+                              }}
+                              className="hover:text-amber-400 transition underline-offset-2 hover:underline"
+                            >
+                              {r.game.league.name}
+                            </button>{" "}
+                            <button
+                              onClick={() =>
+                                goTo("rounds", {
+                                  gameId: r.game.id,
+                                  gameNumber: r.game.number,
+                                })
+                              }
+                              className="hover:text-amber-400 transition underline-offset-2 hover:underline"
+                            >
+                              (G{r.game.number})
+                            </button>
+                          </td>
+                          <td className="p-3 text-[#a0a0b8] text-sm">
+                            {r.atBatPlayer ? (
+                              <button
+                                onClick={() =>
+                                  goTo("players", {
+                                    playerUserId: r.atBatPlayer!.userId,
+                                    playerName: r.atBatPlayer!.nickname,
+                                  })
+                                }
+                                className="hover:text-amber-400 transition underline-offset-2 hover:underline"
+                              >
+                                {r.atBatPlayer.nickname}
+                              </button>
+                            ) : (
+                              "—"
+                            )}
+                          </td>
+                          <td className="p-3 text-center">
+                            <span
+                              className={`badge ${
+                                r.status === "graded"
+                                  ? "bg-green-500/20 text-green-400"
+                                  : r.status === "category_revealed"
+                                  ? "bg-blue-500/20 text-blue-400"
+                                  : "bg-gray-500/20 text-gray-400"
+                              }`}
+                            >
+                              {r.status}
+                            </span>
+                          </td>
+                          <td className="p-3 text-[#a0a0b8] text-sm">
+                            {r.category || "—"}
+                          </td>
+                          <td className="p-3 text-right text-sm text-[#666680]">
+                            {new Date(r.deadlineAt).toLocaleDateString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {roundsTotalPages > 1 && (
+                  <div className="mt-4 flex justify-center items-center gap-2">
+                    <button
+                      onClick={() => setRoundsPage((p) => Math.max(1, p - 1))}
+                      disabled={roundsPage === 1}
+                      className="px-3 py-1 bg-[#1e3a5f] text-white rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#2a4a6f] transition"
+                    >
+                      Previous
+                    </button>
+                    <span className="text-sm text-[#a0a0b8]">
+                      Page {roundsPage} of {roundsTotalPages}
+                    </span>
+                    <button
+                      onClick={() =>
+                        setRoundsPage((p) =>
+                          Math.min(roundsTotalPages, p + 1)
+                        )
+                      }
+                      disabled={roundsPage === roundsTotalPages}
+                      className="px-3 py-1 bg-[#1e3a5f] text-white rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#2a4a6f] transition"
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </>
         )}
 
         {tab === "questions" && (
           <>
             {/* Filter controls */}
             <div className="mb-4 flex flex-wrap gap-3">
+              <input
+                type="text"
+                placeholder="Filter loaded questions (text, creator, league)…"
+                value={questionsTextFilter}
+                onChange={(e) => setQuestionsTextFilter(e.target.value)}
+                className="px-3 py-2 bg-[#1e3a5f] border border-[#2a4a6f] rounded-lg text-white text-sm placeholder-[#666680] focus:outline-none focus:border-amber-500 flex-1 min-w-[240px]"
+              />
+
               <select
                 value={filterLeague}
                 onChange={(e) => {
@@ -918,7 +1811,7 @@ export default function AdminPage() {
                 className="px-3 py-2 bg-[#1e3a5f] border border-[#2a4a6f] rounded-lg text-white text-sm focus:outline-none focus:border-amber-500"
               >
                 <option value="">All Leagues</option>
-                {data.recentLeagues.map((l) => (
+                {data.leagues.map((l) => (
                   <option key={l.id} value={l.id}>
                     {l.name}
                   </option>
@@ -956,7 +1849,6 @@ export default function AdminPage() {
                 className="px-3 py-2 bg-[#1e3a5f] border border-[#2a4a6f] rounded-lg text-white text-sm focus:outline-none focus:border-amber-500"
               />
 
-              {/* Image filter pills */}
               <div className="flex gap-1">
                 {(["all", "with", "without"] as const).map((opt) => (
                   <button
@@ -968,7 +1860,11 @@ export default function AdminPage() {
                         : "bg-[#1e3a5f] text-[#a0a0b8] hover:bg-[#2a4a6f]"
                     }`}
                   >
-                    {opt === "all" ? "All" : opt === "with" ? "With Image" : "Without Image"}
+                    {opt === "all"
+                      ? "All"
+                      : opt === "with"
+                      ? "With Image"
+                      : "Without Image"}
                   </button>
                 ))}
               </div>
@@ -976,14 +1872,18 @@ export default function AdminPage() {
               {(filterLeague ||
                 filterCategory ||
                 filterDateFrom ||
-                filterDateTo) && (
+                filterDateTo ||
+                questionsTextFilter ||
+                tabFilter.playerUserId) && (
                 <button
                   onClick={() => {
                     setFilterLeague("");
                     setFilterCategory("");
                     setFilterDateFrom("");
                     setFilterDateTo("");
+                    setQuestionsTextFilter("");
                     setQuestionsPage(1);
+                    if (tabFilter.playerUserId) clearFilter();
                   }}
                   className="px-3 py-2 bg-red-500/20 text-red-400 rounded-lg text-sm hover:bg-red-500/30 transition"
                 >
@@ -992,29 +1892,40 @@ export default function AdminPage() {
               )}
             </div>
 
-            {/* Image stats summary */}
             {!questionsLoading && questions.length > 0 && (
               <div className="mb-4 p-4 bg-[#1e3a5f] rounded-lg border border-[#2a4a6f]">
                 <div className="flex flex-wrap gap-6 text-sm">
                   <div>
-                    <span className="text-[#a0a0b8]">Questions with images: </span>
+                    <span className="text-[#a0a0b8]">
+                      Questions with images:{" "}
+                    </span>
                     <span className="text-white font-medium">
                       {imageStats.withImage} / {imageStats.total}
                       {imageStats.total > 0 && (
                         <span className="text-[#666680] ml-1">
-                          ({Math.round((imageStats.withImage / imageStats.total) * 100)}%)
+                          (
+                          {Math.round(
+                            (imageStats.withImage / imageStats.total) * 100
+                          )}
+                          %)
                         </span>
                       )}
                     </span>
                   </div>
                   {Object.entries(imageStats.sources).length > 0 && (
                     <div className="flex gap-4">
-                      {Object.entries(imageStats.sources).map(([src, count]) => (
-                        <span key={src}>
-                          <span className="text-[#a0a0b8] capitalize">{src}: </span>
-                          <span className="text-white font-medium">{count}</span>
-                        </span>
-                      ))}
+                      {Object.entries(imageStats.sources).map(
+                        ([src, count]) => (
+                          <span key={src}>
+                            <span className="text-[#a0a0b8] capitalize">
+                              {src}:{" "}
+                            </span>
+                            <span className="text-white font-medium">
+                              {count}
+                            </span>
+                          </span>
+                        )
+                      )}
                     </div>
                   )}
                 </div>
@@ -1068,7 +1979,19 @@ export default function AdminPage() {
                             {q.creator?.nickname || "—"}
                           </td>
                           <td className="p-3 text-[#a0a0b8] text-sm">
-                            {q.league?.name || "—"}
+                            {q.league ? (
+                              <button
+                                onClick={() => {
+                                  goTo("leagues");
+                                  setLeaguesFilter(q.league!.name);
+                                }}
+                                className="hover:text-amber-400 transition underline-offset-2 hover:underline"
+                              >
+                                {q.league.name}
+                              </button>
+                            ) : (
+                              "—"
+                            )}
                           </td>
                           <td className="p-3 text-center">
                             {q.imageUrl ? (
@@ -1109,7 +2032,6 @@ export default function AdminPage() {
                   </table>
                 </div>
 
-                {/* Pagination */}
                 {questionsTotalPages > 1 && (
                   <div className="mt-4 flex justify-center items-center gap-2">
                     <button
@@ -1178,7 +2100,11 @@ export default function AdminPage() {
                 </p>
                 {selectedQuestion.imageUrl && (
                   <div className="mt-4 flex items-start gap-4">
-                    <button onClick={() => setExpandedImageUrl(selectedQuestion.imageUrl!)}>
+                    <button
+                      onClick={() =>
+                        setExpandedImageUrl(selectedQuestion.imageUrl!)
+                      }
+                    >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={selectedQuestion.imageUrl}
@@ -1190,7 +2116,9 @@ export default function AdminPage() {
                       {selectedQuestion.imageSource && (
                         <p className="text-sm text-[#a0a0b8]">
                           <strong>Image source:</strong>{" "}
-                          <span className="capitalize">{selectedQuestion.imageSource}</span>
+                          <span className="capitalize">
+                            {selectedQuestion.imageSource}
+                          </span>
                         </p>
                       )}
                       <button
@@ -1301,7 +2229,6 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* Expanded image lightbox */}
         {expandedImageUrl && (
           <div
             className="fixed inset-0 bg-black/90 flex items-center justify-center z-[60] p-4"
@@ -1321,12 +2248,14 @@ export default function AdminPage() {
         {tab === "test" && (
           <div className="space-y-6 max-w-2xl">
             <div className="bg-[#1e3a5f] rounded-lg p-5 border border-[#2a4a6f]">
-              <h2 className="text-base font-semibold text-white mb-1">SMS Test Console</h2>
+              <h2 className="text-base font-semibold text-white mb-1">
+                SMS Test Console
+              </h2>
               <p className="text-xs text-[#666680] mb-5">
-                Sends a real SMS via Mosio. Notifications are not recorded in the database.
+                Sends a real SMS via Mosio. Notifications are not recorded in
+                the database.
               </p>
 
-              {/* Phone number */}
               <div className="mb-4">
                 <label className="block text-xs font-medium text-[#a0a0b8] uppercase tracking-wider mb-1.5">
                   Destination phone number
@@ -1340,7 +2269,6 @@ export default function AdminPage() {
                 />
               </div>
 
-              {/* Append text */}
               <div className="mb-6">
                 <label className="block text-xs font-medium text-[#a0a0b8] uppercase tracking-wider mb-1.5">
                   Additional text to append (optional)
@@ -1354,18 +2282,47 @@ export default function AdminPage() {
                 />
               </div>
 
-              {/* Notification type buttons */}
               <div className="text-xs font-medium text-[#a0a0b8] uppercase tracking-wider mb-3">
                 Send test notification
               </div>
               <div className="space-y-2">
                 {[
-                  { type: "at_bat",               icon: "⚾", label: "You're Up",           desc: "at_bat player – time to submit question" },
-                  { type: "new_question",          icon: "❓", label: "New Question",        desc: "all other players – bets are open" },
-                  { type: "all_answers_in",        icon: "✅", label: "All Answers In",      desc: "at_bat player – time to grade" },
-                  { type: "on_deck",               icon: "🎯", label: "On Deck",             desc: "on_deck player – low level only" },
-                  { type: "round_results",         icon: "🏆", label: "Round Results",       desc: "all players – high level only" },
-                  { type: "about_to_be_skipped",   icon: "⚠️", label: "About to Be Skipped", desc: "last holdout – high level only" },
+                  {
+                    type: "at_bat",
+                    icon: "⚾",
+                    label: "You're Up",
+                    desc: "at_bat player – time to submit question",
+                  },
+                  {
+                    type: "new_question",
+                    icon: "❓",
+                    label: "New Question",
+                    desc: "all other players – bets are open",
+                  },
+                  {
+                    type: "all_answers_in",
+                    icon: "✅",
+                    label: "All Answers In",
+                    desc: "at_bat player – time to grade",
+                  },
+                  {
+                    type: "on_deck",
+                    icon: "🎯",
+                    label: "On Deck",
+                    desc: "on_deck player – low level only",
+                  },
+                  {
+                    type: "round_results",
+                    icon: "🏆",
+                    label: "Round Results",
+                    desc: "all players – high level only",
+                  },
+                  {
+                    type: "about_to_be_skipped",
+                    icon: "⚠️",
+                    label: "About to Be Skipped",
+                    desc: "last holdout – high level only",
+                  },
                 ].map(({ type, icon, label, desc }) => {
                   const s = testStatus[type] ?? "idle";
                   return (
@@ -1376,31 +2333,54 @@ export default function AdminPage() {
                       <div className="flex items-center gap-3 min-w-0">
                         <span className="text-xl shrink-0">{icon}</span>
                         <div className="min-w-0">
-                          <div className="text-sm font-medium text-white">{label}</div>
-                          <div className="text-xs text-[#666680] truncate">{desc}</div>
+                          <div className="text-sm font-medium text-white">
+                            {label}
+                          </div>
+                          <div className="text-xs text-[#666680] truncate">
+                            {desc}
+                          </div>
                         </div>
                       </div>
                       <button
                         disabled={s === "sending" || !testPhone.trim()}
                         onClick={async () => {
-                          setTestStatus((prev) => ({ ...prev, [type]: "sending" }));
+                          setTestStatus((prev) => ({
+                            ...prev,
+                            [type]: "sending",
+                          }));
                           try {
                             const res = await fetch("/api/admin/test-sms", {
                               method: "POST",
                               headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ to: testPhone, type, appendText: testAppend }),
+                              body: JSON.stringify({
+                                to: testPhone,
+                                type,
+                                appendText: testAppend,
+                              }),
                             });
                             const data = await res.json();
-                            setTestStatus((prev) => ({ ...prev, [type]: data.error ? "failed" : "sent" }));
+                            setTestStatus((prev) => ({
+                              ...prev,
+                              [type]: data.error ? "failed" : "sent",
+                            }));
                             if (data.error) {
                               alert(`Failed: ${data.error}`);
                             }
                           } catch {
-                            setTestStatus((prev) => ({ ...prev, [type]: "failed" }));
+                            setTestStatus((prev) => ({
+                              ...prev,
+                              [type]: "failed",
+                            }));
                             alert("Request failed");
                           }
-                          // Reset to idle after 4 seconds
-                          setTimeout(() => setTestStatus((prev) => ({ ...prev, [type]: "idle" })), 4000);
+                          setTimeout(
+                            () =>
+                              setTestStatus((prev) => ({
+                                ...prev,
+                                [type]: "idle",
+                              })),
+                            4000
+                          );
                         }}
                         className={`shrink-0 px-4 py-1.5 rounded-lg text-xs font-semibold transition-all border ${
                           s === "sent"
@@ -1414,7 +2394,13 @@ export default function AdminPage() {
                             : "bg-[#e94560]/10 border-[#e94560]/40 text-[#e94560] hover:bg-[#e94560]/20"
                         }`}
                       >
-                        {s === "sending" ? "Sending…" : s === "sent" ? "✓ Sent" : s === "failed" ? "✗ Failed" : "Send"}
+                        {s === "sending"
+                          ? "Sending…"
+                          : s === "sent"
+                          ? "✓ Sent"
+                          : s === "failed"
+                          ? "✗ Failed"
+                          : "Send"}
                       </button>
                     </div>
                   );
@@ -1433,13 +2419,13 @@ export default function AdminPage() {
               <div className="py-12 text-center text-[#a0a0b8]">No data</div>
             ) : (
               <>
-                {/* Global Override Control */}
                 <div className="bg-[#1e3a5f] rounded-lg p-5 border border-[#2a4a6f]">
                   <h2 className="text-sm font-semibold text-[#a0a0b8] uppercase tracking-wider mb-2">
                     Global Notification Override
                   </h2>
                   <p className="text-xs text-[#666680] mb-3">
-                    Overrides all league commissioner settings. Use &quot;Force None&quot; if SMS is going haywire.
+                    Overrides all league commissioner settings. Use &quot;Force
+                    None&quot; if SMS is going haywire.
                   </p>
                   <div className="flex gap-3 flex-wrap">
                     {[
@@ -1448,15 +2434,22 @@ export default function AdminPage() {
                     ].map((opt) => (
                       <button
                         key={opt.value}
-                        disabled={savingOverride || notifStats.globalOverride === opt.value}
+                        disabled={
+                          savingOverride ||
+                          notifStats.globalOverride === opt.value
+                        }
                         onClick={async () => {
                           setSavingOverride(true);
                           await fetch("/api/admin/global-settings", {
                             method: "PUT",
                             headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ notificationOverride: opt.value }),
+                            body: JSON.stringify({
+                              notificationOverride: opt.value,
+                            }),
                           });
-                          setNotifStats((prev) => prev ? { ...prev, globalOverride: opt.value } : prev);
+                          setNotifStats((prev) =>
+                            prev ? { ...prev, globalOverride: opt.value } : prev
+                          );
                           setSavingOverride(false);
                         }}
                         className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${
@@ -1472,22 +2465,39 @@ export default function AdminPage() {
                   </div>
                 </div>
 
-                {/* Stats Cards */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   {[
-                    { label: "Total Sent", value: notifStats.totalSent.toLocaleString() },
-                    { label: "SMS Sent", value: notifStats.totalSms.toLocaleString() },
-                    { label: "Link Clicks", value: notifStats.totalClicks.toLocaleString() },
-                    { label: "Click Rate", value: `${notifStats.clickRate.toFixed(1)}%` },
+                    {
+                      label: "Total Sent",
+                      value: notifStats.totalSent.toLocaleString(),
+                    },
+                    {
+                      label: "SMS Sent",
+                      value: notifStats.totalSms.toLocaleString(),
+                    },
+                    {
+                      label: "Link Clicks",
+                      value: notifStats.totalClicks.toLocaleString(),
+                    },
+                    {
+                      label: "Click Rate",
+                      value: `${notifStats.clickRate.toFixed(1)}%`,
+                    },
                   ].map((stat) => (
-                    <div key={stat.label} className="bg-[#1e3a5f] rounded-lg p-4 border border-[#2a4a6f] text-center">
-                      <div className="text-2xl font-bold text-amber-400">{stat.value}</div>
-                      <div className="text-xs text-[#a0a0b8] mt-1">{stat.label}</div>
+                    <div
+                      key={stat.label}
+                      className="bg-[#1e3a5f] rounded-lg p-4 border border-[#2a4a6f] text-center"
+                    >
+                      <div className="text-2xl font-bold text-amber-400">
+                        {stat.value}
+                      </div>
+                      <div className="text-xs text-[#a0a0b8] mt-1">
+                        {stat.label}
+                      </div>
                     </div>
                   ))}
                 </div>
 
-                {/* By Type Breakdown */}
                 <div className="bg-[#1e3a5f] rounded-lg p-5 border border-[#2a4a6f]">
                   <h2 className="text-sm font-semibold text-[#a0a0b8] uppercase tracking-wider mb-3">
                     Notifications by Type
@@ -1497,18 +2507,33 @@ export default function AdminPage() {
                       <thead>
                         <tr className="border-b border-[#2a4a6f]">
                           <th className="p-2 text-left text-[#a0a0b8]">Type</th>
-                          <th className="p-2 text-right text-[#a0a0b8]">Total</th>
+                          <th className="p-2 text-right text-[#a0a0b8]">
+                            Total
+                          </th>
                           <th className="p-2 text-right text-[#a0a0b8]">SMS</th>
-                          <th className="p-2 text-right text-[#a0a0b8]">Clicks</th>
+                          <th className="p-2 text-right text-[#a0a0b8]">
+                            Clicks
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
                         {notifStats.byType.map((row) => (
-                          <tr key={row.type} className="border-b border-[#2a4a6f]/50">
-                            <td className="p-2 text-white capitalize">{row.type.replace(/_/g, " ")}</td>
-                            <td className="p-2 text-right text-[#a0a0b8]">{row.count}</td>
-                            <td className="p-2 text-right text-[#a0a0b8]">{row.smsCount}</td>
-                            <td className="p-2 text-right text-[#a0a0b8]">{row.clickCount}</td>
+                          <tr
+                            key={row.type}
+                            className="border-b border-[#2a4a6f]/50"
+                          >
+                            <td className="p-2 text-white capitalize">
+                              {row.type.replace(/_/g, " ")}
+                            </td>
+                            <td className="p-2 text-right text-[#a0a0b8]">
+                              {row.count}
+                            </td>
+                            <td className="p-2 text-right text-[#a0a0b8]">
+                              {row.smsCount}
+                            </td>
+                            <td className="p-2 text-right text-[#a0a0b8]">
+                              {row.clickCount}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -1516,7 +2541,6 @@ export default function AdminPage() {
                   </div>
                 </div>
 
-                {/* Recent Notifications */}
                 <div className="bg-[#1e3a5f] rounded-lg p-5 border border-[#2a4a6f]">
                   <h2 className="text-sm font-semibold text-[#a0a0b8] uppercase tracking-wider mb-3">
                     Recent Notifications (last 50)
@@ -1526,26 +2550,67 @@ export default function AdminPage() {
                       <thead>
                         <tr className="border-b border-[#2a4a6f]">
                           <th className="p-2 text-left text-[#a0a0b8]">Type</th>
-                          <th className="p-2 text-left text-[#a0a0b8]">Title</th>
-                          <th className="p-2 text-left text-[#a0a0b8]">Player</th>
-                          <th className="p-2 text-center text-[#a0a0b8]">SMS</th>
-                          <th className="p-2 text-center text-[#a0a0b8]">Clicked</th>
-                          <th className="p-2 text-right text-[#a0a0b8]">Sent</th>
+                          <th className="p-2 text-left text-[#a0a0b8]">
+                            Title
+                          </th>
+                          <th className="p-2 text-left text-[#a0a0b8]">
+                            Player
+                          </th>
+                          <th className="p-2 text-center text-[#a0a0b8]">
+                            SMS
+                          </th>
+                          <th className="p-2 text-center text-[#a0a0b8]">
+                            Clicked
+                          </th>
+                          <th className="p-2 text-right text-[#a0a0b8]">
+                            Sent
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
                         {notifStats.recentNotifications.map((n) => (
-                          <tr key={n.id} className="border-b border-[#2a4a6f]/50">
-                            <td className="p-2 text-[#a0a0b8] capitalize text-xs">{n.type.replace(/_/g, " ")}</td>
-                            <td className="p-2 text-white text-xs max-w-[180px] truncate">{n.title}</td>
-                            <td className="p-2 text-[#a0a0b8] text-xs">{n.userNickname}</td>
+                          <tr
+                            key={n.id}
+                            className="border-b border-[#2a4a6f]/50"
+                          >
+                            <td className="p-2 text-[#a0a0b8] capitalize text-xs">
+                              {n.type.replace(/_/g, " ")}
+                            </td>
+                            <td className="p-2 text-white text-xs max-w-[180px] truncate">
+                              {n.title}
+                            </td>
+                            <td className="p-2 text-[#a0a0b8] text-xs">
+                              <button
+                                onClick={() =>
+                                  goTo("players", {
+                                    playerUserId: n.userId,
+                                    playerName: n.userNickname,
+                                  })
+                                }
+                                className="hover:text-amber-400 transition underline-offset-2 hover:underline"
+                              >
+                                {n.userNickname}
+                              </button>
+                            </td>
                             <td className="p-2 text-center">
-                              <span className={`text-xs ${n.smsStatus === "sent" ? "text-green-400" : n.smsStatus === "failed" ? "text-red-400" : "text-[#666680]"}`}>
+                              <span
+                                className={`text-xs ${
+                                  n.smsStatus === "sent"
+                                    ? "text-green-400"
+                                    : n.smsStatus === "failed"
+                                    ? "text-red-400"
+                                    : "text-[#666680]"
+                                }`}
+                              >
                                 {n.smsStatus ?? "—"}
                               </span>
                             </td>
                             <td className="p-2 text-center text-xs">
-                              {n.clickedAt ? <span className="text-green-400">✓</span> : <span className="text-[#666680]">—</span>}
+                              {n.clickedAt ? (
+                                <span className="text-green-400">✓</span>
+                              ) : (
+                                <span className="text-[#666680]">—</span>
+                              )}
                             </td>
                             <td className="p-2 text-right text-xs text-[#666680]">
                               {new Date(n.createdAt).toLocaleDateString()}

@@ -21,11 +21,8 @@ export async function GET() {
     totalRounds,
     activeUsers7d,
     activeUsers30d,
-    recentLeagues,
-    recentPlayers,
+    allLeagues,
     commissioners,
-    recentGames,
-    recentRounds,
   ] = await Promise.all([
     prisma.user.count(),
     prisma.league.count(),
@@ -37,7 +34,6 @@ export async function GET() {
     prisma.user.count({ where: { lastLoginAt: { gte: sevenDaysAgo } } }),
     prisma.user.count({ where: { lastLoginAt: { gte: thirtyDaysAgo } } }),
     prisma.league.findMany({
-      take: 20,
       orderBy: { createdAt: "desc" },
       include: {
         players: {
@@ -56,20 +52,6 @@ export async function GET() {
         },
       },
     }),
-    prisma.user.findMany({
-      take: 20,
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        nickname: true,
-        email: true,
-        createdAt: true,
-        lastLoginAt: true,
-        _count: {
-          select: { leaguePlayers: true },
-        },
-      },
-    }),
     // Get all commissioners
     prisma.leaguePlayer.findMany({
       where: { role: "commissioner" },
@@ -85,108 +67,21 @@ export async function GET() {
         },
         league: {
           select: {
+            id: true,
             name: true,
             _count: { select: { players: true } },
           },
         },
       },
     }),
-    // Get recent games
-    prisma.game.findMany({
-      take: 20,
-      orderBy: { createdAt: "desc" },
-      include: {
-        season: {
-          include: {
-            league: {
-              select: { id: true, name: true },
-            },
-          },
-        },
-        _count: {
-          select: {
-            rounds: true,
-          },
-        },
-        rounds: {
-          where: { status: "graded" },
-          select: { id: true },
-        },
-      },
-    }),
-    // Get recent rounds
-    prisma.round.findMany({
-      take: 20,
-      orderBy: { createdAt: "desc" },
-      include: {
-        game: {
-          include: {
-            season: {
-              include: {
-                league: {
-                  select: { id: true, name: true },
-                },
-              },
-            },
-          },
-        },
-        question: {
-          select: { category: true },
-        },
-      },
-    }),
   ]);
 
-  // Compute per-player question success rates (how often others answer their questions correctly)
-  const playerIds = recentPlayers.map((p) => p.id);
-  const playerLeaguePlayers = await prisma.leaguePlayer.findMany({
-    where: { userId: { in: playerIds } },
-    select: { id: true, userId: true },
-  });
-  const playerIdsByUserId = new Map<string, string[]>();
-  playerLeaguePlayers.forEach((lp) => {
-    const existing = playerIdsByUserId.get(lp.userId) || [];
-    existing.push(lp.id);
-    playerIdsByUserId.set(lp.userId, existing);
-  });
-
-  // Batch query: total answers and correct answers to each player's questions
-  const playerQuestionStats = await Promise.all(
-    playerIds.map(async (userId) => {
-      const lpIds = playerIdsByUserId.get(userId) || [];
-      if (lpIds.length === 0) return { userId, totalAnswers: 0, correctAnswers: 0 };
-      const [totalAnswers, correctAnswers] = await Promise.all([
-        prisma.roundAnswer.count({
-          where: {
-            round: { status: "graded", atBatPlayerId: { in: lpIds } },
-            leaguePlayerId: { notIn: lpIds },
-            isAbsent: false,
-            isCorrect: { not: null },
-          },
-        }),
-        prisma.roundAnswer.count({
-          where: {
-            round: { status: "graded", atBatPlayerId: { in: lpIds } },
-            leaguePlayerId: { notIn: lpIds },
-            isAbsent: false,
-            isCorrect: true,
-          },
-        }),
-      ]);
-      return { userId, totalAnswers, correctAnswers };
-    })
-  );
-  const questionStatsMap = new Map(playerQuestionStats.map((s) => [s.userId, s]));
-
   // Calculate average league size
-  const allLeagueSizes = await prisma.league.findMany({
-    where: { isActive: true },
-    select: { _count: { select: { players: true } } },
-  });
+  const activeLeaguesForSize = allLeagues.filter((l) => l.isActive);
   const avgLeagueSize =
-    allLeagueSizes.length > 0
-      ? allLeagueSizes.reduce((sum, l) => sum + l._count.players, 0) /
-        allLeagueSizes.length
+    activeLeaguesForSize.length > 0
+      ? activeLeaguesForSize.reduce((sum, l) => sum + l._count.players, 0) /
+        activeLeaguesForSize.length
       : 0;
 
   // Group commissioners by user
@@ -203,22 +98,6 @@ export async function GET() {
     }
     commissionersByUser.get(c.userId)!.leagues.push(c.league);
   });
-
-  // Fetch at-bat players for recent rounds
-  const atBatPlayerIds = recentRounds
-    .map((r) => r.atBatPlayerId)
-    .filter((id): id is string => !!id);
-
-  const atBatPlayers = await prisma.leaguePlayer.findMany({
-    where: { id: { in: atBatPlayerIds } },
-    include: {
-      user: {
-        select: { nickname: true, email: true },
-      },
-    },
-  });
-
-  const atBatPlayerMap = new Map(atBatPlayers.map((p) => [p.id, p]));
 
   return NextResponse.json({
     overview: {
@@ -237,80 +116,34 @@ export async function GET() {
           ? Math.round((totalGamesCompleted / totalGamesStarted) * 100)
           : 0,
     },
-    recentLeagues: recentLeagues.map((l) => ({
+    leagues: allLeagues.map((l) => ({
       id: l.id,
       name: l.name,
       type: l.type,
       commissioner:
         l.players[0]?.user?.nickname || l.players[0]?.user?.email || "Unknown",
+      commissionerUserId: l.players[0]?.userId ?? null,
       playerCount: l._count.players,
       currentSeason: l.seasons[0]?.number || 0,
+      currentSeasonId: l.seasons[0]?.id ?? null,
       currentGame: l.seasons[0]?.games[0]?.number || 0,
+      currentGameId: l.seasons[0]?.games[0]?.id ?? null,
       createdAt: l.createdAt,
       isActive: l.isActive,
+      notificationMode: l.notificationMode,
     })),
-    recentPlayers: recentPlayers.map((p) => {
-      const stats = questionStatsMap.get(p.id);
-      return {
-        id: p.id,
-        nickname: p.nickname,
-        email: p.email,
-        leagueCount: p._count.leaguePlayers,
-        createdAt: p.createdAt,
-        lastLogin: p.lastLoginAt,
-        questionSuccessRate: stats && stats.totalAnswers > 0
-          ? Math.round((stats.correctAnswers / stats.totalAnswers) * 100)
-          : null,
-        questionAnswerCount: stats?.totalAnswers ?? 0,
-      };
-    }),
     commissioners: Array.from(commissionersByUser.values()).map((c) => ({
       id: c.user.id,
       nickname: c.user.nickname,
       email: c.user.email,
       leagueCount: c.leagues.length,
-      totalPlayers: c.leagues.reduce((sum, l) => sum + l._count.players, 0),
+      leagues: c.leagues.map((l: any) => ({ id: l.id, name: l.name })),
+      totalPlayers: c.leagues.reduce(
+        (sum: number, l: any) => sum + l._count.players,
+        0
+      ),
       createdAt: c.user.createdAt,
     })),
-    recentGames: recentGames.map((g) => ({
-      id: g.id,
-      number: g.number,
-      status: g.status,
-      league: g.season.league,
-      season: {
-        id: g.season.id,
-        number: g.season.number,
-      },
-      totalRounds: g._count.rounds,
-      completedRounds: g.rounds.length,
-      startedAt: g.startedAt,
-      completedAt: g.completedAt,
-    })),
-    recentRounds: recentRounds.map((r) => {
-      const atBatPlayer = r.atBatPlayerId
-        ? atBatPlayerMap.get(r.atBatPlayerId)
-        : null;
-      return {
-        id: r.id,
-        number: r.number,
-        status: r.status,
-        game: {
-          id: r.game.id,
-          number: r.game.number,
-          league: r.game.season.league,
-        },
-        atBatPlayer: atBatPlayer
-          ? {
-              nickname:
-                atBatPlayer.user.nickname ||
-                atBatPlayer.user.email ||
-                "Unknown",
-            }
-          : null,
-        category: r.question?.category,
-        deadlineAt: r.deadlineAt,
-      };
-    }),
   });
 }
 

@@ -11,6 +11,7 @@ export async function GET(req: NextRequest) {
   const category = searchParams.get("category");
   const dateFrom = searchParams.get("dateFrom");
   const dateTo = searchParams.get("dateTo");
+  const creatorUserId = searchParams.get("creatorUserId");
   const page = parseInt(searchParams.get("page") || "1");
   const limit = parseInt(searchParams.get("limit") || "50");
 
@@ -19,11 +20,23 @@ export async function GET(req: NextRequest) {
 
   if (leagueId) {
     where.round = {
+      ...(where.round ?? {}),
       game: {
         season: {
           leagueId,
         },
       },
+    };
+  }
+
+  if (creatorUserId) {
+    const lps = await prisma.leaguePlayer.findMany({
+      where: { userId: creatorUserId },
+      select: { id: true },
+    });
+    where.round = {
+      ...(where.round ?? {}),
+      atBatPlayerId: { in: lps.map((lp) => lp.id) },
     };
   }
 
