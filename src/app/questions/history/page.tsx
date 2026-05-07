@@ -8,6 +8,7 @@ import Link from "next/link";
 import Avatar from "@/components/ui/Avatar";
 import StarRating from "@/components/ui/StarRating";
 import CheatSeekerEye from "@/components/game/CheatSeekerEye";
+import { useRequireProfile } from "@/hooks/useRequireProfile";
 
 interface PlayerResult {
   name: string;
@@ -40,6 +41,7 @@ interface HistoryEntry {
 }
 
 export default function QuestionHistoryPage() {
+  useRequireProfile();
   const { data: session, status } = useSession();
   const router = useRouter();
   const [history, setHistory] = useState<HistoryEntry[]>([]);

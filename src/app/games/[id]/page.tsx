@@ -13,6 +13,7 @@ import GuideControl from "@/components/game/GuideControl";
 import RoundControl from "@/components/game/RoundControl";
 import BoxScoreControl from "@/components/game/BoxScoreControl";
 import { STARTING_POINTS } from "@/lib/constants";
+import { useRequireProfile } from "@/hooks/useRequireProfile";
 import { CHART_COLORS } from "@/components/game/GameChart";
 import AutoSkipAnnouncementModal from "@/components/ui/AutoSkipAnnouncementModal";
 
@@ -187,6 +188,7 @@ interface RoundData {
 }
 
 export default function GamePage() {
+  useRequireProfile();
   const { data: session, status } = useSession();
   const router = useRouter();
   const params = useParams();

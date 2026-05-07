@@ -7,6 +7,7 @@ import NavBar from "@/components/layout/NavBar";
 import Link from "next/link";
 import InfoTooltip from "@/components/ui/InfoTooltip";
 import Avatar from "@/components/ui/Avatar";
+import { useRequireProfile } from "@/hooks/useRequireProfile";
 
 interface PlayerStats {
   playerId: string;
@@ -65,6 +66,7 @@ const AWARD_LABELS: Record<string, { label: string; emoji: string }> = {
 };
 
 export default function HallOfFamePage() {
+  useRequireProfile();
   const { data: session, status } = useSession();
   const router = useRouter();
   const params = useParams();

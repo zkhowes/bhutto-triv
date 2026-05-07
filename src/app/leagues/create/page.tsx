@@ -4,8 +4,10 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import NavBar from "@/components/layout/NavBar";
+import { useRequireProfile } from "@/hooks/useRequireProfile";
 
 export default function CreateLeaguePage() {
+  useRequireProfile();
   const { data: session, status } = useSession();
   const router = useRouter();
   const [name, setName] = useState("");

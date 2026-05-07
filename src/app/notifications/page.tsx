@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useRequireProfile } from "@/hooks/useRequireProfile";
 
 interface Notification {
   id: string;
@@ -50,6 +51,7 @@ function timeAgo(dateStr: string): string {
 const PAGE_SIZE = 20;
 
 export default function NotificationsPage() {
+  useRequireProfile();
   const router = useRouter();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [filter, setFilter] = useState<"all" | "unread">("all");

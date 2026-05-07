@@ -28,12 +28,14 @@ export const authOptions: NextAuthOptions = {
     strategy: "jwt",
   },
   callbacks: {
-    async jwt({ token, user, trigger }) {
+    async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
       }
-      // Refresh user data from DB on every JWT creation/update
-      if (token.id || trigger === "update") {
+      // Refresh user data from DB on every JWT touch so profile completion,
+      // nickname, and super-admin flips reflect immediately for active sessions
+      // (no re-login required).
+      if (token.id) {
         const dbUser = await prisma.user.findUnique({
           where: { id: token.id as string },
           select: { profileComplete: true, nickname: true, isSuperAdmin: true },

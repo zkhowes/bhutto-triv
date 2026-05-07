@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback } from "react";
 import NavBar from "@/components/layout/NavBar";
 import Link from "next/link";
 import Avatar from "@/components/ui/Avatar";
+import { useRequireProfile } from "@/hooks/useRequireProfile";
 
 interface Player {
   id: string;
@@ -59,6 +60,7 @@ interface LeagueInfo {
 }
 
 export default function CommissionerPage() {
+  useRequireProfile();
   const { data: session, status } = useSession();
   const router = useRouter();
   const params = useParams();

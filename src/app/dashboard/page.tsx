@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import NavBar from "@/components/layout/NavBar";
 import Link from "next/link";
 import DashboardSkipCountdown from "@/components/game/DashboardSkipCountdown";
+import { useRequireProfile } from "@/hooks/useRequireProfile";
 
 interface LeagueSummary {
   id: string;
@@ -76,12 +77,11 @@ export default function DashboardPage() {
   const [joinCode, setJoinCode] = useState("");
   const [joinError, setJoinError] = useState("");
 
+  useRequireProfile();
+
   useEffect(() => {
     if (status === "unauthenticated") router.push("/");
-    if (status === "authenticated" && session?.user && !session.user.profileComplete) {
-      router.push("/profile");
-    }
-  }, [status, session, router]);
+  }, [status, router]);
 
   useEffect(() => {
     if (session?.user) {

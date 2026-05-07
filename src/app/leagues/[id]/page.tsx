@@ -9,6 +9,7 @@ import dynamic from "next/dynamic";
 import LeagueHeader from "@/components/game/LeagueHeader";
 import GameControl from "@/components/game/GameControl";
 import GuideControl from "@/components/game/GuideControl";
+import { useRequireProfile } from "@/hooks/useRequireProfile";
 
 const SeasonChart = dynamic(() => import("@/components/league/SeasonChart"), {
   ssr: false,
@@ -66,6 +67,7 @@ interface LeagueData {
 }
 
 export default function LeagueDetailPage() {
+  useRequireProfile();
   const { data: session, status } = useSession();
   const router = useRouter();
   const params = useParams();

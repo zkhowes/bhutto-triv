@@ -9,6 +9,7 @@ import ImageSearchModal from "@/components/question/ImageSearchModal";
 import Avatar from "@/components/ui/Avatar";
 import StarRating from "@/components/ui/StarRating";
 import type { WorkshopVariation, WorkshopResponse } from "@/lib/ai";
+import { useRequireProfile } from "@/hooks/useRequireProfile";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -176,6 +177,7 @@ export default function WorkshopPage() {
 }
 
 function WorkshopPageInner() {
+  useRequireProfile();
   const { data: session, status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();

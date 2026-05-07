@@ -164,16 +164,44 @@ function ProfilePageContent() {
     );
   }
 
+  const isIncomplete = !session?.user?.profileComplete;
+  const phoneMissing = isIncomplete && !phoneNumber.trim();
+
   return (
     <div className="min-h-screen">
       <NavBar />
       <div className="max-w-md mx-auto px-4 py-8">
         <h1 className="text-2xl font-bold text-white mb-2">
-          {session?.user?.profileComplete ? "Edit Profile" : "Complete Your Profile"}
+          {isIncomplete ? "Complete Your Profile" : "Edit Profile"}
         </h1>
-        <p className="text-[#a0a0b8] text-sm mb-6">
+        <p className="text-[#a0a0b8] text-sm mb-4">
           Set up your display name and preferences.
         </p>
+
+        {isIncomplete && (
+          <div className="mb-6 rounded-lg border border-amber-500/50 bg-amber-500/10 p-4">
+            <div className="flex items-start gap-3">
+              <span className="text-2xl leading-none">⚠️</span>
+              <div className="flex-1">
+                <p className="text-amber-300 font-medium text-sm">
+                  Add your phone number to keep playing
+                </p>
+                <p className="text-amber-300/80 text-xs mt-1 leading-relaxed">
+                  We need your phone to keep you in the game when it&apos;s
+                  your turn. Don&apos;t want texts? Pick{" "}
+                  <span className="font-semibold">None</span> under
+                  Notification Preference below — your phone stays on file but
+                  we won&apos;t SMS you.
+                </p>
+                {returnTo && (
+                  <p className="text-amber-300/60 text-xs mt-2">
+                    You&apos;ll head back to where you were after saving.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* Avatar Section */}
@@ -245,14 +273,22 @@ function ProfilePageContent() {
 
           <div>
             <label className="block text-sm font-medium text-[#a0a0b8] mb-1.5">
-              Phone Number *
+              Phone Number *{" "}
+              {phoneMissing && (
+                <span className="ml-1 text-amber-400">← required</span>
+              )}
             </label>
             <input
               type="tel"
               value={phoneNumber}
               onChange={(e) => setPhoneNumber(e.target.value)}
-              className="input-field"
+              className={`input-field ${
+                phoneMissing
+                  ? "ring-2 ring-amber-500/60 border-amber-500/60"
+                  : ""
+              }`}
               placeholder="+1 (555) 123-4567"
+              autoFocus={phoneMissing}
             />
             <p className="mt-1.5 text-xs text-[#666680]">
               We only use your phone number for game notifications and do not
