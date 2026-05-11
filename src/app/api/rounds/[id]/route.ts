@@ -164,7 +164,17 @@ export async function GET(
     const myAnswer = actAsPlayerId
       ? round.answers.find((a) => a.leaguePlayerId === actAsPlayerId)
       : round.answers.find((a) => a.userId === userId);
-    if (!myAnswer?.betPlacedAt) {
+    // Busted players bypass the bet gate once the category is revealed —
+    // they're on the answer-only path, so they need to see the question.
+    const myLeaguePlayerId = actAsPlayerId
+      ?? round.game.playerStates.find((ps) => ps.leaguePlayer.user.id === userId)?.leaguePlayerId
+      ?? null;
+    const myPlayerState = myLeaguePlayerId
+      ? round.game.playerStates.find((ps) => ps.leaguePlayerId === myLeaguePlayerId)
+      : null;
+    const isBustedAnswerPhase =
+      !!myPlayerState?.isEliminated && round.status === "category_revealed";
+    if (!myAnswer?.betPlacedAt && !isBustedAnswerPhase) {
       // Player hasn't bet yet, only show category + answerFormat (safe to reveal format)
       questionData = {
         ...questionData,
