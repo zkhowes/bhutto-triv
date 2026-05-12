@@ -139,7 +139,7 @@ Accessible throughout the league lifecycle:
 
 ### Betting Mechanics
 
-- The **At Bat player does not bet or answer** their own question. They earn F1 placement points based on their current point total relative to other players.
+- The **At Bat player does not bet or answer** their own question. They earn Season Points based on their current point total relative to other players.
 - Players start each game with **20 points**
 - Can bet any amount from **1 up to their total available points**
 - **"All In"** button for quick max bet
@@ -217,7 +217,10 @@ Available to players **anytime** (not just during At Bat):
 
 ## Scoring System
 
-### Round Scoring (F1-Style, Scaled)
+### Season Points (F1-inspired placement scale, scaled to league size)
+
+> Originally called "F1 Points" internally; renamed user-facing to **Season Points**. The placement scale below is still inspired by Formula 1's points system.
+
 
 | Placement | Points |
 |-----------|--------|
@@ -321,7 +324,7 @@ Accessed via shareable link, shows real-time status:
 
 **Round Scorecard Style:**
 - `Round X Complete` header
-- Table: Avatar · Nickname · Bet amount · Answer (correct/incorrect) · Points won/lost · F1 placement points · Fastest Lap indicator
+- Table: Avatar · Nickname · Bet amount · Answer (correct/incorrect) · Points won/lost · Season Points (placement) · Fastest Lap indicator
 - Personal performance highlight
 - Updated game leaderboard
 - "Next Round" preview (who's At Bat)
@@ -355,7 +358,7 @@ Auto-generated when season completes:
 
 | Award | Criteria |
 |-------|----------|
-| **MVP** | Most total points (correct answers × F1 placements) |
+| **MVP** | Most total points (correct answers × placement-based Season Points) |
 | **Iron Man** | Perfect attendance — never missed question or answer |
 | **Offensive Player of the Year** | Biggest bets, consistently wins |
 | **Defensive Player of the Year** | Smallest bets, consistently wins |
@@ -559,7 +562,7 @@ Every round, game, and season has unique shareable URLs for text, email, WhatsAp
 - Use sports terminology consistently in all UI copy
 - Boxing round cards and timers for round progression
 - Baseball batting order language (At Bat, On Deck, In The Hole)
-- F1 scoring system for placements
+- Season Points (F1-inspired placement scoring)
 - Award ceremonies like professional sports
 - Hall of Fame for legacy tracking
 - Stat tracking similar to baseball cards / sports analytics
@@ -672,7 +675,7 @@ Every round, game, and season has unique shareable URLs for text, email, WhatsAp
 - Question submission with AI chat interface
 - Betting and answer submission flow
 - Automatic grading (multiple choice) and AI grading (free text)
-- F1 scoring system with Fastest Lap
+- Season Points scoring system with Fastest Lap (F1-inspired)
 - Game and season leaderboards
 - Basic notification system (in-app only)
 
@@ -704,7 +707,7 @@ Every round, game, and season has unique shareable URLs for text, email, WhatsAp
 - Timezone conversion accuracy
 - AI grading fuzzy matching edge cases
 - Commissioner role transfer integrity
-- Point calculations with varying league sizes (F1 scaling)
+- Point calculations with varying league sizes (Season Points scaling, F1-inspired)
 - Question edit locking timing
 - Absentee penalty calculations
 

@@ -160,7 +160,7 @@ export default function HallOfFamePage() {
                     <div className="text-left">
                       <p className="text-xl font-bold text-white">{stats[0].nickname}</p>
                       <p className="text-sm text-[#a0a0b8]">
-                        {stats[0].totalF1Points} F1 Points · {stats[0].totalGames} Games
+                        {stats[0].totalF1Points} Season Points · {stats[0].totalGames} Games
                       </p>
                     </div>
                   </div>
@@ -229,7 +229,7 @@ export default function HallOfFamePage() {
                   <tr className="border-b border-[#1e3a5f]">
                     <th className="table-header p-2 text-left sticky left-0 bg-[#1a1a2e] z-10">#</th>
                     <th className="table-header p-2 text-left sticky left-8 bg-[#1a1a2e] z-10 min-w-[120px]">Player</th>
-                    <th className="table-header p-2 text-right">F1 Pts</th>
+                    <th className="table-header p-2 text-right">Season Pts</th>
                     <th className="table-header p-2 text-right">Games</th>
                     <th className="table-header p-2 text-right">Correct %</th>
                     <th className="table-header p-2 text-right">

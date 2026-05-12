@@ -63,8 +63,8 @@ export default function TermsPage() {
             <p className="mb-3">
               Bhutto Wisdom is a round-based trivia game played within private leagues. Each league is
               managed by a commissioner who controls league settings and membership. Players take turns
-              submitting questions, while all other players bet points and answer. Scoring follows an
-              F1-style points system.
+              submitting questions, while all other players bet points and answer. Scoring follows a
+              season points system based on placement.
             </p>
             <p className="mb-3">
               By submitting a question, you represent that you have the right to submit it and that it

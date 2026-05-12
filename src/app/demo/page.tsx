@@ -501,7 +501,7 @@ function StepResults({ onNext }: { onNext: () => void }) {
         </div>
         <h2 className="text-2xl font-bold text-white mb-2">Round Results</h2>
         <p className="text-[#a0a0b8] text-sm">
-          Scoring inspired by F1: higher bets with correct answers earn more points.
+          Placement-based scoring: higher bets with correct answers earn more points.
         </p>
       </div>
 

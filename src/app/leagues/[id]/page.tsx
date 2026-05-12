@@ -323,7 +323,7 @@ export default function LeagueDetailPage() {
                   {league.seasonStandings[0].nickname}
                 </p>
                 <p className="text-sm text-[#a0a0b8]">
-                  {league.seasonStandings[0].totalF1Points} F1 Points · {league.seasonStandings[0].gamesPlayed} Games
+                  {league.seasonStandings[0].totalF1Points} Season Points · {league.seasonStandings[0].gamesPlayed} Games
                 </p>
               </div>
             </div>

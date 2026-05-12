@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 Bhutto Wisdom is a competitive daily trivia game built with Next.js 14, featuring:
-- F1-style scoring system with betting mechanics
+- Season Points scoring (F1-inspired placement scale) with betting mechanics. **Customer-facing term is "Season Points"** — internal code still uses `totalF1Points` / `getF1PointsForPlacement` / `F1_POINTS_SCALE` (no DB migration). When touching UI copy, use "Season Points" / "Season Pts".
 - Round-based gameplay where players take turns submitting questions
 - AI-powered answer grading using Claude (Anthropic API)
 - Seasonal league structure with awards and hall of fame
@@ -53,7 +53,7 @@ awaiting_question → question_submitted → category_revealed → graded
 1. `awaiting_question` - At-bat player submits question (auto-submitted from bank if available)
 2. `question_submitted` - Other players can now see category and place bets
 3. `category_revealed` - Betting locks, players answer the question, timer starts
-4. `graded` - All answers in, AI auto-grades and finalizes immediately. Scores calculated, F1 points awarded
+4. `graded` - All answers in, AI auto-grades and finalizes immediately. Scores calculated, Season Points awarded (internally still called F1 points in code)
 
 **Key Functions:**
 - `submitAnswer()` - Handles answer submission and triggers AI grading
@@ -108,7 +108,7 @@ League → Season → Game → Round → RoundAnswer
 
 ### Scoring System
 
-F1-style points (`src/lib/scoring.ts`):
+Season Points — F1-inspired placement scale (`src/lib/scoring.ts`, internal identifiers still use F1):
 - Scale: [25, 18, 15, 12, 10, 8, 6, 4, 2, 1] for top 10 placements
 - Players bet points (1-max available) on their answer
 - **Correct answer:** Win bet amount × placement multiplier
@@ -121,9 +121,9 @@ F1-style points (`src/lib/scoring.ts`):
 
 ### Core Logic
 - `src/lib/game-engine.ts` - All game state transitions, scoring, round management
-- `src/lib/scoring.ts` - F1 points calculation, placement assignment
+- `src/lib/scoring.ts` - Season Points calculation, placement assignment (functions/constants still named F1: `getF1PointsForPlacement`, `F1_POINTS_SCALE`)
 - `src/lib/ai.ts` - AI grading, question workshop, fun fact generation
-- `src/lib/constants.ts` - All status enums, default settings, F1 scale
+- `src/lib/constants.ts` - All status enums, default settings, Season Points scale (still exported as `F1_POINTS_SCALE`)
 
 ### API Routes (Next.js App Router)
 - `src/app/api/rounds/[id]/route.ts` - Get round data (hides question until bet placed)
@@ -196,7 +196,7 @@ Required for development (see `.env.example`):
 
 ## Kanban
 
-> Last updated: 2026-05-11 (busted players can now see the question at category_revealed — API bet-gate exemption)
+> Last updated: 2026-05-12 (Season Points rename + admin Reviewer tab)
 
 ### Backlog
 - [ ] View-only public round dashboard — *currently requires auth, no anonymous mode*
@@ -209,6 +209,7 @@ Required for development (see `.env.example`):
 ### In Progress
 
 ### Done
+- [x] Season Points rename + admin Reviewer tab — *Customer-facing "F1 Points" → "Season Points" across hall-of-fame champion subtitle, hall-of-fame table column, league season-champion subtitle, terms page, demo page; CLAUDE.md + REQUIREMENTS.md updated to keep "F1-inspired" inspiration note while standardizing the user-facing term. Internal `totalF1Points` / `getF1PointsForPlacement` / `F1_POINTS_SCALE` left as-is (no DB migration). New admin "Reviewer" tab surfacing the at-submit question reviewer agent's `QuestionReviewLog` rows: summary cards (total reviewed, % changed, errors, unavailable, avg latency), filters (status, changed-only, text search), paginated table with status/changed badges + notes, and a side-by-side Before/After JSON diff modal. New /api/admin/question-reviews endpoint. Cross-links: each Questions-tab row now shows a colored review badge (green ✓ clean / yellow ✎ changed / red ⚠ error / gray · unavailable / — none) that jumps to the Reviewer tab filtered to that question; Question Details modal includes a Reviewer Log section listing every log entry for that question with status badges and click-to-open-diff.*
 - [x] Busted-but-not-out question reveal fix — *GET /api/rounds/[id] was hiding the question from busted players because the gate keyed solely on betPlacedAt — busted players never bet, so they got "[Place your bet to see the question]" with null options even after category reveal. Route now exempts isEliminated players at round.status === "category_revealed", falling through to the standard post-bet branch that scrubs only the correct answer. Pre-reveal still shows the placeholder, matching the "Wait for the category to be revealed" copy in GuideControl. AnswerInterface (already rendered in busted mode by GuideControl.tsx:406) now receives a real question and can submit for the +1 next-game bank.*
 - [x] Profile completion gate everywhere — *useRequireProfile() hook bounces signed-in-but-incomplete users to /profile?returnTo=<current path+query> on dashboard, games, leagues, league-commissioner, hall-of-fame, leagues/create, questions/workshop, questions/history, notifications. Auth JWT callback now re-reads profileComplete/nickname/isSuperAdmin from DB on every request (no more 30-day JWT staleness, no re-login required when admin flips a flag). Profile page shows a yellow banner + autoFocus + ring on the phone field when profile is incomplete, with copy clarifying that "phone required, but pick None below to opt out of texts." One-shot backfill script (scripts/reset-incomplete-profiles.ts) flips profileComplete=false for any User where phoneNumber is null/empty — applied 2026-05-06, affected 3 real users (Daniel S, Jeff Sebastian, Sean Flannigan) and 2 test fakes; they'll be prompted on next page load. Note: Gary Hanson (not Hansen, in Triangle Fellas not "Triangle Hood Fellas") DOES have a phone on file (2064079199, profileComplete=true, isActive=true) but every notification record for him has smsStatus=null while peers in the same league get smsStatus=sent — separate Mosio-side bug, not a data-completeness issue, tracked for future investigation.*
 - [x] Admin overhaul — *Players tab is now paginated/server-searched (was capped at 20-most-recent users, hiding most of a 34-user roster). Each player row expands to show all league memberships with active/paused/fake/effective-notification-level badges, last 5 SMS statuses with per-attempt outcome, and a yellow diagnostic banner when phone is missing, prefs are "none", or any LeaguePlayer.isActive=false — these are the four gates a Mosio SMS has to pass, so root-causing "X isn't getting texts" no longer requires DB access. New endpoints: /api/admin/players (paginated, q + leagueId filters, returns phoneNumber/notificationPreference/profileComplete/memberships/recentNotifications), /api/admin/games (leagueId/status filters), /api/admin/rounds (gameId/leagueId/playerId filters). /api/admin/questions accepts creatorUserId so player → questions cross-link works. /api/admin/route.ts trimmed to just monitoring stats + full leagues + commissioners (each tab loads its own paginated data instead of relying on the dashboard payload). Admin page rewritten around a goTo(tab, filter) helper and a filter chip with ✕ — every cross-link goes through it: league name → players in that league, player count → same, commissioner → that user's row, current S#G# → rounds for that game, Q% → questions by that creator, round R# → opens /games/[id]?round=… in a new tab, recent-notification player → players filter. Per-tab text filter inputs added to Leagues, Players, Commissioners, Games, Rounds, Questions. League rows now also show notificationMode badge so "set to none" is visible at a glance.*
@@ -248,7 +249,7 @@ Required for development (see `.env.example`):
 - [x] Google OAuth + profile setup flow
 - [x] Full data model (League/Season/Game/Round/Answer/Player/BattingOrder)
 - [x] Game engine — question submission, betting, answering, grading, round close, scoring
-- [x] F1 scoring system + Fastest Lap bonus
+- [x] Season Points scoring system (F1-inspired) + Fastest Lap bonus
 - [x] AI grading — fuzzy match for free text, auto for MC
 - [x] AI question workshop — 3-variation cards, edit flow, draft bank
 - [x] AI league name suggestions + avatar generation

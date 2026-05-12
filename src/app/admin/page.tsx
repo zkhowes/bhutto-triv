@@ -14,6 +14,7 @@ type TabName =
   | "games"
   | "rounds"
   | "questions"
+  | "reviewer"
   | "notifications"
   | "test";
 
@@ -25,6 +26,8 @@ interface TabFilter {
   playerUserId?: string;
   playerName?: string;
   commissionerUserId?: string;
+  questionId?: string;
+  questionExcerpt?: string;
 }
 
 interface AdminData {
@@ -270,6 +273,54 @@ export default function AdminPage() {
   );
   const [questionAnswers, setQuestionAnswers] = useState<QuestionAnswer[]>([]);
   const [questionDetailsLoading, setQuestionDetailsLoading] = useState(false);
+  const [selectedQuestionReviews, setSelectedQuestionReviews] = useState<
+    ReviewLog[]
+  >([]);
+
+  // Reviewer tab state
+  interface ReviewLog {
+    id: string;
+    questionId: string;
+    format: string;
+    category: string;
+    questionText: string;
+    beforeJson: string;
+    afterJson: string;
+    changed: boolean;
+    notes: string | null;
+    modelUsed: string;
+    status: string;
+    latencyMs: number;
+    createdAt: string;
+    league: { id: string; name: string } | null;
+    seasonNumber: number | null;
+    gameNumber: number | null;
+    roundNumber: number | null;
+    roundId: string | null;
+    gameId: string | null;
+  }
+  interface ReviewSummary {
+    totalReviewed: number;
+    changed: number;
+    errors: number;
+    unavailable: number;
+    avgLatencyMs: number;
+  }
+  const [reviewLogs, setReviewLogs] = useState<ReviewLog[]>([]);
+  const [reviewLogsPage, setReviewLogsPage] = useState(1);
+  const [reviewLogsTotalPages, setReviewLogsTotalPages] = useState(1);
+  const [reviewLogsLoading, setReviewLogsLoading] = useState(false);
+  const [reviewSummary, setReviewSummary] = useState<ReviewSummary | null>(null);
+  const [reviewStatusFilter, setReviewStatusFilter] = useState<
+    "" | "ok" | "review_error" | "review_unavailable"
+  >("");
+  const [reviewChangedOnly, setReviewChangedOnly] = useState(false);
+  const [reviewQuery, setReviewQuery] = useState("");
+  const [selectedReview, setSelectedReview] = useState<ReviewLog | null>(null);
+  // Map questionId -> latest review log (for badges on Questions tab)
+  const [reviewIndex, setReviewIndex] = useState<Map<string, ReviewLog>>(
+    new Map()
+  );
 
   // Notifications tab state
   interface NotifStats {
@@ -456,6 +507,73 @@ export default function AdminPage() {
     setQuestionsPage(1);
   }, [tabFilter.leagueId, tabFilter.playerUserId]);
 
+  // Reviewer loader
+  const loadReviewLogs = useCallback(async () => {
+    setReviewLogsLoading(true);
+    try {
+      const params = new URLSearchParams({
+        page: reviewLogsPage.toString(),
+        limit: "50",
+      });
+      if (reviewStatusFilter) params.append("status", reviewStatusFilter);
+      if (reviewChangedOnly) params.append("changedOnly", "true");
+      if (tabFilter.questionId) params.append("questionId", tabFilter.questionId);
+      if (reviewQuery.trim()) params.append("q", reviewQuery.trim());
+
+      const res = await fetch(`/api/admin/question-reviews?${params}`);
+      const result = await res.json();
+      setReviewLogs(result.logs || []);
+      setReviewLogsTotalPages(result.totalPages || 1);
+      setReviewSummary(result.summary || null);
+    } catch (err) {
+      console.error("Failed to load review logs:", err);
+    } finally {
+      setReviewLogsLoading(false);
+    }
+  }, [
+    reviewLogsPage,
+    reviewStatusFilter,
+    reviewChangedOnly,
+    reviewQuery,
+    tabFilter.questionId,
+  ]);
+
+  useEffect(() => {
+    if (tab === "reviewer" && isAuthenticated) loadReviewLogs();
+  }, [tab, isAuthenticated, loadReviewLogs]);
+
+  useEffect(() => {
+    setReviewLogsPage(1);
+  }, [reviewStatusFilter, reviewChangedOnly, reviewQuery, tabFilter.questionId]);
+
+  // Build reviewIndex (questionId -> latest log) whenever Questions tab loads,
+  // so we can show per-row review badges. We fetch only the logs for the
+  // currently-visible questions to keep it bounded.
+  useEffect(() => {
+    if (tab !== "questions" || !isAuthenticated || questions.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        // Fetch up to 200 most-recent logs and index by questionId. The Questions
+        // tab pages 50 at a time, so 200 covers the visible page plus headroom.
+        const res = await fetch(`/api/admin/question-reviews?page=1&limit=200`);
+        const result = await res.json();
+        if (cancelled) return;
+        const idx = new Map<string, ReviewLog>();
+        for (const log of (result.logs || []) as ReviewLog[]) {
+          // Logs come back ordered newest-first; keep the first one we see per question.
+          if (!idx.has(log.questionId)) idx.set(log.questionId, log);
+        }
+        setReviewIndex(idx);
+      } catch (err) {
+        console.error("Failed to load review index:", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [tab, isAuthenticated, questions]);
+
   // Load notification stats when tab changes to notifications
   useEffect(() => {
     if (tab === "notifications" && isAuthenticated) {
@@ -596,12 +714,20 @@ export default function AdminPage() {
   const showQuestionDetails = async (question: QuestionData) => {
     setSelectedQuestion(question);
     setQuestionDetailsLoading(true);
+    setSelectedQuestionReviews([]);
     try {
-      const res = await fetch(`/api/admin/questions/${question.id}/answers`);
-      const data = await res.json();
-      setQuestionAnswers(data.answers || []);
+      const [answersRes, reviewsRes] = await Promise.all([
+        fetch(`/api/admin/questions/${question.id}/answers`),
+        fetch(
+          `/api/admin/question-reviews?questionId=${question.id}&limit=20`
+        ),
+      ]);
+      const answersData = await answersRes.json();
+      setQuestionAnswers(answersData.answers || []);
+      const reviewsData = await reviewsRes.json();
+      setSelectedQuestionReviews(reviewsData.logs || []);
     } catch (error) {
-      console.error("Failed to load question answers:", error);
+      console.error("Failed to load question details:", error);
     } finally {
       setQuestionDetailsLoading(false);
     }
@@ -610,6 +736,7 @@ export default function AdminPage() {
   const closeQuestionDetails = () => {
     setSelectedQuestion(null);
     setQuestionAnswers([]);
+    setSelectedQuestionReviews([]);
   };
 
   // League edit/delete state
@@ -756,6 +883,15 @@ export default function AdminPage() {
       };
     if (tabFilter.playerName)
       return { label: `Player: ${tabFilter.playerName}` };
+    if (tabFilter.questionId)
+      return {
+        label: `Question: ${
+          tabFilter.questionExcerpt
+            ? tabFilter.questionExcerpt.slice(0, 60) +
+              (tabFilter.questionExcerpt.length > 60 ? "…" : "")
+            : tabFilter.questionId.slice(0, 8)
+        }`,
+      };
     return null;
   })();
 
@@ -823,6 +959,7 @@ export default function AdminPage() {
               "games",
               "rounds",
               "questions",
+              "reviewer",
               "notifications",
               "test",
             ] as const
@@ -1953,6 +2090,7 @@ export default function AdminPage() {
                         <th className="table-header p-3 text-left">Creator</th>
                         <th className="table-header p-3 text-left">League</th>
                         <th className="table-header p-3 text-center">Image</th>
+                        <th className="table-header p-3 text-center">Review</th>
                         <th className="table-header p-3 text-center">
                           Accuracy
                         </th>
@@ -2012,6 +2150,58 @@ export default function AdminPage() {
                               <span className="text-[#666680] text-sm">—</span>
                             )}
                           </td>
+                          <td className="p-3 text-center">
+                            {(() => {
+                              const log = reviewIndex.get(q.id);
+                              if (!log)
+                                return (
+                                  <span
+                                    className="text-[#666680] text-sm"
+                                    title="No reviewer log"
+                                  >
+                                    —
+                                  </span>
+                                );
+                              const badge =
+                                log.status === "review_error"
+                                  ? {
+                                      cls: "bg-red-500/20 text-red-400",
+                                      label: "⚠",
+                                      title: `Reviewer error: ${log.notes ?? ""}`,
+                                    }
+                                  : log.status === "review_unavailable"
+                                  ? {
+                                      cls: "bg-[#666680]/20 text-[#a0a0b8]",
+                                      label: "·",
+                                      title: "Reviewer unavailable when this question shipped",
+                                    }
+                                  : log.changed
+                                  ? {
+                                      cls: "bg-yellow-500/20 text-yellow-400",
+                                      label: "✎",
+                                      title: `Reviewer rewrote: ${log.notes ?? ""}`,
+                                    }
+                                  : {
+                                      cls: "bg-green-500/20 text-green-400",
+                                      label: "✓",
+                                      title: "Reviewer passed clean",
+                                    };
+                              return (
+                                <button
+                                  onClick={() =>
+                                    goTo("reviewer", {
+                                      questionId: q.id,
+                                      questionExcerpt: q.questionText,
+                                    })
+                                  }
+                                  className={`px-2 py-1 rounded text-xs font-bold ${badge.cls} hover:opacity-80 transition`}
+                                  title={badge.title}
+                                >
+                                  {badge.label}
+                                </button>
+                              );
+                            })()}
+                          </td>
                           <td className="p-3 text-center text-sm text-[#a0a0b8]">
                             {q.stats.accuracy}%
                           </td>
@@ -2062,6 +2252,350 @@ export default function AdminPage() {
               </>
             )}
           </>
+        )}
+
+        {tab === "reviewer" && (
+          <>
+            {reviewSummary && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
+                {[
+                  {
+                    label: "Total Reviewed",
+                    value: reviewSummary.totalReviewed,
+                  },
+                  {
+                    label: "Changes Applied",
+                    value: reviewSummary.changed,
+                    sub:
+                      reviewSummary.totalReviewed > 0
+                        ? `${Math.round(
+                            (reviewSummary.changed /
+                              reviewSummary.totalReviewed) *
+                              100
+                          )}%`
+                        : null,
+                    accent: "text-yellow-400",
+                  },
+                  {
+                    label: "Errors",
+                    value: reviewSummary.errors,
+                    accent:
+                      reviewSummary.errors > 0 ? "text-red-400" : undefined,
+                  },
+                  {
+                    label: "Unavailable",
+                    value: reviewSummary.unavailable,
+                  },
+                  {
+                    label: "Avg Latency",
+                    value: `${reviewSummary.avgLatencyMs}ms`,
+                  },
+                ].map((c) => (
+                  <div
+                    key={c.label}
+                    className="bg-[#1e3a5f] border border-[#2a4a6f] rounded-lg p-3"
+                  >
+                    <div className="text-xs text-[#a0a0b8] mb-1">{c.label}</div>
+                    <div
+                      className={`text-xl font-bold ${
+                        c.accent ?? "text-white"
+                      }`}
+                    >
+                      {c.value}
+                    </div>
+                    {c.sub && (
+                      <div className="text-xs text-[#666680] mt-0.5">
+                        {c.sub}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="mb-4 flex flex-wrap gap-3 items-center">
+              <input
+                type="text"
+                placeholder="Filter by question text, notes, category…"
+                value={reviewQuery}
+                onChange={(e) => setReviewQuery(e.target.value)}
+                className="px-3 py-2 bg-[#1e3a5f] border border-[#2a4a6f] rounded-lg text-white text-sm placeholder-[#666680] focus:outline-none focus:border-amber-500 flex-1 min-w-[240px]"
+              />
+              <select
+                value={reviewStatusFilter}
+                onChange={(e) =>
+                  setReviewStatusFilter(e.target.value as typeof reviewStatusFilter)
+                }
+                className="px-3 py-2 bg-[#1e3a5f] border border-[#2a4a6f] rounded-lg text-white text-sm focus:outline-none focus:border-amber-500"
+              >
+                <option value="">All statuses</option>
+                <option value="ok">OK</option>
+                <option value="review_error">Errors</option>
+                <option value="review_unavailable">Unavailable</option>
+              </select>
+              <label className="flex items-center gap-2 px-3 py-2 bg-[#1e3a5f] border border-[#2a4a6f] rounded-lg text-sm text-white cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={reviewChangedOnly}
+                  onChange={(e) => setReviewChangedOnly(e.target.checked)}
+                />
+                Changed only
+              </label>
+              {(reviewQuery ||
+                reviewStatusFilter ||
+                reviewChangedOnly ||
+                tabFilter.questionId) && (
+                <button
+                  onClick={() => {
+                    setReviewQuery("");
+                    setReviewStatusFilter("");
+                    setReviewChangedOnly(false);
+                    if (tabFilter.questionId) clearFilter();
+                  }}
+                  className="px-3 py-2 bg-red-500/20 text-red-400 rounded-lg text-sm hover:bg-red-500/30 transition"
+                >
+                  Clear Filters
+                </button>
+              )}
+            </div>
+
+            {reviewLogsLoading ? (
+              <div className="text-center py-12">
+                <div className="animate-pulse text-[#a0a0b8]">Loading…</div>
+              </div>
+            ) : reviewLogs.length === 0 ? (
+              <div className="text-center py-12 text-[#666680]">
+                No reviewer logs found.
+              </div>
+            ) : (
+              <>
+                <div className="card overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-[#1e3a5f]">
+                        <th className="table-header p-3 text-left">When</th>
+                        <th className="table-header p-3 text-left">Question</th>
+                        <th className="table-header p-3 text-left">League</th>
+                        <th className="table-header p-3 text-center">Status</th>
+                        <th className="table-header p-3 text-center">Changed</th>
+                        <th className="table-header p-3 text-left">Notes</th>
+                        <th className="table-header p-3 text-right">Latency</th>
+                        <th className="table-header p-3 text-center">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reviewLogs.map((log) => (
+                        <tr key={log.id} className="table-row">
+                          <td className="p-3 text-xs text-[#a0a0b8] whitespace-nowrap">
+                            {new Date(log.createdAt).toLocaleString()}
+                          </td>
+                          <td className="p-3 text-white text-sm max-w-md truncate">
+                            <span className="px-2 py-0.5 rounded text-xs font-medium bg-purple-500/20 text-purple-400 mr-2">
+                              {log.category}
+                            </span>
+                            {log.questionText}
+                          </td>
+                          <td className="p-3 text-sm text-[#a0a0b8] whitespace-nowrap">
+                            {log.league ? (
+                              <button
+                                onClick={() => {
+                                  goTo("leagues");
+                                  setLeaguesFilter(log.league!.name);
+                                }}
+                                className="hover:text-amber-400 transition underline-offset-2 hover:underline"
+                              >
+                                {log.league.name}
+                              </button>
+                            ) : (
+                              "—"
+                            )}
+                            {log.seasonNumber !== null &&
+                              log.gameNumber !== null && (
+                                <span className="text-[#666680] text-xs ml-2">
+                                  S{log.seasonNumber}G{log.gameNumber}
+                                  {log.roundNumber !== null
+                                    ? `R${log.roundNumber}`
+                                    : ""}
+                                </span>
+                              )}
+                          </td>
+                          <td className="p-3 text-center">
+                            <span
+                              className={`px-2 py-1 rounded text-xs font-medium ${
+                                log.status === "ok"
+                                  ? "bg-green-500/20 text-green-400"
+                                  : log.status === "review_error"
+                                  ? "bg-red-500/20 text-red-400"
+                                  : "bg-[#666680]/20 text-[#a0a0b8]"
+                              }`}
+                            >
+                              {log.status === "ok"
+                                ? "OK"
+                                : log.status === "review_error"
+                                ? "Error"
+                                : "Unavail."}
+                            </span>
+                          </td>
+                          <td className="p-3 text-center">
+                            {log.changed ? (
+                              <span className="px-2 py-1 rounded text-xs font-medium bg-yellow-500/20 text-yellow-400">
+                                ✎ Changed
+                              </span>
+                            ) : (
+                              <span className="text-[#666680] text-xs">—</span>
+                            )}
+                          </td>
+                          <td className="p-3 text-sm text-[#a0a0b8] max-w-xs truncate">
+                            {log.notes || "—"}
+                          </td>
+                          <td className="p-3 text-right text-xs text-[#a0a0b8] whitespace-nowrap">
+                            {log.latencyMs}ms
+                          </td>
+                          <td className="p-3 text-center">
+                            <button
+                              onClick={() => setSelectedReview(log)}
+                              className="px-3 py-1 bg-amber-500/20 text-amber-400 rounded text-xs hover:bg-amber-500/30 transition"
+                            >
+                              View Diff
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {reviewLogsTotalPages > 1 && (
+                  <div className="mt-4 flex justify-center items-center gap-2">
+                    <button
+                      onClick={() =>
+                        setReviewLogsPage((p) => Math.max(1, p - 1))
+                      }
+                      disabled={reviewLogsPage === 1}
+                      className="px-3 py-1 bg-[#1e3a5f] text-white rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#2a4a6f] transition"
+                    >
+                      Previous
+                    </button>
+                    <span className="text-sm text-[#a0a0b8]">
+                      Page {reviewLogsPage} of {reviewLogsTotalPages}
+                    </span>
+                    <button
+                      onClick={() =>
+                        setReviewLogsPage((p) =>
+                          Math.min(reviewLogsTotalPages, p + 1)
+                        )
+                      }
+                      disabled={reviewLogsPage === reviewLogsTotalPages}
+                      className="px-3 py-1 bg-[#1e3a5f] text-white rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#2a4a6f] transition"
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </>
+        )}
+
+        {/* Reviewer Diff Modal */}
+        {selectedReview && (
+          <div
+            className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
+            onClick={() => setSelectedReview(null)}
+          >
+            <div
+              className="bg-[#1e3a5f] rounded-lg p-6 max-w-5xl w-full max-h-[90vh] overflow-y-auto border border-[#2a4a6f]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                  <h2 className="text-xl font-bold text-amber-400">
+                    Reviewer Log
+                  </h2>
+                  <p className="text-xs text-[#a0a0b8] mt-1">
+                    {new Date(selectedReview.createdAt).toLocaleString()} ·{" "}
+                    {selectedReview.modelUsed} · {selectedReview.latencyMs}ms
+                  </p>
+                </div>
+                <button
+                  onClick={() => setSelectedReview(null)}
+                  className="text-[#a0a0b8] hover:text-white transition"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="mb-4">
+                <p className="text-white mb-2">{selectedReview.questionText}</p>
+                <p className="text-sm text-[#a0a0b8]">
+                  <strong>Category:</strong> {selectedReview.category} ·{" "}
+                  <strong>Format:</strong> {selectedReview.format}
+                </p>
+                {selectedReview.notes && (
+                  <p className="text-sm text-[#a0a0b8] mt-2">
+                    <strong>Notes:</strong> {selectedReview.notes}
+                  </p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <h3 className="text-sm font-semibold text-[#a0a0b8] mb-2">
+                    Before (submitter / AI draft)
+                  </h3>
+                  <pre className="bg-[#0f1e30] border border-[#2a4a6f] rounded p-3 text-xs text-white overflow-x-auto whitespace-pre-wrap break-words">
+                    {(() => {
+                      try {
+                        return JSON.stringify(
+                          JSON.parse(selectedReview.beforeJson),
+                          null,
+                          2
+                        );
+                      } catch {
+                        return selectedReview.beforeJson;
+                      }
+                    })()}
+                  </pre>
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-[#a0a0b8] mb-2">
+                    After (what shipped)
+                    {selectedReview.changed && (
+                      <span className="ml-2 px-2 py-0.5 rounded text-xs font-medium bg-yellow-500/20 text-yellow-400">
+                        Modified
+                      </span>
+                    )}
+                  </h3>
+                  <pre className="bg-[#0f1e30] border border-[#2a4a6f] rounded p-3 text-xs text-white overflow-x-auto whitespace-pre-wrap break-words">
+                    {(() => {
+                      try {
+                        return JSON.stringify(
+                          JSON.parse(selectedReview.afterJson),
+                          null,
+                          2
+                        );
+                      } catch {
+                        return selectedReview.afterJson;
+                      }
+                    })()}
+                  </pre>
+                </div>
+              </div>
+
+              {selectedReview.gameId && selectedReview.roundId && (
+                <div className="mt-4 text-sm">
+                  <a
+                    href={`/games/${selectedReview.gameId}?round=${selectedReview.roundId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-amber-400 hover:underline"
+                  >
+                    Open round in game view ↗
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
         )}
 
         {/* Question Details Modal */}
@@ -2132,6 +2666,67 @@ export default function AdminPage() {
                   </div>
                 )}
               </div>
+
+              {selectedQuestionReviews.length > 0 && (
+                <div className="mb-6">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-lg font-semibold text-amber-400">
+                      Reviewer Log ({selectedQuestionReviews.length})
+                    </h3>
+                    <button
+                      onClick={() => {
+                        closeQuestionDetails();
+                        goTo("reviewer", {
+                          questionId: selectedQuestion.id,
+                          questionExcerpt: selectedQuestion.questionText,
+                        });
+                      }}
+                      className="text-xs text-amber-400 hover:underline"
+                    >
+                      Open in Reviewer tab →
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    {selectedQuestionReviews.map((log) => (
+                      <button
+                        key={log.id}
+                        onClick={() => setSelectedReview(log)}
+                        className="w-full text-left bg-[#0f1e30] border border-[#2a4a6f] rounded p-3 hover:border-amber-500/50 transition"
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <span
+                            className={`px-2 py-0.5 rounded text-xs font-medium ${
+                              log.status === "ok"
+                                ? "bg-green-500/20 text-green-400"
+                                : log.status === "review_error"
+                                ? "bg-red-500/20 text-red-400"
+                                : "bg-[#666680]/20 text-[#a0a0b8]"
+                            }`}
+                          >
+                            {log.status === "ok"
+                              ? "OK"
+                              : log.status === "review_error"
+                              ? "Error"
+                              : "Unavail."}
+                          </span>
+                          {log.changed && (
+                            <span className="px-2 py-0.5 rounded text-xs font-medium bg-yellow-500/20 text-yellow-400">
+                              ✎ Changed
+                            </span>
+                          )}
+                          <span className="text-xs text-[#a0a0b8]">
+                            {new Date(log.createdAt).toLocaleString()} ·{" "}
+                            {log.latencyMs}ms
+                          </span>
+                        </div>
+                        {log.notes && (
+                          <p className="text-sm text-[#a0a0b8]">{log.notes}</p>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <h3 className="text-lg font-semibold text-amber-400 mb-3">
                 All Player Answers ({selectedQuestion.stats.totalAnswers})
