@@ -169,6 +169,7 @@ export default function BettingInterface({
             min={1}
             max={maxPoints}
             onChange={setBetAmount}
+            disabled={placing || betPlaced}
           />
         </div>
       )}

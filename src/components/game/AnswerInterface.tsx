@@ -211,10 +211,12 @@ export default function AnswerInterface({
         throw new Error(data.error || "Failed to submit answer");
       }
 
+      // Keep submitting=true so the button stays disabled until the parent
+      // refetch swaps this component out for the next phase. Otherwise the
+      // button briefly re-enables and users double-click.
       onAnswered();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to submit");
-    } finally {
       setSubmitting(false);
     }
   };

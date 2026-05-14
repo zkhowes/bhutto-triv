@@ -113,6 +113,9 @@ type GuideControlProps = LeagueGuideProps | GameGuideProps;
 export default function GuideControl(props: GuideControlProps) {
   const [editingGrades, setEditingGrades] = useState(false);
   const [revertingSkip, setRevertingSkip] = useState(false);
+  // Per-round opt-in for busted players to enter the answer interface from
+  // the "Busted but Not Out" guide card.
+  const [bustedAnswerStartedFor, setBustedAnswerStartedFor] = useState<string | null>(null);
 
   // League mode
   if (props.mode === "league") {
@@ -402,8 +405,31 @@ export default function GuideControl(props: GuideControlProps) {
       );
     }
 
-    // Category revealed: show AnswerInterface with no bet (busted mode)
-    if (round.status === "category_revealed" && round.question && myPlayerId) {
+    // Question available: busted players skip betting and can answer as soon
+    // as a question exists. First show the guide card with an explicit
+    // "Answer Question" button; clicking it reveals AnswerInterface.
+    const canAnswer =
+      (round.status === "question_submitted" || round.status === "category_revealed") &&
+      round.question &&
+      myPlayerId;
+    if (canAnswer) {
+      const hasStarted = bustedAnswerStartedFor === round.id;
+      if (!hasStarted) {
+        return (
+          <div className="card p-5 mb-6 text-center border-amber-500/30 bg-amber-500/5">
+            <p className="text-lg font-bold text-amber-400 mb-1">Busted but Not Out</p>
+            <p className="text-[#a0a0b8] text-sm mb-4">
+              You&apos;re out of points for this game. {bonusLine}
+            </p>
+            <button
+              onClick={() => setBustedAnswerStartedFor(round.id)}
+              className="btn-primary"
+            >
+              Answer Question
+            </button>
+          </div>
+        );
+      }
       return (
         <div className="mb-6">
           <div className="card p-3 mb-3 text-center border-amber-500/30 bg-amber-500/5">
@@ -413,7 +439,7 @@ export default function GuideControl(props: GuideControlProps) {
           <AnswerInterface
             roundId={round.id}
             leaguePlayerId={myPlayerId}
-            question={round.question}
+            question={round.question!}
             betAmount={0}
             playerPoints={0}
             allActivePoints={[]}
@@ -428,12 +454,14 @@ export default function GuideControl(props: GuideControlProps) {
       );
     }
 
-    // Pre-category-reveal banner
+    // No question yet (awaiting at-bat player to submit)
     return (
       <div className="card p-5 mb-6 text-center border-amber-500/30 bg-amber-500/5">
         <p className="text-lg font-bold text-amber-400 mb-1">Busted but Not Out</p>
         <p className="text-[#a0a0b8] text-sm">
-          You&apos;re out of points for this game. {bonusLine} Wait for the category to be revealed, then answer.
+          You&apos;re out of points for this game. {bonusLine} Waiting on{" "}
+          <span className="text-white font-medium">{atBatPlayerName || "the next player"}</span>{" "}
+          to submit a question.
         </p>
       </div>
     );

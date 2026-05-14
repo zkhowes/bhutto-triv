@@ -319,10 +319,11 @@ export default function QuestionSubmitForm({
       setImageUrl("");
       setImageSource("");
       setImageAttribution("");
+      // Keep submitting=true so the button stays disabled until the parent
+      // refetch advances the round and unmounts this form.
       onSubmitted();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to submit");
-    } finally {
       setSubmitting(false);
     }
   };

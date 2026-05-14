@@ -172,8 +172,12 @@ export async function GET(
     const myPlayerState = myLeaguePlayerId
       ? round.game.playerStates.find((ps) => ps.leaguePlayerId === myLeaguePlayerId)
       : null;
+    // Busted players bypass the bet gate as soon as a question exists — no
+    // bet to place, so the bet-screen placeholder would just block them from
+    // answering. question_submitted and category_revealed both qualify.
     const isBustedAnswerPhase =
-      !!myPlayerState?.isEliminated && round.status === "category_revealed";
+      !!myPlayerState?.isEliminated &&
+      (round.status === "question_submitted" || round.status === "category_revealed");
     if (!myAnswer?.betPlacedAt && !isBustedAnswerPhase) {
       // Player hasn't bet yet, only show category + answerFormat (safe to reveal format)
       questionData = {

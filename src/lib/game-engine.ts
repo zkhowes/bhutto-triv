@@ -430,10 +430,17 @@ export async function submitQuestion(
     });
   }
 
-  // Update round status
+  // Update round status. Stamp categoryRevealAt at submit time so the
+  // answer countdown starts running immediately — otherwise a slow
+  // at-bat player squeezes everyone else's effective answer window.
+  // Status stays question_submitted; the commissioner "Reveal Category"
+  // action is no longer required for the countdown to begin.
   await prisma.round.update({
     where: { id: roundId },
-    data: { status: ROUND_STATUS.QUESTION_SUBMITTED },
+    data: {
+      status: ROUND_STATUS.QUESTION_SUBMITTED,
+      categoryRevealAt: new Date(),
+    },
   });
 
   // Notify all other players that a new question is ready (fire-and-forget)
@@ -585,9 +592,14 @@ export async function submitAnswer(
     if (!existingAnswer) throw new Error("Must place bet before answering");
     if (!existingAnswer.betAmount) throw new Error("Must place bet before answering");
   } else {
-    // Busted: answer-only path. Round must be in the answer phase.
-    if (roundForGate.status !== ROUND_STATUS.CATEGORY_REVEALED) {
-      throw new Error("Cannot answer until category is revealed");
+    // Busted: answer-only path. Any phase with a question is fair game —
+    // busted players don't bet, so they shouldn't have to wait for the
+    // category-reveal gate that betting players need.
+    if (
+      roundForGate.status !== ROUND_STATUS.QUESTION_SUBMITTED &&
+      roundForGate.status !== ROUND_STATUS.CATEGORY_REVEALED
+    ) {
+      throw new Error("Cannot answer until a question is submitted");
     }
     if (!roundForGate.question) throw new Error("No question on this round");
   }

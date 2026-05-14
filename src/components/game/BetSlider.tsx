@@ -7,6 +7,7 @@ interface BetSliderProps {
   min: number;
   max: number;
   onChange: (value: number) => void;
+  disabled?: boolean;
 }
 
 /**
@@ -14,7 +15,7 @@ interface BetSliderProps {
  * and the thumb are grabbable, and responds to the first pointer touch
  * without the native-range "scroll vs drag" disambiguation delay.
  */
-export default function BetSlider({ value, min, max, onChange }: BetSliderProps) {
+export default function BetSlider({ value, min, max, onChange, disabled = false }: BetSliderProps) {
   const trackRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
   const onChangeRef = useRef(onChange);
@@ -41,20 +42,22 @@ export default function BetSlider({ value, min, max, onChange }: BetSliderProps)
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
+      if (disabled) return;
       e.preventDefault();
       draggingRef.current = true;
       (e.target as Element).setPointerCapture?.(e.pointerId);
       updateFromClientX(e.clientX);
     },
-    [updateFromClientX]
+    [updateFromClientX, disabled]
   );
 
   const handlePointerMove = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
+      if (disabled) return;
       if (!draggingRef.current) return;
       updateFromClientX(e.clientX);
     },
-    [updateFromClientX]
+    [updateFromClientX, disabled]
   );
 
   const handlePointerUp = useCallback(
@@ -67,6 +70,7 @@ export default function BetSlider({ value, min, max, onChange }: BetSliderProps)
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (disabled) return;
       if (e.key === "ArrowLeft" || e.key === "ArrowDown") {
         e.preventDefault();
         if (value > min) onChangeRef.current(value - 1);
@@ -81,7 +85,7 @@ export default function BetSlider({ value, min, max, onChange }: BetSliderProps)
         onChangeRef.current(max);
       }
     },
-    [value, min, max]
+    [value, min, max, disabled]
   );
 
   return (
@@ -98,7 +102,8 @@ export default function BetSlider({ value, min, max, onChange }: BetSliderProps)
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
       onKeyDown={handleKeyDown}
-      className="relative w-full select-none cursor-pointer"
+      aria-disabled={disabled}
+      className={`relative w-full select-none ${disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
       style={{ height: 88, touchAction: "none", WebkitTapHighlightColor: "transparent" }}
     >
       {/* Track */}
