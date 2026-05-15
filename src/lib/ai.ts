@@ -867,8 +867,18 @@ export async function suggestLeagueNames(): Promise<string[]> {
 // consistency, not real-world correctness. Silent — corrects in place,
 // logs everything for forensics. Never blocks submission.
 
-export const REVIEWER_MODEL = "claude-haiku-4-5-20251001";
-const REVIEWER_TIMEOUT_MS = 3000;
+// Sonnet 4.6 — upgraded from Haiku 4.5 after Haiku produced confident false
+// corrections on pop-culture/sports MC questions (Step Brothers "pillow"→
+// "bike helmet", Super Bowl margin D→B). Larger model dramatically reduces
+// the "I'm sure I know better" hallucination mode.
+export const REVIEWER_MODEL = "claude-sonnet-4-6";
+const REVIEWER_TIMEOUT_MS = 8000;
+
+// Confidence floor for accepting a reviewer correction. The reviewer emits a
+// self-reported confidence per pass; we only apply the rewrite when it clears
+// this bar. Asymmetric-cost framing in the system prompt makes the model
+// reluctant to claim 0.9+ unless it really has receipts.
+export const REVIEWER_CONFIDENCE_THRESHOLD = 0.9;
 
 export interface ReviewablePayload {
   category: string;
@@ -889,9 +899,12 @@ export interface ReviewablePayload {
 }
 
 export interface ReviewerResult {
-  changed: boolean;
-  corrected: ReviewablePayload;
-  notes: string;          // free-text rationale (<= 240 chars)
+  changed: boolean;             // true only if reviewer proposed a change AND it cleared the confidence gate
+  proposedChange: boolean;      // what the model actually wanted to do (pre-gate) — for forensics
+  confidence: number;           // 0..1 self-reported; corrections only apply at >= REVIEWER_CONFIDENCE_THRESHOLD
+  corrected: ReviewablePayload; // the payload to persist (= original when changed=false)
+  proposed: ReviewablePayload;  // what the reviewer suggested (= corrected when gate passed; differs when gate dropped it)
+  notes: string;                // free-text rationale (<= 240 chars)
   modelUsed: string;
   latencyMs: number;
   status: "ok" | "review_unavailable" | "review_error";
@@ -899,7 +912,11 @@ export interface ReviewerResult {
 
 const REVIEWER_SYSTEM_PROMPT = `You are a fact-checking trivia question reviewer for "Bhutto Wisdom".
 
-A first-pass AI generated a question and a human submitter is about to ship it. Your job: catch factual errors before it goes live. Be conservative — only correct things you are highly confident about. If unsure, leave the field unchanged.
+A first-pass AI generated a question and a human submitter is about to ship it. Your job: catch factual errors before it goes live.
+
+CRITICAL — asymmetric cost: A FALSE CORRECTION is far worse than a missed error. A missed error gets caught by players throwing a flag during the round; a false correction silently flips the answer key on a question that was already right, so the players who picked correctly are graded wrong. We have observed real incidents of this happening (e.g. a reviewer flipped "pillows" → "bike helmet" on a Step Brothers question, when "pillows" was the canonical answer). When in doubt, DO NOT CHANGE THE FIELD.
+
+Heuristic: if you would not stake $100 of your own money on the correction being right, leave the field unchanged. Pop-culture (movies, TV, music lyrics, sports plays/quotes) is the danger zone — your training data on specific scene details is often wrong. Hard numerical/historical facts (dates, capitals, scientific constants) are safer.
 
 You will receive a JSON payload with one of these answerFormats:
 - "multiple_choice": optionA-D + correctOption (A/B/C/D). Verify correctOption identifies the actually-correct option. If a different option is correct, change correctOption to match it. Do NOT rewrite the option texts unless one contains a clear factual error.
@@ -909,6 +926,7 @@ You will receive a JSON payload with one of these answerFormats:
 Return EXACTLY this JSON, nothing else:
 {
   "changed": true | false,
+  "confidence": 0.0 to 1.0,
   "notes": "one short sentence describing what you fixed and why, or 'no issues found'",
   "corrected": {
     // include the FULL payload, with any corrections applied. Even unchanged fields must be present.
@@ -916,6 +934,9 @@ Return EXACTLY this JSON, nothing else:
 }
 
 Rules:
+- "confidence" is REQUIRED. It is your subjective probability that the correction is right. If changed=false, set confidence to your probability that the original is correct.
+- A correction will only be applied at confidence >= 0.9. So: do NOT claim 0.9 unless you would bet $100 of your own money. Claiming 0.85 means "I think I'm right but I am not certain" — that will NOT trigger a change, which is the right outcome when you're not sure.
+- For pop-culture/sports/lyrics MC questions specifically, the bar is even higher. If you cannot point to a specific source or scene detail you are sure of, cap confidence at 0.7 — better to let a real human flag mid-round than to silently flip a correct key.
 - "notes" must be <= 240 characters.
 - Only set changed=true if you actually modified a field's value.
 - For ordering: when you correct values, verify the items+values pair makes sense, then sort both arrays so they're in orderingDirection order. orderingCorrectOrder MUST remain [1, 2, 3] or [1, 2, 3, 4].
@@ -934,7 +955,10 @@ export async function reviewQuestion(
   if (!process.env.ANTHROPIC_API_KEY) {
     return {
       changed: false,
+      proposedChange: false,
+      confidence: 0,
       corrected: payload,
+      proposed: payload,
       notes: "AI unavailable; reviewer skipped",
       modelUsed: REVIEWER_MODEL,
       latencyMs: Date.now() - start,
@@ -969,7 +993,10 @@ export async function reviewQuestion(
     if (!match) {
       return {
         changed: false,
+        proposedChange: false,
+        confidence: 0,
         corrected: payload,
+        proposed: payload,
         notes: "reviewer returned no JSON",
         modelUsed: REVIEWER_MODEL,
         latencyMs: Date.now() - start,
@@ -978,25 +1005,39 @@ export async function reviewQuestion(
     }
     const parsed = JSON.parse(match[0]) as {
       changed?: boolean;
+      confidence?: number;
       notes?: string;
       corrected?: ReviewablePayload;
     };
 
-    const corrected = parsed.corrected ?? payload;
+    const proposed = parsed.corrected ?? payload;
     // Defensive: keep critical invariants in place even if the model drifts.
     if (
-      corrected.answerFormat === "ordering" &&
-      Array.isArray(corrected.orderingItems) &&
-      Array.isArray(corrected.orderingCorrectOrder)
+      proposed.answerFormat === "ordering" &&
+      Array.isArray(proposed.orderingItems) &&
+      Array.isArray(proposed.orderingCorrectOrder)
     ) {
-      const n = corrected.orderingItems.length;
-      corrected.orderingCorrectOrder = Array.from({ length: n }, (_, i) => i + 1);
+      const n = proposed.orderingItems.length;
+      proposed.orderingCorrectOrder = Array.from({ length: n }, (_, i) => i + 1);
     }
 
+    const proposedChange = !!parsed.changed;
+    const rawConfidence = typeof parsed.confidence === "number" ? parsed.confidence : 0;
+    const confidence = Math.max(0, Math.min(1, rawConfidence));
+    const gatePassed = proposedChange && confidence >= REVIEWER_CONFIDENCE_THRESHOLD;
+
+    const baseNote = (parsed.notes ?? "").slice(0, 240);
+    const notes = proposedChange && !gatePassed
+      ? `[low-confidence ${confidence.toFixed(2)}; correction dropped] ${baseNote}`.slice(0, 240)
+      : baseNote;
+
     return {
-      changed: !!parsed.changed,
-      corrected,
-      notes: (parsed.notes ?? "").slice(0, 240),
+      changed: gatePassed,
+      proposedChange,
+      confidence,
+      corrected: gatePassed ? proposed : payload,
+      proposed,
+      notes,
       modelUsed: REVIEWER_MODEL,
       latencyMs: Date.now() - start,
       status: "ok",
@@ -1005,7 +1046,10 @@ export async function reviewQuestion(
     const isTimeout = err instanceof Error && err.message === "reviewer_timeout";
     return {
       changed: false,
+      proposedChange: false,
+      confidence: 0,
       corrected: payload,
+      proposed: payload,
       notes: isTimeout ? "reviewer timed out" : "reviewer error",
       modelUsed: REVIEWER_MODEL,
       latencyMs: Date.now() - start,

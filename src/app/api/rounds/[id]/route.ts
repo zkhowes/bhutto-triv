@@ -327,9 +327,28 @@ export async function GET(
     },
   });
 
+  // Pending reviewer proposal: contains the PROPOSED answer key, so only the
+  // question's creator should ever see it. Strip for everyone else. Also strip
+  // once the round leaves the decision-eligible window (graded / cancelled).
+  let questionWithReview = questionData;
+  if (questionWithReview && "pendingReviewProposal" in questionWithReview) {
+    const isCreator = round.question?.creatorUserId === userId;
+    const eligibleStatus =
+      round.status === "question_submitted" || round.status === "category_revealed";
+    if (!isCreator || !eligibleStatus) {
+      questionWithReview = {
+        ...questionWithReview,
+        pendingReviewProposal: null,
+        pendingReviewNotes: null,
+        pendingReviewConfidence: null,
+        pendingReviewLogId: null,
+      };
+    }
+  }
+
   return NextResponse.json({
     ...round,
-    question: questionData,
+    question: questionWithReview,
     answers: processedAnswers,
     atBatAvgRating,
     atBatRatingCount,

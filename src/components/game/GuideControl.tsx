@@ -9,6 +9,7 @@ import GradingInterface from "@/components/game/GradingInterface";
 import FlagReviewInterface from "@/components/game/FlagReviewInterface";
 import FixAndRegradeModal from "@/components/game/FixAndRegradeModal";
 import AutoSkipCountdown from "@/components/game/AutoSkipCountdown";
+import ReviewProposalBanner from "@/components/game/ReviewProposalBanner";
 
 interface RoundData {
   id: string;
@@ -36,6 +37,9 @@ interface RoundData {
     orderingCorrectOrder: string | null;
     orderingDirection: string | null;
     orderingItemValues: string | null;
+    pendingReviewProposal?: string | null;
+    pendingReviewNotes?: string | null;
+    pendingReviewConfidence?: number | null;
   } | null;
   answers: Array<{
     id: string;
@@ -437,19 +441,24 @@ export default function GuideControl(props: GuideControlProps) {
   // At bat: waiting for others
   if (isAtBat && !isGraded && round.status !== "awaiting_question") {
     return (
-      <div className="card p-5 mb-6 text-center">
-        <p className="text-lg font-bold text-[#e94560] mb-2">
-          You&apos;re Up!
-        </p>
-        <p className="text-[#a0a0b8]">
-          You submitted the question for this round. Waiting for other players to bet and answer...
-        </p>
-        {showAutoSkipTimer && (
-          <div className="flex justify-center">
-            <AutoSkipCountdown roundUpdatedAt={roundUpdatedAt!} />
-          </div>
+      <>
+        {round.question?.pendingReviewProposal && (
+          <ReviewProposalBanner question={round.question} onDecided={onRefresh} />
         )}
-      </div>
+        <div className="card p-5 mb-6 text-center">
+          <p className="text-lg font-bold text-[#e94560] mb-2">
+            You&apos;re Up!
+          </p>
+          <p className="text-[#a0a0b8]">
+            You submitted the question for this round. Waiting for other players to bet and answer...
+          </p>
+          {showAutoSkipTimer && (
+            <div className="flex justify-center">
+              <AutoSkipCountdown roundUpdatedAt={roundUpdatedAt!} />
+            </div>
+          )}
+        </div>
+      </>
     );
   }
 

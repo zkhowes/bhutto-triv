@@ -34,7 +34,7 @@ describe("reviewQuestion — graceful fallback paths", () => {
 });
 
 describe("reviewQuestion — reviewer rewrites payload", () => {
-  it("applies reviewer corrections when changed=true", async () => {
+  it("applies reviewer corrections when changed=true and confidence >= 0.9", async () => {
     vi.stubEnv("ANTHROPIC_API_KEY", "test-key");
     vi.doMock("@anthropic-ai/sdk", () => ({
       default: class MockAnthropic {
@@ -45,6 +45,7 @@ describe("reviewQuestion — reviewer rewrites payload", () => {
                 type: "text",
                 text: JSON.stringify({
                   changed: true,
+                  confidence: 0.95,
                   notes: "Frozen is 2013, Snow White is 1937 — values were transposed.",
                   corrected: {
                     ...baseOrdering,
@@ -64,6 +65,8 @@ describe("reviewQuestion — reviewer rewrites payload", () => {
     const result = await fresh(baseOrdering);
     expect(result.status).toBe("ok");
     expect(result.changed).toBe(true);
+    expect(result.proposedChange).toBe(true);
+    expect(result.confidence).toBeCloseTo(0.95);
     expect(result.corrected.orderingItems).toEqual([
       "Snow White and the Seven Dwarfs",
       "The Lion King",
@@ -74,6 +77,78 @@ describe("reviewQuestion — reviewer rewrites payload", () => {
     // Defensive invariant: orderingCorrectOrder always [1..n].
     expect(result.corrected.orderingCorrectOrder).toEqual([1, 2, 3, 4]);
     expect(result.notes).toMatch(/Frozen|Snow White/);
+  });
+
+  it("DROPS reviewer corrections when confidence < 0.9 (the Step Brothers protection)", async () => {
+    // Mirrors the real-world failure: reviewer wants to flip pillow -> bike helmet
+    // but isn't sure enough. Gate must reject and persist the original payload.
+    vi.stubEnv("ANTHROPIC_API_KEY", "test-key");
+    const stepBrothers: ReviewablePayload = {
+      category: "Entertainment",
+      questionText: "In Step Brothers, what does Dale put in the oven while sleepwalking?",
+      answerFormat: "multiple_choice",
+      optionA: "Pillows",
+      optionB: "Bike helmet",
+      optionC: "Cell phone",
+      optionD: "Clothes",
+      correctOption: "A",
+    };
+    vi.doMock("@anthropic-ai/sdk", () => ({
+      default: class MockAnthropic {
+        messages = {
+          create: vi.fn(async () => ({
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  changed: true,
+                  confidence: 0.7,
+                  notes: "I think it's a bike helmet.",
+                  corrected: { ...stepBrothers, correctOption: "B" },
+                }),
+              },
+            ],
+          })),
+        };
+      },
+    }));
+    const { reviewQuestion: fresh } = await import("../ai");
+    const result = await fresh(stepBrothers);
+    expect(result.status).toBe("ok");
+    expect(result.changed).toBe(false);                          // gate dropped it
+    expect(result.proposedChange).toBe(true);                    // but forensics see the attempt
+    expect(result.confidence).toBeCloseTo(0.7);
+    expect(result.corrected.correctOption).toBe("A");            // persisted = original
+    expect(result.proposed.correctOption).toBe("B");             // logged = what reviewer wanted
+    expect(result.notes).toMatch(/low-confidence/);
+  });
+
+  it("treats missing confidence as 0 and drops the correction", async () => {
+    vi.stubEnv("ANTHROPIC_API_KEY", "test-key");
+    vi.doMock("@anthropic-ai/sdk", () => ({
+      default: class MockAnthropic {
+        messages = {
+          create: vi.fn(async () => ({
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  changed: true,
+                  // no confidence field — old prompt's response shape
+                  notes: "would change",
+                  corrected: { ...baseOrdering, orderingItemValues: [9999, 1994, 2013, 2016] },
+                }),
+              },
+            ],
+          })),
+        };
+      },
+    }));
+    const { reviewQuestion: fresh } = await import("../ai");
+    const result = await fresh(baseOrdering);
+    expect(result.changed).toBe(false);
+    expect(result.confidence).toBe(0);
+    expect(result.corrected).toEqual(baseOrdering);
   });
 
   it("returns changed=false when reviewer reports no issues", async () => {
@@ -196,7 +271,7 @@ describe("reviewQuestion — reviewer rewrites payload", () => {
 });
 
 describe("reviewQuestion — multiple-choice corrections", () => {
-  it("can flip correctOption when reviewer says so", async () => {
+  it("can flip correctOption when reviewer is confident (>= 0.9)", async () => {
     vi.stubEnv("ANTHROPIC_API_KEY", "test-key");
     const mc: ReviewablePayload = {
       category: "Geography",
@@ -217,6 +292,7 @@ describe("reviewQuestion — multiple-choice corrections", () => {
                 type: "text",
                 text: JSON.stringify({
                   changed: true,
+                  confidence: 0.98,
                   notes: "Capital of Australia is Canberra (B), not Sydney.",
                   corrected: { ...mc, correctOption: "B" },
                 }),

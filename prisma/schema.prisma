@@ -304,6 +304,18 @@ model Question {
   orderingDirection    String?   // e.g. "most to least", "earliest to latest"
   orderingItemValues   String?   // JSON: parallel to orderingItems, comparable scalars (years, populations); equal values count as ties when scoring
 
+  // Pending reviewer proposal (MC + free-text only — ordering still auto-applies).
+  // When the at-submit reviewer returns a high-confidence correction on an MC or
+  // free-text question, the ORIGINAL payload is persisted to the question fields
+  // above and the proposal is stashed here so the submitter can accept/reject it.
+  // Cleared once reviewDecision is set.
+  pendingReviewProposal   String?   // JSON of the proposed ReviewablePayload
+  pendingReviewNotes      String?   // reviewer rationale, <=240 chars
+  pendingReviewConfidence Float?    // reviewer self-reported 0..1
+  pendingReviewLogId      String?   // FK to QuestionReviewLog (no relation — referenced by id only)
+  reviewDecision          String?   // "accepted" | "rejected" | null (null = still pending or never proposed)
+  reviewDecidedAt         DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -318,21 +330,24 @@ model Question {
 // One row per submission attempt, capturing the AI/submitter payload before
 // review and the final (possibly corrected) payload that hit production.
 model QuestionReviewLog {
-  id           String   @id @default(cuid())
-  questionId   String
-  format       String   // "multiple_choice" | "price_is_right" | "ordering"
-  category     String
-  questionText String
-  beforeJson   String   // serialized payload pre-review
-  afterJson    String   // serialized payload post-review (may equal before)
-  changed      Boolean  // did the reviewer rewrite anything?
-  notes        String?  // reviewer's free-text rationale
-  modelUsed    String   // e.g. "claude-haiku-4-5-20251001"
-  status       String   // "ok" | "review_unavailable" | "review_error"
-  latencyMs    Int
-  createdAt    DateTime @default(now())
+  id              String   @id @default(cuid())
+  questionId      String
+  format          String   // "multiple_choice" | "price_is_right" | "ordering"
+  category        String
+  questionText    String
+  beforeJson      String   // serialized payload pre-review
+  afterJson       String   // serialized payload post-review (= beforeJson when correction was dropped or none proposed)
+  proposedJson    String?  // what the reviewer wanted to change to (may equal beforeJson if it proposed nothing)
+  proposedChange  Boolean  @default(false) // did the reviewer propose a change (before confidence gate)?
+  confidence      Float?   // reviewer's self-reported 0..1 confidence; null if pre-confidence rows or unavailable
+  changed         Boolean  // did we actually apply a change? (proposedChange && confidence >= threshold && passed defensive validators)
+  notes           String?  // reviewer's free-text rationale
+  modelUsed       String   // e.g. "claude-sonnet-4-6", or "commissioner-regrade" for manual fixes
+  status          String   // "ok" | "review_unavailable" | "review_error"
+  latencyMs       Int
+  createdAt       DateTime @default(now())
 
-  question     Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  question        Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
 }
 
 model QuestionDraft {

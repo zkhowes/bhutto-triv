@@ -336,11 +336,18 @@ export async function submitQuestion(
     : await reviewQuestion(beforePayload);
   const finalPayload = review?.corrected ?? beforePayload;
 
-  // Defense: if the reviewer corrected an ordering payload, re-run the
-  // workshop's structural validator on the corrected version. If it now fails
-  // validation (e.g. reviewer broke direction monotonicity), drop the
-  // correction and ship the original.
+  // Decide whether to APPLY the reviewer's correction now, STASH it for
+  // submitter approval, or DROP it.
+  //
+  // - Ordering: defensive structural validator catches reviewer drift. If it
+  //   passes, auto-apply (current behavior). False-positive risk is low.
+  // - MC / free-text / closest-guess: reviewer is most fallible here (real-world
+  //   incidents: Step Brothers pillow→bike-helmet, SB margin D→B). When the
+  //   reviewer has a high-confidence correction, STASH it on the question's
+  //   pendingReview* fields and ship the submitter's original. Submitter
+  //   accepts or rejects via a banner on the round page.
   let usedReviewerCorrection = !!review?.changed;
+  let stashAsPendingProposal = false;
   if (review?.changed && finalPayload.answerFormat === "ordering") {
     const { validateOrderingPayload } = await import("./ai");
     const problem = validateOrderingPayload({
@@ -358,6 +365,10 @@ export async function submitQuestion(
       console.warn(`[reviewer] dropped correction (validation failed): ${problem}`);
       usedReviewerCorrection = false;
     }
+  } else if (review?.changed && finalPayload.answerFormat !== "ordering") {
+    // MC / free-text / closest-guess: don't apply silently. Stash for submitter.
+    usedReviewerCorrection = false;
+    stashAsPendingProposal = true;
   }
   const persistPayload = usedReviewerCorrection ? finalPayload : beforePayload;
 
@@ -388,13 +399,17 @@ export async function submitQuestion(
       orderingItemValues: persistPayload.orderingItemValues ? JSON.stringify(persistPayload.orderingItemValues) : null,
       isReplay,
       originalQuestionId: rootOriginalId,
+      // Stash the reviewer's proposal for submitter accept/reject (MC/free-text only).
+      pendingReviewProposal: stashAsPendingProposal && review ? JSON.stringify(review.proposed) : null,
+      pendingReviewNotes: stashAsPendingProposal && review ? review.notes : null,
+      pendingReviewConfidence: stashAsPendingProposal && review ? review.confidence : null,
     },
   });
 
   // Forensic log of the reviewer pass (skip when replay — reviewer didn't run).
   if (review) {
     try {
-      await prisma.questionReviewLog.create({
+      const log = await prisma.questionReviewLog.create({
         data: {
           questionId: question.id,
           format: persistPayload.answerFormat,
@@ -402,6 +417,9 @@ export async function submitQuestion(
           questionText: persistPayload.questionText,
           beforeJson: JSON.stringify(beforePayload),
           afterJson: JSON.stringify(persistPayload),
+          proposedJson: JSON.stringify(review.proposed),
+          proposedChange: review.proposedChange,
+          confidence: review.confidence,
           changed: usedReviewerCorrection,
           notes: review.notes || null,
           modelUsed: review.modelUsed,
@@ -409,6 +427,14 @@ export async function submitQuestion(
           latencyMs: review.latencyMs,
         },
       });
+      // Back-link the log id to the question so the accept/reject route can
+      // update the same forensic row when the submitter decides.
+      if (stashAsPendingProposal) {
+        await prisma.question.update({
+          where: { id: question.id },
+          data: { pendingReviewLogId: log.id },
+        });
+      }
     } catch (err) {
       console.error("[reviewer] failed to write QuestionReviewLog:", err);
     }
