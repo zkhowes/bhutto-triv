@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import FixAndRegradeModal from "@/components/game/FixAndRegradeModal";
 
 interface FlagReviewData {
   id: string;
@@ -44,28 +45,72 @@ interface RoundContext {
   }>;
 }
 
+// Shapes accepted by FixAndRegradeModal. Kept loose so callers can pass
+// whatever the existing /api/rounds/[id] payload provides — the modal only
+// reads the fields it uses.
+interface RegradeQuestion {
+  id: string;
+  category: string;
+  questionText: string;
+  answerFormat: string;
+  optionA: string | null;
+  optionB: string | null;
+  optionC: string | null;
+  optionD: string | null;
+  correctOption: string | null;
+  correctAnswer: string | null;
+  acceptableAnswers: string | null;
+  correctAnswerUnit: string | null;
+  orderingItems: string | null;
+  orderingCorrectOrder: string | null;
+  orderingItemValues: string | null;
+  orderingDirection: string | null;
+}
+
+interface RegradeAnswer {
+  id: string;
+  leaguePlayerId: string;
+  selectedOption: string | null;
+  freeTextAnswer: string | null;
+  isAbsent: boolean;
+  leaguePlayer: {
+    fakeNickname: string | null;
+    user: { nickname: string | null };
+  };
+}
+
 interface FlagReviewInterfaceProps {
   roundId: string;
+  roundNumber: number;
+  gameNumber: number;
   myPlayerId: string | null;
   isCommissioner: boolean;
   actAsPlayerId: string | null;
   roundContext?: RoundContext | null;
+  regradeQuestion?: RegradeQuestion | null;
+  regradeAnswers?: RegradeAnswer[];
   onResolved: () => void;
 }
 
 export default function FlagReviewInterface({
   roundId,
+  roundNumber,
+  gameNumber,
   myPlayerId,
   isCommissioner,
   actAsPlayerId,
   roundContext,
+  regradeQuestion,
+  regradeAnswers,
   onResolved,
 }: FlagReviewInterfaceProps) {
+  void actAsPlayerId;
   const [review, setReview] = useState<FlagReviewData | null>(null);
   const [loading, setLoading] = useState(true);
   const [voting, setVoting] = useState(false);
   const [forceClosing, setForceClosing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showRegradeModal, setShowRegradeModal] = useState(false);
 
   const fetchReview = useCallback(async () => {
     try {
@@ -347,7 +392,7 @@ export default function FlagReviewInterface({
       {isCommissioner && review.status === "pending" && (
         <div className="border-t border-[#1e3a5f] pt-3 mt-3">
           <p className="text-xs text-[#666680] uppercase tracking-wider mb-2">Commissioner</p>
-          <div className="flex gap-2">
+          <div className="flex gap-2 mb-2">
             <button
               onClick={() => handleForceClose("agree")}
               disabled={forceClosing}
@@ -363,11 +408,36 @@ export default function FlagReviewInterface({
               Force: Keep
             </button>
           </div>
+          {regradeQuestion && regradeAnswers && (
+            <button
+              onClick={() => setShowRegradeModal(true)}
+              className="w-full py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs hover:bg-amber-500/20 transition-colors"
+            >
+              Fix answer & regrade in place
+            </button>
+          )}
         </div>
       )}
 
       {error && (
         <p className="text-xs text-red-400 mt-3 text-center">{error}</p>
+      )}
+
+      {showRegradeModal && regradeQuestion && regradeAnswers && (
+        <FixAndRegradeModal
+          roundId={roundId}
+          roundNumber={roundNumber}
+          gameNumber={gameNumber}
+          hasFlag={true}
+          question={regradeQuestion}
+          answers={regradeAnswers}
+          isOpen={showRegradeModal}
+          onClose={() => setShowRegradeModal(false)}
+          onApplied={() => {
+            setShowRegradeModal(false);
+            onResolved();
+          }}
+        />
       )}
     </div>
   );

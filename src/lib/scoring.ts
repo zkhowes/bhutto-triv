@@ -429,3 +429,189 @@ export function computeQuestionComposite(
   return Math.round(Math.min(5, avgRating + formatBoost) * 10) / 10;
 }
 
+// ─── Projection: simulate a commissioner regrade ───────────────────────────
+
+export interface ProjectionAnswerInput {
+  id: string;
+  leaguePlayerId: string;
+  nickname: string;
+  selectedOption: string | null;
+  freeTextAnswer: string | null;
+  betAmount: number;
+  answeredAt: Date | null;
+  isAbsent: boolean;
+  isBlindBet: boolean;
+  // Current (pre-regrade) values, surfaced in the projection's `before` half.
+  isCorrect: boolean | null;
+  pointsWon: number;
+  f1Points: number;
+  placement: number | null;
+  fastestLap: boolean;
+  // The new isCorrect under the proposed key. For MC, the caller passes
+  // selectedOption === newCorrectOption. For closest-guess / ordering, the
+  // caller supplies the proposed answer-key fields and the helper recomputes.
+  // For free-text the caller must run the AI grader externally and pass the
+  // boolean here.
+  newIsCorrect: boolean;
+}
+
+export interface ProjectionPlayerStateInput {
+  leaguePlayerId: string;
+  nickname: string;
+  /** Current points displayed on the game chart (already includes this round). */
+  currentPoints: number;
+  /** Whether the player is currently eliminated. */
+  isEliminated: boolean;
+}
+
+export interface ProjectionAnswerResult {
+  answerId: string;
+  leaguePlayerId: string;
+  nickname: string;
+  before: {
+    isCorrect: boolean | null;
+    pointsWon: number;
+    f1Points: number;
+    placement: number | null;
+    fastestLap: boolean;
+  };
+  after: {
+    isCorrect: boolean;
+    pointsWon: number;
+    f1Points: number;
+    placement: number | null;
+    fastestLap: boolean;
+  };
+}
+
+export interface ProjectionPlayerResult {
+  leaguePlayerId: string;
+  nickname: string;
+  before: { points: number; isEliminated: boolean };
+  after: { points: number; isEliminated: boolean };
+}
+
+/**
+ * Pure projection of what a regrade would do, given the proposed per-answer
+ * `newIsCorrect` values. Mirrors closeRound's scoring path: blind-bet 2x
+ * multiplier on correct, clamp at -prevPoints on negatives, busted-player
+ * path zeros placement/F1/points (correct just earns +1 bonus elsewhere).
+ *
+ * The caller is responsible for computing each answer's `newIsCorrect`
+ * upstream (MC: option compare; closest-guess: determinePirWinners on new
+ * target; ordering: determineOrderingWinners on new order/values; free-text:
+ * AI grader). This helper does NOT call the AI grader.
+ */
+export function projectRegrade(input: {
+  answers: ProjectionAnswerInput[];
+  playerStates: ProjectionPlayerStateInput[];
+}): {
+  answers: ProjectionAnswerResult[];
+  players: ProjectionPlayerResult[];
+} {
+  const { answers, playerStates } = input;
+
+  const stateByPlayer = new Map(playerStates.map((p) => [p.leaguePlayerId, p]));
+
+  // Reverse each answer's existing pointsWon to derive each player's pre-round points.
+  const prevPoints = new Map<string, number>();
+  for (const ps of playerStates) prevPoints.set(ps.leaguePlayerId, ps.currentPoints);
+  for (const a of answers) {
+    const cur = prevPoints.get(a.leaguePlayerId);
+    if (cur === undefined) continue;
+    prevPoints.set(a.leaguePlayerId, Math.max(0, cur - a.pointsWon));
+  }
+
+  // Run scoreRound with the new isCorrect values.
+  const scoringInput = answers.map((a) => {
+    const ps = stateByPlayer.get(a.leaguePlayerId);
+    // Eliminated-before-this-round = pre-round points === 0.
+    // (We use the same definition closeRound uses internally: playerState.isEliminated.
+    // But after reversal, a player whose only points came from this round drops to 0,
+    // so we compute from prevPoints to be safe.)
+    const wasElim = (prevPoints.get(a.leaguePlayerId) ?? 0) === 0 && (ps?.isEliminated ?? false);
+    return {
+      leaguePlayerId: a.leaguePlayerId,
+      isCorrect: a.newIsCorrect,
+      betAmount: a.betAmount,
+      answeredAt: a.answeredAt,
+      isAbsent: a.isAbsent,
+      isEliminated: wasElim,
+      nickname: a.nickname,
+    };
+  });
+  const scored = scoreRound(scoringInput);
+  const scoredById = new Map(scored.map((s) => [s.leaguePlayerId, s]));
+
+  // Apply blind multiplier + clamp the same way closeRound does, and compute
+  // each answer's after-state pointsWon.
+  const afterPointsByPlayer = new Map<string, number>();
+  prevPoints.forEach((pts, id) => afterPointsByPlayer.set(id, pts));
+
+  const answerResults: ProjectionAnswerResult[] = answers.map((a) => {
+    const score = scoredById.get(a.leaguePlayerId);
+    const wasElim = (prevPoints.get(a.leaguePlayerId) ?? 0) === 0;
+
+    let afterPointsWon: number;
+    let afterPlacement: number | null;
+    let afterF1: number;
+    let afterFastest: boolean;
+
+    if (wasElim) {
+      afterPointsWon = 0;
+      afterPlacement = null;
+      afterF1 = 0;
+      afterFastest = false;
+    } else if (a.isAbsent) {
+      // Absentee penalty is computed elsewhere by closeRound; keep current value.
+      afterPointsWon = a.pointsWon;
+      afterPlacement = score?.placement ?? null;
+      afterF1 = score?.f1Points ?? 0;
+      afterFastest = score?.fastestLap ?? false;
+    } else {
+      const blindMul = a.isBlindBet ? 2 : 1;
+      const raw = a.newIsCorrect ? a.betAmount * blindMul : -a.betAmount;
+      const prev = prevPoints.get(a.leaguePlayerId) ?? 0;
+      afterPointsWon = raw < 0 ? Math.max(raw, -prev) : raw;
+      afterPlacement = score?.placement ?? null;
+      afterF1 = score?.f1Points ?? 0;
+      afterFastest = score?.fastestLap ?? false;
+    }
+
+    const cur = afterPointsByPlayer.get(a.leaguePlayerId) ?? 0;
+    afterPointsByPlayer.set(a.leaguePlayerId, Math.max(0, cur + afterPointsWon));
+
+    return {
+      answerId: a.id,
+      leaguePlayerId: a.leaguePlayerId,
+      nickname: a.nickname,
+      before: {
+        isCorrect: a.isCorrect,
+        pointsWon: a.pointsWon,
+        f1Points: a.f1Points,
+        placement: a.placement,
+        fastestLap: a.fastestLap,
+      },
+      after: {
+        isCorrect: a.newIsCorrect,
+        pointsWon: afterPointsWon,
+        f1Points: afterF1,
+        placement: afterPlacement,
+        fastestLap: afterFastest,
+      },
+    };
+  });
+
+  const playerResults: ProjectionPlayerResult[] = playerStates.map((ps) => {
+    const afterPts = afterPointsByPlayer.get(ps.leaguePlayerId) ?? ps.currentPoints;
+    return {
+      leaguePlayerId: ps.leaguePlayerId,
+      nickname: ps.nickname,
+      before: { points: ps.currentPoints, isEliminated: ps.isEliminated },
+      after: { points: afterPts, isEliminated: afterPts === 0 },
+    };
+  });
+
+  return { answers: answerResults, players: playerResults };
+}
+

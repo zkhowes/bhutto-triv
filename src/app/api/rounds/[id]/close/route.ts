@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { closeRound } from "@/lib/game-engine";
+import { closeRound, reverseRoundScoring } from "@/lib/game-engine";
+import { ROUND_STATUS } from "@/lib/constants";
 
 export async function POST(
   _req: NextRequest,
@@ -64,7 +65,15 @@ export async function POST(
   }
 
   try {
-    await closeRound(roundId);
+    // Re-grading a graded round: closeRound's race-condition guard short-circuits
+    // on GRADED status, so we must reverse the prior scoring on GamePlayerState
+    // and demote the round to CATEGORY_REVEALED before forcing a fresh close.
+    await reverseRoundScoring(roundId);
+    await prisma.round.update({
+      where: { id: roundId },
+      data: { status: ROUND_STATUS.CATEGORY_REVEALED },
+    });
+    await closeRound(roundId, { force: true });
     return NextResponse.json({ success: true });
   } catch (error) {
     const message =

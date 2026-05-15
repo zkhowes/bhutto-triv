@@ -2437,7 +2437,14 @@ export default function AdminPage() {
                             </span>
                           </td>
                           <td className="p-3 text-center">
-                            {log.changed ? (
+                            {log.modelUsed === "commissioner-regrade" ? (
+                              <span
+                                className="px-2 py-1 rounded text-xs font-medium bg-blue-500/20 text-blue-400"
+                                title="Commissioner regrade"
+                              >
+                                🛠 Commish
+                              </span>
+                            ) : log.changed ? (
                               <span className="px-2 py-1 rounded text-xs font-medium bg-yellow-500/20 text-yellow-400">
                                 ✎ Changed
                               </span>

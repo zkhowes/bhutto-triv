@@ -8,6 +8,9 @@ import {
   calculateAbsenteePenalty,
   classifyOrderingDirection,
   deriveCanonicalOrder,
+  projectRegrade,
+  type ProjectionAnswerInput,
+  type ProjectionPlayerStateInput,
 } from "../scoring";
 
 describe("determinePirWinners (closest guess)", () => {
@@ -479,5 +482,212 @@ describe("computePowerUpCost", () => {
 
   it("returns 1 for empty array", () => {
     expect(computePowerUpCost(10, [])).toBe(1);
+  });
+});
+
+describe("projectRegrade", () => {
+  // Helper: build a minimal ProjectionAnswerInput.
+  function ans(
+    id: string,
+    nickname: string,
+    overrides: Partial<ProjectionAnswerInput>
+  ): ProjectionAnswerInput {
+    return {
+      id,
+      leaguePlayerId: id,
+      nickname,
+      selectedOption: null,
+      freeTextAnswer: null,
+      betAmount: 0,
+      answeredAt: null,
+      isAbsent: false,
+      isBlindBet: false,
+      isCorrect: false,
+      pointsWon: 0,
+      f1Points: 0,
+      placement: null,
+      fastestLap: false,
+      newIsCorrect: false,
+      ...overrides,
+    };
+  }
+
+  function state(
+    id: string,
+    nickname: string,
+    currentPoints: number,
+    isEliminated = false
+  ): ProjectionPlayerStateInput {
+    return { leaguePlayerId: id, nickname, currentPoints, isEliminated };
+  }
+
+  it("MC flip: correct↔wrong swap recomputes pointsWon (Bhutto Pilot G3R4 scenario)", () => {
+    // Three answerers bet on D (correct under old key, wrong under new key) and B
+    // (wrong → correct). One bets C (always wrong). Mirrors the real round 4 fix.
+    const answers: ProjectionAnswerInput[] = [
+      ans("zk", "Zkhowes", {
+        selectedOption: "D",
+        betAmount: 10,
+        isBlindBet: true,
+        isCorrect: true,
+        pointsWon: 20,
+        placement: 1,
+        fastestLap: true,
+        newIsCorrect: false,
+      }),
+      ans("los", "LOS", {
+        selectedOption: "B",
+        betAmount: 3,
+        isCorrect: false,
+        pointsWon: -3,
+        placement: 3,
+        newIsCorrect: true,
+      }),
+      ans("yap", "Yap", {
+        selectedOption: "B",
+        betAmount: 7,
+        isCorrect: false,
+        pointsWon: -7,
+        placement: 6,
+        newIsCorrect: true,
+      }),
+      ans("tim", "Spokane Tim", {
+        selectedOption: "B",
+        betAmount: 3,
+        isCorrect: false,
+        pointsWon: -3,
+        placement: 4,
+        newIsCorrect: true,
+      }),
+      ans("za", "Zack Ali", {
+        selectedOption: "C",
+        betAmount: 5,
+        isCorrect: false,
+        pointsWon: -5,
+        placement: 5,
+        newIsCorrect: false,
+      }),
+    ];
+    const players: ProjectionPlayerStateInput[] = [
+      state("zk", "Zkhowes", 31),
+      state("los", "LOS", 17),
+      state("yap", "Yap", 13),
+      state("tim", "Spokane Tim", 10),
+      state("za", "Zack Ali", 34),
+    ];
+
+    const result = projectRegrade({ answers, playerStates: players });
+
+    const zkAfter = result.players.find((p) => p.leaguePlayerId === "zk")!;
+    expect(zkAfter.before.points).toBe(31);
+    // Reverse +20 → 11, then blind bet on wrong = -10 (clamped at -prev=11). Floor 0.
+    expect(zkAfter.after.points).toBe(1);
+
+    const yapAfter = result.players.find((p) => p.leaguePlayerId === "yap")!;
+    // Reverse -7 → 20, then correct +7 (no blind multiplier set) = 27.
+    expect(yapAfter.after.points).toBe(27);
+
+    const losAfter = result.players.find((p) => p.leaguePlayerId === "los")!;
+    expect(losAfter.after.points).toBe(23);
+
+    const timAfter = result.players.find((p) => p.leaguePlayerId === "tim")!;
+    expect(timAfter.after.points).toBe(16);
+
+    const zaAfter = result.players.find((p) => p.leaguePlayerId === "za")!;
+    expect(zaAfter.after.points).toBe(34); // unchanged, still wrong
+
+    // Yap should now hold P1 with fastest lap (highest bet among correct: 7).
+    const yapAns = result.answers.find((a) => a.answerId === "yap")!;
+    expect(yapAns.after.placement).toBe(1);
+    expect(yapAns.after.fastestLap).toBe(true);
+  });
+
+  it("clamps negative pointsWon at -prevPoints (no debt allowed)", () => {
+    const answers: ProjectionAnswerInput[] = [
+      ans("p1", "Solo", {
+        selectedOption: "A",
+        betAmount: 50,
+        isCorrect: true,
+        pointsWon: 50,
+        placement: 1,
+        newIsCorrect: false,
+      }),
+    ];
+    // Player had 0 before the round, +50 brought them to 50.
+    // Reversal drops them to 0; new wrong-bet -50 is clamped at -0 = 0.
+    const players = [state("p1", "Solo", 50)];
+    const r = projectRegrade({ answers, playerStates: players });
+    const a = r.answers[0];
+    expect(a.after.pointsWon).toBe(0);
+    expect(r.players[0].after.points).toBe(0);
+    expect(r.players[0].after.isEliminated).toBe(true);
+  });
+
+  it("blind bet doubles the gain on correct, not the loss on wrong", () => {
+    const correct: ProjectionAnswerInput[] = [
+      ans("a", "A", { betAmount: 5, isBlindBet: true, isCorrect: false, pointsWon: -5, placement: 2, newIsCorrect: true }),
+      ans("b", "B", { betAmount: 5, isCorrect: false, pointsWon: -5, placement: 3, newIsCorrect: false }),
+    ];
+    const r = projectRegrade({
+      answers: correct,
+      playerStates: [state("a", "A", 20), state("b", "B", 20)],
+    });
+    expect(r.answers.find((x) => x.answerId === "a")!.after.pointsWon).toBe(10);
+    // Now flip: A wrong with blind = -5 (NOT -10).
+    const flipped: ProjectionAnswerInput[] = [
+      ans("a", "A", { betAmount: 5, isBlindBet: true, isCorrect: true, pointsWon: 10, placement: 1, newIsCorrect: false }),
+      ans("b", "B", { betAmount: 5, isCorrect: true, pointsWon: 5, placement: 2, newIsCorrect: false }),
+    ];
+    const r2 = projectRegrade({
+      answers: flipped,
+      playerStates: [state("a", "A", 30), state("b", "B", 25)],
+    });
+    expect(r2.answers.find((x) => x.answerId === "a")!.after.pointsWon).toBe(-5);
+  });
+
+  it("busted player (eliminated, pre-round = 0): no placement or pointsWon", () => {
+    const answers: ProjectionAnswerInput[] = [
+      ans("busted", "Busted", {
+        selectedOption: "A",
+        betAmount: 0,
+        isCorrect: true,
+        pointsWon: 0,
+        placement: null,
+        newIsCorrect: true,
+      }),
+      ans("alive", "Alive", {
+        selectedOption: "B",
+        betAmount: 5,
+        isCorrect: true,
+        pointsWon: 5,
+        placement: 1,
+        fastestLap: true,
+        newIsCorrect: true,
+      }),
+    ];
+    const players = [
+      state("busted", "Busted", 0, true),
+      state("alive", "Alive", 25),
+    ];
+    const r = projectRegrade({ answers, playerStates: players });
+    const b = r.answers.find((x) => x.answerId === "busted")!;
+    expect(b.after.placement).toBe(null);
+    expect(b.after.pointsWon).toBe(0);
+    expect(b.after.f1Points).toBe(0);
+  });
+
+  it("fastest lap reassigns when the previous holder is now wrong", () => {
+    const answers: ProjectionAnswerInput[] = [
+      ans("a", "A", { betAmount: 10, isCorrect: true, pointsWon: 10, placement: 1, fastestLap: true, newIsCorrect: false }),
+      ans("b", "B", { betAmount: 7, isCorrect: true, pointsWon: 7, placement: 2, newIsCorrect: true }),
+      ans("c", "C", { betAmount: 5, isCorrect: true, pointsWon: 5, placement: 3, newIsCorrect: true }),
+    ];
+    const r = projectRegrade({
+      answers,
+      playerStates: [state("a", "A", 30), state("b", "B", 25), state("c", "C", 20)],
+    });
+    expect(r.answers.find((x) => x.answerId === "a")!.after.fastestLap).toBe(false);
+    expect(r.answers.find((x) => x.answerId === "b")!.after.fastestLap).toBe(true);
+    expect(r.answers.find((x) => x.answerId === "b")!.after.placement).toBe(1);
   });
 });

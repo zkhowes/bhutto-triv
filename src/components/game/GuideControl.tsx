@@ -7,6 +7,7 @@ import BettingInterface from "@/components/game/BettingInterface";
 import AnswerInterface from "@/components/game/AnswerInterface";
 import GradingInterface from "@/components/game/GradingInterface";
 import FlagReviewInterface from "@/components/game/FlagReviewInterface";
+import FixAndRegradeModal from "@/components/game/FixAndRegradeModal";
 import AutoSkipCountdown from "@/components/game/AutoSkipCountdown";
 
 interface RoundData {
@@ -113,6 +114,7 @@ type GuideControlProps = LeagueGuideProps | GameGuideProps;
 export default function GuideControl(props: GuideControlProps) {
   const [editingGrades, setEditingGrades] = useState(false);
   const [revertingSkip, setRevertingSkip] = useState(false);
+  const [showRegradeFromGraded, setShowRegradeFromGraded] = useState(false);
   // Per-round opt-in for busted players to enter the answer interface from
   // the "Busted but Not Out" guide card.
   const [bustedAnswerStartedFor, setBustedAnswerStartedFor] = useState<string | null>(null);
@@ -229,13 +231,38 @@ export default function GuideControl(props: GuideControlProps) {
         })),
     } : null;
 
+    const regradeQuestion = round.question
+      ? {
+          id: round.question.id,
+          category: round.question.category,
+          questionText: round.question.questionText,
+          answerFormat: round.question.answerFormat,
+          optionA: round.question.optionA,
+          optionB: round.question.optionB,
+          optionC: round.question.optionC,
+          optionD: round.question.optionD,
+          correctOption: round.question.correctOption,
+          correctAnswer: round.question.correctAnswer,
+          acceptableAnswers: (round.question as Record<string, unknown>).acceptableAnswers as string | null ?? null,
+          correctAnswerUnit: (round.question as Record<string, unknown>).correctAnswerUnit as string | null ?? null,
+          orderingItems: round.question.orderingItems,
+          orderingCorrectOrder: round.question.orderingCorrectOrder,
+          orderingItemValues: round.question.orderingItemValues,
+          orderingDirection: round.question.orderingDirection,
+        }
+      : null;
+
     return (
       <FlagReviewInterface
         roundId={round.id}
+        roundNumber={roundNumber ?? round.number}
+        gameNumber={gameNumber ?? 1}
         myPlayerId={myPlayerId}
         isCommissioner={isCommissioner}
         actAsPlayerId={actAsPlayerId}
         roundContext={roundContext}
+        regradeQuestion={regradeQuestion}
+        regradeAnswers={round.answers}
         onResolved={onRefresh}
       />
     );
@@ -275,6 +302,27 @@ export default function GuideControl(props: GuideControlProps) {
       );
     }
 
+    const regradeQuestionGraded = round.question
+      ? {
+          id: round.question.id,
+          category: round.question.category,
+          questionText: round.question.questionText,
+          answerFormat: round.question.answerFormat,
+          optionA: round.question.optionA,
+          optionB: round.question.optionB,
+          optionC: round.question.optionC,
+          optionD: round.question.optionD,
+          correctOption: round.question.correctOption,
+          correctAnswer: round.question.correctAnswer,
+          acceptableAnswers: (round.question as Record<string, unknown>).acceptableAnswers as string | null ?? null,
+          correctAnswerUnit: (round.question as Record<string, unknown>).correctAnswerUnit as string | null ?? null,
+          orderingItems: round.question.orderingItems,
+          orderingCorrectOrder: round.question.orderingCorrectOrder,
+          orderingItemValues: round.question.orderingItemValues,
+          orderingDirection: round.question.orderingDirection,
+        }
+      : null;
+
     return (
       <div className="card p-5 mb-6 text-center">
         <p className="text-lg font-bold text-[#e94560] mb-1">
@@ -284,12 +332,36 @@ export default function GuideControl(props: GuideControlProps) {
           View results below
         </p>
         {isCommissioner && round.question && (
-          <button
-            onClick={() => setEditingGrades(true)}
-            className="btn-secondary text-xs mt-3"
-          >
-            ✏️ Edit Grades
-          </button>
+          <div className="flex gap-2 justify-center mt-3">
+            <button
+              onClick={() => setEditingGrades(true)}
+              className="btn-secondary text-xs"
+            >
+              ✏️ Edit Grades
+            </button>
+            <button
+              onClick={() => setShowRegradeFromGraded(true)}
+              className="btn-secondary text-xs"
+            >
+              🔑 Edit Answer Key
+            </button>
+          </div>
+        )}
+        {showRegradeFromGraded && regradeQuestionGraded && (
+          <FixAndRegradeModal
+            roundId={round.id}
+            roundNumber={roundNumber ?? round.number}
+            gameNumber={gameNumber ?? 1}
+            hasFlag={false}
+            question={regradeQuestionGraded}
+            answers={round.answers}
+            isOpen={showRegradeFromGraded}
+            onClose={() => setShowRegradeFromGraded(false)}
+            onApplied={() => {
+              setShowRegradeFromGraded(false);
+              onRefresh();
+            }}
+          />
         )}
       </div>
     );

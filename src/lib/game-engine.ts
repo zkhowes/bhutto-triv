@@ -852,9 +852,66 @@ export async function tryAutoSubmitFromBank(roundId: string): Promise<void> {
 }
 
 /**
- * Close a round and calculate scores
+ * Reverse a round's scoring effects on each player's GamePlayerState.
+ *
+ * Used by:
+ *   - resolveFlagAgree (round cancellation)
+ *   - closeRound when invoked with { force: true } on an already-graded round
+ *     (commissioner regrade / answer-key fix)
+ *
+ * Subtracts each answer's pointsWon from the player's current points (clamped at 0),
+ * un-eliminates players whose post-reversal points are > 0, and decrements bonusEarned
+ * for busted-correct answers. Callers that intend to re-run closeRound afterwards
+ * should call this first so the engine doesn't double-apply.
  */
-export async function closeRound(roundId: string): Promise<void> {
+export async function reverseRoundScoring(roundId: string): Promise<void> {
+  const round = await prisma.round.findUnique({
+    where: { id: roundId },
+    include: {
+      answers: true,
+      game: { include: { playerStates: true } },
+    },
+  });
+  if (!round) throw new Error("Round not found");
+
+  for (const answer of round.answers) {
+    const playerState = round.game.playerStates.find(
+      (ps) => ps.leaguePlayerId === answer.leaguePlayerId
+    );
+    if (!playerState) continue;
+
+    if (playerState.isEliminated && answer.isCorrect && !answer.isAbsent) {
+      await prisma.gamePlayerState.update({
+        where: { id: playerState.id },
+        data: { bonusEarned: { decrement: 1 } },
+      });
+    }
+
+    if (answer.pointsWon === 0) continue;
+
+    const reversedPoints = playerState.points - answer.pointsWon;
+    await prisma.gamePlayerState.update({
+      where: { id: playerState.id },
+      data: {
+        points: Math.max(0, reversedPoints),
+        isEliminated: reversedPoints <= 0 ? playerState.isEliminated : false,
+      },
+    });
+  }
+}
+
+/**
+ * Close a round and calculate scores.
+ *
+ * @param roundId  the round to close
+ * @param options.force  if true, runs even when the round is already GRADED. Callers
+ *                       MUST have reversed prior scoring via reverseRoundScoring and
+ *                       set the round status back to a non-graded value first.
+ */
+export async function closeRound(
+  roundId: string,
+  options: { force?: boolean; suppressNotify?: boolean } = {}
+): Promise<void> {
   const round = await prisma.round.findUnique({
     where: { id: roundId },
     include: {
@@ -885,8 +942,9 @@ export async function closeRound(roundId: string): Promise<void> {
 
   if (!round) throw new Error("Round not found");
 
-  // Guard against race condition: two simultaneous answer submissions can both trigger closeRound
-  if (round.status === ROUND_STATUS.GRADED) return;
+  // Guard against race condition: two simultaneous answer submissions can both trigger closeRound.
+  // Commissioner regrade passes force:true to bypass this after reversing prior scoring.
+  if (round.status === ROUND_STATUS.GRADED && !options.force) return;
 
   const game = round.game;
   const league = game.season.league;
@@ -1197,8 +1255,12 @@ export async function closeRound(roundId: string): Promise<void> {
     data: { status: ROUND_STATUS.GRADED, funFact, questionComposite },
   });
 
-  // Notify all players of round results (fire-and-forget)
-  notifyRoundResults(roundId).catch(console.error);
+  // Notify all players of round results (fire-and-forget). Callers that want
+  // to send their own contextual notification (e.g. commissioner regrade) pass
+  // suppressNotify:true and handle the broadcast themselves.
+  if (!options.suppressNotify) {
+    notifyRoundResults(roundId).catch(console.error);
+  }
 
   // Check if game should end (all players at 0 or no remaining rounds)
   const remainingActiveRounds = game.rounds.filter(
@@ -1914,31 +1976,7 @@ async function resolveFlagAgree(flagReviewId: string): Promise<void> {
   const game = round.game;
 
   // 1. Reverse round scoring for all answers
-  for (const answer of round.answers) {
-    const playerState = game.playerStates.find(
-      (ps) => ps.leaguePlayerId === answer.leaguePlayerId
-    );
-    if (!playerState) continue;
-
-    // Reverse bonusEarned for busted-correct answers in the cancelled round.
-    if (playerState.isEliminated && answer.isCorrect && !answer.isAbsent) {
-      await prisma.gamePlayerState.update({
-        where: { id: playerState.id },
-        data: { bonusEarned: { decrement: 1 } },
-      });
-    }
-
-    if (answer.pointsWon === 0) continue;
-
-    const reversedPoints = playerState.points - answer.pointsWon;
-    await prisma.gamePlayerState.update({
-      where: { id: playerState.id },
-      data: {
-        points: Math.max(0, reversedPoints),
-        isEliminated: reversedPoints <= 0 ? playerState.isEliminated : false,
-      },
-    });
-  }
+  await reverseRoundScoring(round.id);
 
   // 2. Cancel the round
   await prisma.round.update({
