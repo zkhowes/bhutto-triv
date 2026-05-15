@@ -59,7 +59,7 @@ export default function AutoSkipAnnouncementModal({ leagueId }: AutoSkipAnnounce
               <div>
                 <p className="font-bold text-white">Submitting questions</p>
                 <p>
-                  If you&apos;re at bat and don&apos;t submit a question within 24 hours, you&apos;ll get a warning notification. After 27 hours, you&apos;ll be auto-skipped.
+                  If you&apos;re at bat and don&apos;t submit a question within 24 hours, you&apos;ll be auto-skipped. If that 24-hour mark lands inside the league&apos;s quiet hours, the skip is pushed to one hour after quiet hours end so nobody loses their turn overnight.
                 </p>
                 <ul className="list-disc list-inside mt-1 text-xs text-gray-500">
                   <li>First skip: you move to the end of the batting order (no point penalty)</li>
@@ -70,7 +70,7 @@ export default function AutoSkipAnnouncementModal({ leagueId }: AutoSkipAnnounce
               <div>
                 <p className="font-bold text-white">Answering questions</p>
                 <p>
-                  If a question has been posted and you don&apos;t place your bet and answer within 24 hours, you&apos;ll get a warning. After 27 hours, the round will auto-close and you&apos;ll be marked absent. The penalty is your points divided by rounds remaining (capped at 50%).
+                  If a question has been posted and you don&apos;t place your bet and answer within 24 hours, the round will auto-close and you&apos;ll be marked absent (same quiet-hours deferral applies). The penalty is your points divided by rounds remaining (capped at 50%).
                 </p>
               </div>
 

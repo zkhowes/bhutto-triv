@@ -41,6 +41,7 @@ interface GameData {
       autoSkipEnabled: boolean;
     };
   };
+  quietHours?: { enabled: boolean; start: number; end: number; timezone: string };
   rounds: Array<{
     id: string;
     number: number;
@@ -593,6 +594,7 @@ export default function GamePage() {
           gameNumber={game.number}
           autoSkipEnabled={league.autoSkipEnabled}
           roundUpdatedAt={guideRoundData?.updatedAt}
+          quietHours={game.quietHours ?? null}
         />
 
         {/* Previous round results (shown when a new round is active) */}

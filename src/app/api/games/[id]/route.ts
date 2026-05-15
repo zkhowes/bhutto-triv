@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { DEFAULT_QUIET_HOURS_TZ } from "@/lib/quiet-hours";
 
 export async function GET(
   _req: NextRequest,
@@ -21,6 +22,9 @@ export async function GET(
               type: true,
               answerTimerSeconds: true,
               autoSkipEnabled: true,
+              quietHoursEnabled: true,
+              quietHoursStart: true,
+              quietHoursEnd: true,
             },
           },
         },
@@ -124,5 +128,23 @@ export async function GET(
     }
   }
 
-  return NextResponse.json({ ...game, myRole, myPlayerId, canJoinLate, previousGameLastRoundId });
+  const commissioner = await prisma.leaguePlayer.findFirst({
+    where: { leagueId: game.season.league.id, role: "commissioner", isActive: true },
+    select: { user: { select: { timezone: true } } },
+  });
+  const quietHours = {
+    enabled: game.season.league.quietHoursEnabled,
+    start: game.season.league.quietHoursStart,
+    end: game.season.league.quietHoursEnd,
+    timezone: commissioner?.user?.timezone ?? DEFAULT_QUIET_HOURS_TZ,
+  };
+
+  return NextResponse.json({
+    ...game,
+    myRole,
+    myPlayerId,
+    canJoinLate,
+    previousGameLastRoundId,
+    quietHours,
+  });
 }

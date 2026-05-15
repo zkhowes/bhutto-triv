@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { nanoid } from "nanoid";
 import { DEFAULT_SETTINGS } from "@/lib/constants";
+import { DEFAULT_QUIET_HOURS_TZ } from "@/lib/quiet-hours";
 
 // GET /api/leagues - List user's leagues
 export async function GET() {
@@ -22,7 +23,7 @@ export async function GET() {
     include: {
       players: {
         where: { isActive: true },
-        include: { user: { select: { nickname: true, avatarUrl: true, image: true } } },
+        include: { user: { select: { nickname: true, avatarUrl: true, image: true, timezone: true } } },
       },
       seasons: {
         orderBy: { number: "desc" },
@@ -135,6 +136,9 @@ export async function GET() {
       }
     }
 
+    const commissioner = league.players.find((p) => p.role === "commissioner");
+    const quietHoursTimezone = commissioner?.user?.timezone ?? DEFAULT_QUIET_HOURS_TZ;
+
     return {
       id: league.id,
       name: league.name,
@@ -145,6 +149,12 @@ export async function GET() {
       myLeaguePlayerId: myPlayer?.id ?? null,
       gameId: currentGame?.id ?? null,
       autoSkipEnabled: league.autoSkipEnabled,
+      quietHours: {
+        enabled: league.quietHoursEnabled,
+        start: league.quietHoursStart,
+        end: league.quietHoursEnd,
+        timezone: quietHoursTimezone,
+      },
       currentSeason: currentSeason
         ? { number: currentSeason.number, status: currentSeason.status }
         : null,

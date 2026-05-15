@@ -1,10 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { deferredSkipDeadline, type QuietHoursConfig } from "@/lib/quiet-hours";
+
+interface QuietHoursProps {
+  enabled: boolean;
+  start: number;
+  end: number;
+  timezone: string;
+}
 
 interface AutoSkipCountdownProps {
-  /** ISO string of round.updatedAt — deadline is this + 27 hours */
+  /** ISO string of round.updatedAt — natural deadline is this + 24 hours,
+   *  deferred to quiet-end + 1h if that lands inside the league's quiet hours. */
   roundUpdatedAt: string;
+  quietHours?: QuietHoursProps | null;
 }
 
 function formatRemaining(ms: number): string {
@@ -17,16 +27,27 @@ function formatRemaining(ms: number): string {
   return "< 15m";
 }
 
-export default function AutoSkipCountdown({ roundUpdatedAt }: AutoSkipCountdownProps) {
+function computeDeadline(roundUpdatedAt: string, quietHours: QuietHoursProps | null | undefined): number {
+  const stale = new Date(roundUpdatedAt);
+  const cfg: QuietHoursConfig = {
+    quietHoursEnabled: quietHours?.enabled ?? false,
+    quietHoursStart: quietHours?.start ?? 20,
+    quietHoursEnd: quietHours?.end ?? 7,
+  };
+  const tz = quietHours?.timezone ?? "America/Los_Angeles";
+  return deferredSkipDeadline(stale, cfg, tz).getTime();
+}
+
+export default function AutoSkipCountdown({ roundUpdatedAt, quietHours }: AutoSkipCountdownProps) {
   const [remaining, setRemaining] = useState<number | null>(null);
 
   useEffect(() => {
-    const deadline = new Date(roundUpdatedAt).getTime() + 27 * 60 * 60 * 1000;
+    const deadline = computeDeadline(roundUpdatedAt, quietHours);
     const update = () => setRemaining(deadline - Date.now());
     update();
     const interval = setInterval(update, 60000);
     return () => clearInterval(interval);
-  }, [roundUpdatedAt]);
+  }, [roundUpdatedAt, quietHours]);
 
   if (remaining === null) return null;
   if (remaining <= 0) return null;

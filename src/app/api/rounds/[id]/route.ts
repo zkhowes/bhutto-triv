@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { DEFAULT_QUIET_HOURS_TZ } from "@/lib/quiet-hours";
 
 export async function GET(
   _req: NextRequest,
@@ -41,6 +42,10 @@ export async function GET(
                   dailyDeadline: true,
                   deadlineTimezone: true,
                   answerTimerSeconds: true,
+                  autoSkipEnabled: true,
+                  quietHoursEnabled: true,
+                  quietHoursStart: true,
+                  quietHoursEnd: true,
                 },
               },
             },
@@ -346,6 +351,19 @@ export async function GET(
     }
   }
 
+  // Resolve commissioner timezone for client-side quiet-hours math
+  const league = round.game.season.league;
+  const commissioner = await prisma.leaguePlayer.findFirst({
+    where: { leagueId: league.id, role: "commissioner", isActive: true },
+    select: { user: { select: { timezone: true } } },
+  });
+  const quietHours = {
+    enabled: league.quietHoursEnabled,
+    start: league.quietHoursStart,
+    end: league.quietHoursEnd,
+    timezone: commissioner?.user?.timezone ?? DEFAULT_QUIET_HOURS_TZ,
+  };
+
   return NextResponse.json({
     ...round,
     question: questionWithReview,
@@ -358,5 +376,6 @@ export async function GET(
     flagUsed: currentPlayerState?.flagUsed ?? false,
     flagWindowOpen: !laterGradedRound,
     activePlayerCount: round.game.playerStates.filter((ps) => !ps.leaguePlayer.isPaused).length,
+    quietHours,
   });
 }

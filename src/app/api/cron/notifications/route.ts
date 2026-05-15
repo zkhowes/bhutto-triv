@@ -172,6 +172,9 @@ export async function GET(request: NextRequest) {
   }
 
   // ─── 2. 24-hour action reminders ────────────────────────────────────────────
+  // Deadline = round.updatedAt + 24h, deferred to quiet-end + 1h if it lands
+  // inside the league's quiet hours — same rule as auto-skip (§3) so in-app
+  // reminders don't appear with a 3am timestamp while SMS waits at the gate.
 
   const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
@@ -183,12 +186,26 @@ export async function GET(request: NextRequest) {
       pausedAt: null,
       game: { status: "active" },
     },
-    select: { id: true, atBatPlayerId: true },
+    select: {
+      id: true,
+      updatedAt: true,
+      atBatPlayerId: true,
+      game: { select: { season: { select: { league: { select: { id: true } } } } } },
+    },
     take: 50,
   });
 
   for (const round of staleAwaitingQuestion) {
     if (!round.atBatPlayerId) continue;
+    const leagueId = round.game.season.league.id;
+    const quietCtx = await getLeagueQuietCtx(leagueId);
+    const tz = quietCtx?.timezone ?? DEFAULT_TZ;
+    const cfg: QuietHoursConfig = quietCtx?.config ?? {
+      quietHoursEnabled: false,
+      quietHoursStart: 0,
+      quietHoursEnd: 0,
+    };
+    if (now < deferredSkipDeadline(round.updatedAt, cfg, tz)) continue;
     await notifyActionReminder(round.id, round.atBatPlayerId, "question");
     notificationsSent++;
   }
@@ -210,6 +227,7 @@ export async function GET(request: NextRequest) {
           playerStates: {
             select: { leaguePlayerId: true, isEliminated: true },
           },
+          season: { select: { league: { select: { id: true } } } },
         },
       },
     },
@@ -217,6 +235,16 @@ export async function GET(request: NextRequest) {
   });
 
   for (const round of staleAwaitingAnswers) {
+    const leagueId = round.game.season.league.id;
+    const quietCtx = await getLeagueQuietCtx(leagueId);
+    const tz = quietCtx?.timezone ?? DEFAULT_TZ;
+    const cfg: QuietHoursConfig = quietCtx?.config ?? {
+      quietHoursEnabled: false,
+      quietHoursStart: 0,
+      quietHoursEnd: 0,
+    };
+    if (now < deferredSkipDeadline(round.updatedAt, cfg, tz)) continue;
+
     const incompletePlayerIds = round.game.playerStates
       .filter((ps) => {
         if (ps.leaguePlayerId === round.atBatPlayerId) return false;

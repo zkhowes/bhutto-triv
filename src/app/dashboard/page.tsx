@@ -18,6 +18,7 @@ interface LeagueSummary {
   myLeaguePlayerId: string | null;
   gameId: string | null;
   autoSkipEnabled: boolean;
+  quietHours: { enabled: boolean; start: number; end: number; timezone: string };
   currentSeason: { number: number; status: string } | null;
   currentGame: { number: number; status: string; totalRounds: number } | null;
   currentRound: { number: number; status: string } | null;
@@ -272,7 +273,10 @@ export default function DashboardPage() {
                           </p>
                         )}
                         {showCountdown && (
-                          <DashboardSkipCountdown roundUpdatedAt={league.activeRound!.updatedAt} />
+                          <DashboardSkipCountdown
+                            roundUpdatedAt={league.activeRound!.updatedAt}
+                            quietHours={league.quietHours}
+                          />
                         )}
                         {league.myStanding?.isBusted ? (
                           <p className="text-xs mt-1 text-red-400">Busted</p>

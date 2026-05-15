@@ -111,6 +111,7 @@ interface GameGuideProps {
   gameNumber?: number;
   autoSkipEnabled?: boolean;
   roundUpdatedAt?: string;
+  quietHours?: { enabled: boolean; start: number; end: number; timezone: string } | null;
 }
 
 type GuideControlProps = LeagueGuideProps | GameGuideProps;
@@ -198,6 +199,7 @@ export default function GuideControl(props: GuideControlProps) {
     gameNumber,
     autoSkipEnabled,
     roundUpdatedAt,
+    quietHours,
   } = props;
 
   if (!round) return null;
@@ -418,7 +420,7 @@ export default function GuideControl(props: GuideControlProps) {
   if (isAtBat && round.status === "awaiting_question" && myPlayerId) {
     return (
       <div className="mb-6">
-        {showAutoSkipTimer && <AutoSkipCountdown roundUpdatedAt={roundUpdatedAt!} />}
+        {showAutoSkipTimer && <AutoSkipCountdown roundUpdatedAt={roundUpdatedAt!} quietHours={quietHours} />}
         <QuestionSubmitForm
           roundId={round.id}
           leaguePlayerId={myPlayerId}
@@ -454,7 +456,7 @@ export default function GuideControl(props: GuideControlProps) {
           </p>
           {showAutoSkipTimer && (
             <div className="flex justify-center">
-              <AutoSkipCountdown roundUpdatedAt={roundUpdatedAt!} />
+              <AutoSkipCountdown roundUpdatedAt={roundUpdatedAt!} quietHours={quietHours} />
             </div>
           )}
         </div>
@@ -479,7 +481,7 @@ export default function GuideControl(props: GuideControlProps) {
           <p className="text-[#a0a0b8] text-sm">{bonusLine}</p>
           {showAutoSkipTimer && (
             <div className="flex justify-center mt-2">
-              <AutoSkipCountdown roundUpdatedAt={roundUpdatedAt!} />
+              <AutoSkipCountdown roundUpdatedAt={roundUpdatedAt!} quietHours={quietHours} />
             </div>
           )}
         </div>
@@ -618,7 +620,7 @@ export default function GuideControl(props: GuideControlProps) {
         </p>
         {showAutoSkipTimer && (
           <div className="flex justify-center">
-            <AutoSkipCountdown roundUpdatedAt={roundUpdatedAt!} />
+            <AutoSkipCountdown roundUpdatedAt={roundUpdatedAt!} quietHours={quietHours} />
           </div>
         )}
       </div>
@@ -655,7 +657,7 @@ export default function GuideControl(props: GuideControlProps) {
         </p>
         {showAutoSkipTimer && (
           <div className="flex justify-center">
-            <AutoSkipCountdown roundUpdatedAt={roundUpdatedAt!} />
+            <AutoSkipCountdown roundUpdatedAt={roundUpdatedAt!} quietHours={quietHours} />
           </div>
         )}
         {canRevertSkip && (

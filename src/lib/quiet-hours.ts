@@ -1,3 +1,5 @@
+export const DEFAULT_QUIET_HOURS_TZ = "America/Los_Angeles";
+
 export interface QuietHoursConfig {
   quietHoursEnabled: boolean;
   quietHoursStart: number;
