@@ -1,5 +1,29 @@
 import { prisma } from "./prisma";
 import { sendSms } from "./sms";
+import { isInQuietHours, flushTimeFor } from "./quiet-hours";
+
+const DEFAULT_TZ = "America/Los_Angeles";
+
+interface QuietHoursContext {
+  config: { quietHoursEnabled: boolean; quietHoursStart: number; quietHoursEnd: number };
+  timezone: string;
+}
+
+async function getLeagueQuietHoursContext(leagueId: string): Promise<QuietHoursContext | null> {
+  const league = await prisma.league.findUnique({
+    where: { id: leagueId },
+    select: { quietHoursEnabled: true, quietHoursStart: true, quietHoursEnd: true },
+  });
+  if (!league) return null;
+  const commissioner = await prisma.leaguePlayer.findFirst({
+    where: { leagueId, role: "commissioner", isActive: true },
+    select: { user: { select: { timezone: true } } },
+  });
+  return {
+    config: league,
+    timezone: commissioner?.user?.timezone ?? DEFAULT_TZ,
+  };
+}
 
 export type NotificationLevel = "none" | "low" | "high";
 export type NotificationType =
@@ -121,6 +145,30 @@ export async function createNotification({
   const shouldSms = allowedLevels.includes(level) && phoneNumber;
 
   if (shouldSms) {
+    const now = new Date();
+
+    // Quiet hours gate: defer SMS into a queued state to be flushed by the cron
+    // job once the league's quiet window ends. Quiet hours apply to ALL SMS types
+    // — no urgent bypass.
+    const quietCtx = leagueId ? await getLeagueQuietHoursContext(leagueId) : null;
+    if (quietCtx && isInQuietHours(now, quietCtx.config, quietCtx.timezone)) {
+      const userPref = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { preferredSendHour: true },
+      });
+      const scheduledFor = flushTimeFor(
+        now,
+        quietCtx.config,
+        quietCtx.timezone,
+        userPref?.preferredSendHour ?? null,
+      );
+      await prisma.notification.update({
+        where: { id: notification.id },
+        data: { smsStatus: "queued", smsScheduledFor: scheduledFor },
+      });
+      return;
+    }
+
     const appUrl = process.env.NEXTAUTH_URL ?? "";
     // Click-tracking URL: redirect to destinationUrl and record the click
     const clickUrl = `${appUrl}/api/notifications/click/${notification.id}`;
@@ -631,7 +679,7 @@ export async function notifyAutoSkipWarning(
       roundId,
       type: "auto_skip_warning",
       title: `${league.name}: Submit your question or be skipped!`,
-      message: `You have 3 hours to submit a question or you'll be auto-skipped.`,
+      message: `Submit a question soon or you'll be auto-skipped.`,
       destinationUrl: `/games/${round.gameId}?round=${roundId}`,
       phoneNumber: player.phoneNumber,
     });
@@ -705,7 +753,7 @@ export async function notifyAutoCloseWarning(
       roundId,
       type: "auto_close_warning",
       title: `${league.name}: Answer or be marked absent!`,
-      message: `You have 3 hours to place your bet and answer, or the round will auto-close and you'll be marked absent.`,
+      message: `Place your bet and answer soon, or the round will auto-close and you'll be marked absent.`,
       destinationUrl: `/games/${round.gameId}?round=${roundId}`,
       phoneNumber: player.phoneNumber,
     });

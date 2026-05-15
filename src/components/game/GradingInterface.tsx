@@ -227,10 +227,12 @@ export default function GradingInterface({
         throw new Error(data.error || "Failed to close round");
       }
 
+      // Keep submitting=true so the button stays disabled until the parent
+      // refetch swaps this component out for the next phase. Otherwise the
+      // button briefly re-enables and commissioners re-click during the refetch.
       onGradingComplete();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to confirm grades");
-    } finally {
       setSubmitting(false);
     }
   };

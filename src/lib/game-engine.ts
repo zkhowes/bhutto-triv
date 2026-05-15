@@ -941,6 +941,7 @@ export async function closeRound(
   });
 
   if (!round) throw new Error("Round not found");
+  if (round.pausedAt) throw new Error("Round is paused");
 
   // Guard against race condition: two simultaneous answer submissions can both trigger closeRound.
   // Commissioner regrade passes force:true to bypass this after reversing prior scoring.
@@ -1388,6 +1389,7 @@ export async function skipPlayerTurn(
   });
 
   if (!round) throw new Error("Round not found");
+  if (round.pausedAt) throw new Error("Round is paused");
 
   const playerState = await prisma.gamePlayerState.findUnique({
     where: {

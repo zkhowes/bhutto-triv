@@ -2,13 +2,28 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { notifyAboutToBeSkipped, notifyActionReminder, notifyAutoSkipWarning, notifyAutoSkipped, notifyAutoCloseWarning, notifyAutoClosedRound } from "@/lib/notifications";
 import { skipPlayerTurn, closeRound } from "@/lib/game-engine";
+import { deferredSkipDeadline, isInQuietHours, type QuietHoursConfig } from "@/lib/quiet-hours";
+import { sendSms } from "@/lib/sms";
+
+const DEFAULT_TZ = "America/Los_Angeles";
+
+interface LeagueQuietCtx {
+  config: QuietHoursConfig;
+  timezone: string;
+}
 
 /**
  * Vercel Cron Job — runs every 15 minutes
  *
+ * 0. "Flush queued SMS" — sends notifications whose smsScheduledFor has passed
+ *    AND whose league is no longer in quiet hours.
  * 1. "About to be skipped" — last player without bet+answer, deadline 30–90 min away
  * 2. "Action reminder" — round stale 24+ hours, reminds whoever is blocking progress
- * 3. "Auto-skip" — for leagues with autoSkipEnabled: warn at 24h, skip at 27h
+ * 3. "Auto-skip" — for leagues with autoSkipEnabled: skip at-bat players whose
+ *    deferredSkipDeadline has passed (24h, deferred past quiet hours if needed)
+ * 3b. "Auto-close" — for answering rounds: same logic
+ *
+ * Paused rounds (round.pausedAt != null) are excluded from sections 3 and 3b.
  */
 export async function GET(request: NextRequest) {
   // Authenticate cron requests — always require secret
@@ -23,6 +38,80 @@ export async function GET(request: NextRequest) {
 
   const now = new Date();
   let notificationsSent = 0;
+  let queuedFlushed = 0;
+
+  // ─── 0. Flush queued SMS whose scheduledFor has passed ──────────────────────
+  // Re-checks current quiet-hours state per league — if the commissioner extended
+  // quiet hours after queueing, leave the message queued until the next sweep.
+  const queued = await prisma.notification.findMany({
+    where: {
+      smsStatus: "queued",
+      smsScheduledFor: { lte: now },
+    },
+    select: {
+      id: true,
+      title: true,
+      leagueId: true,
+      userId: true,
+    },
+    take: 100,
+  });
+
+  const leagueQuietCache = new Map<string, LeagueQuietCtx | null>();
+  async function getLeagueQuietCtx(leagueId: string | null): Promise<LeagueQuietCtx | null> {
+    if (!leagueId) return null;
+    if (leagueQuietCache.has(leagueId)) return leagueQuietCache.get(leagueId)!;
+    const league = await prisma.league.findUnique({
+      where: { id: leagueId },
+      select: { quietHoursEnabled: true, quietHoursStart: true, quietHoursEnd: true },
+    });
+    if (!league) {
+      leagueQuietCache.set(leagueId, null);
+      return null;
+    }
+    const comm = await prisma.leaguePlayer.findFirst({
+      where: { leagueId, role: "commissioner", isActive: true },
+      select: { user: { select: { timezone: true } } },
+    });
+    const ctx: LeagueQuietCtx = {
+      config: league,
+      timezone: comm?.user?.timezone ?? DEFAULT_TZ,
+    };
+    leagueQuietCache.set(leagueId, ctx);
+    return ctx;
+  }
+
+  for (const n of queued) {
+    const quietCtx = await getLeagueQuietCtx(n.leagueId);
+    if (quietCtx && isInQuietHours(now, quietCtx.config, quietCtx.timezone)) {
+      // Still in quiet hours (commissioner extended) — leave queued, next sweep will retry.
+      continue;
+    }
+    const user = await prisma.user.findUnique({
+      where: { id: n.userId },
+      select: { phoneNumber: true },
+    });
+    if (!user?.phoneNumber) {
+      await prisma.notification.update({
+        where: { id: n.id },
+        data: { smsStatus: "failed", smsScheduledFor: null },
+      });
+      continue;
+    }
+    const appUrl = process.env.NEXTAUTH_URL ?? "";
+    const clickUrl = `${appUrl}/api/notifications/click/${n.id}`;
+    const smsBody = `${n.title}\n${clickUrl}`;
+    const result = await sendSms(user.phoneNumber, smsBody);
+    await prisma.notification.update({
+      where: { id: n.id },
+      data: {
+        smsStatus: result.success ? "sent" : "failed",
+        smsSentAt: result.success ? new Date() : null,
+        smsScheduledFor: null,
+      },
+    });
+    if (result.success) queuedFlushed++;
+  }
 
   // ─── 1. About to be skipped (existing) ──────────────────────────────────────
 
@@ -91,6 +180,7 @@ export async function GET(request: NextRequest) {
     where: {
       status: "awaiting_question",
       updatedAt: { lte: twentyFourHoursAgo },
+      pausedAt: null,
       game: { status: "active" },
     },
     select: { id: true, atBatPlayerId: true },
@@ -108,6 +198,7 @@ export async function GET(request: NextRequest) {
     where: {
       status: { in: ["question_submitted", "category_revealed"] },
       updatedAt: { lte: twentyFourHoursAgo },
+      pausedAt: null,
       game: { status: "active" },
     },
     include: {
@@ -143,14 +234,18 @@ export async function GET(request: NextRequest) {
   }
 
   // ─── 3. Auto-skip (leagues with autoSkipEnabled) ─────────────────────────────
-  // Warn at-bat players at 24h, auto-skip at 27h (when warning was sent 3h+ ago)
+  // Skip at-bat players whose deferred skip deadline has passed.
+  // Deadline = round.updatedAt + 24h, OR if that lands in quiet hours,
+  // quiet-end + 1h so the player gets the morning ping AND an hour to act.
 
   let autoSkipsPerformed = 0;
+  let autoSkipWarningsSent = 0;
 
   const autoSkipStaleRounds = await prisma.round.findMany({
     where: {
       status: "awaiting_question",
       updatedAt: { lte: twentyFourHoursAgo },
+      pausedAt: null,
       game: {
         status: "active",
         season: { league: { autoSkipEnabled: true } },
@@ -158,17 +253,22 @@ export async function GET(request: NextRequest) {
     },
     select: {
       id: true,
+      updatedAt: true,
       atBatPlayerId: true,
       game: {
         select: {
-          season: { select: { league: { select: { id: true } } } },
+          season: {
+            select: {
+              league: {
+                select: { id: true, quietHoursEnabled: true, quietHoursStart: true, quietHoursEnd: true },
+              },
+            },
+          },
         },
       },
     },
     take: 50,
   });
-
-  const threeHoursAgo = new Date(now.getTime() - 3 * 60 * 60 * 1000);
 
   for (const round of autoSkipStaleRounds) {
     if (!round.atBatPlayerId) continue;
@@ -180,22 +280,19 @@ export async function GET(request: NextRequest) {
     });
     if (!atBatPlayer || atBatPlayer.isFake) continue;
 
-    // Check if warning already sent
-    const existingWarning = await prisma.notification.findFirst({
-      where: {
-        roundId: round.id,
-        userId: atBatPlayer.userId,
-        type: "auto_skip_warning",
-      },
-      select: { createdAt: true },
-    });
+    const league = round.game.season.league;
+    const quietCtx = await getLeagueQuietCtx(league.id);
+    const tz = quietCtx?.timezone ?? DEFAULT_TZ;
+    const cfg: QuietHoursConfig = {
+      quietHoursEnabled: league.quietHoursEnabled,
+      quietHoursStart: league.quietHoursStart,
+      quietHoursEnd: league.quietHoursEnd,
+    };
 
-    if (!existingWarning) {
-      // Send 3-hour warning
-      await notifyAutoSkipWarning(round.id, round.atBatPlayerId);
-      notificationsSent++;
-    } else if (existingWarning.createdAt <= threeHoursAgo) {
-      // Warning was sent 3+ hours ago — auto-skip
+    const effectiveDeadline = deferredSkipDeadline(round.updatedAt, cfg, tz);
+
+    if (now >= effectiveDeadline) {
+      // Time to skip
       try {
         await skipPlayerTurn(round.id, round.atBatPlayerId);
         await notifyAutoSkipped(round.id, round.atBatPlayerId);
@@ -204,18 +301,35 @@ export async function GET(request: NextRequest) {
       } catch (err) {
         console.error("[AutoSkip] Failed to skip player:", err);
       }
+    } else {
+      // Not yet at deadline — send warning if not already sent
+      const existingWarning = await prisma.notification.findFirst({
+        where: {
+          roundId: round.id,
+          userId: atBatPlayer.userId,
+          type: "auto_skip_warning",
+        },
+        select: { id: true },
+      });
+      if (!existingWarning) {
+        await notifyAutoSkipWarning(round.id, round.atBatPlayerId);
+        notificationsSent++;
+        autoSkipWarningsSent++;
+      }
     }
   }
 
   // ─── 3b. Auto-close stale answering rounds (leagues with autoSkipEnabled) ───
-  // Warn answering players at 24h, auto-close round at 27h
+  // Same deferred-deadline logic for rounds in the answering phase.
 
   let autoClosesPerformed = 0;
+  let autoCloseWarningsSent = 0;
 
   const autoCloseStaleRounds = await prisma.round.findMany({
     where: {
       status: { in: ["question_submitted", "category_revealed"] },
       updatedAt: { lte: twentyFourHoursAgo },
+      pausedAt: null,
       game: {
         status: "active",
         season: { league: { autoSkipEnabled: true } },
@@ -234,7 +348,13 @@ export async function GET(request: NextRequest) {
               leaguePlayer: { select: { isPaused: true, isFake: true } },
             },
           },
-          season: { select: { league: { select: { id: true } } } },
+          season: {
+            select: {
+              league: {
+                select: { id: true, quietHoursEnabled: true, quietHoursStart: true, quietHoursEnd: true },
+              },
+            },
+          },
         },
       },
     },
@@ -254,25 +374,19 @@ export async function GET(request: NextRequest) {
 
     if (incompletePlayerIds.length === 0) continue;
 
-    // Check if warning already sent for this round (use first incomplete player as proxy)
-    const existingWarning = await prisma.notification.findFirst({
-      where: {
-        roundId: round.id,
-        type: "auto_close_warning",
-      },
-      select: { createdAt: true },
-    });
+    const league = round.game.season.league;
+    const quietCtx = await getLeagueQuietCtx(league.id);
+    const tz = quietCtx?.timezone ?? DEFAULT_TZ;
+    const cfg: QuietHoursConfig = {
+      quietHoursEnabled: league.quietHoursEnabled,
+      quietHoursStart: league.quietHoursStart,
+      quietHoursEnd: league.quietHoursEnd,
+    };
 
-    if (!existingWarning) {
-      // Send 3-hour warning to each incomplete player
-      for (const playerId of incompletePlayerIds) {
-        await notifyAutoCloseWarning(round.id, playerId);
-        notificationsSent++;
-      }
-    } else if (existingWarning.createdAt <= threeHoursAgo) {
-      // Warning was sent 3+ hours ago — auto-close the round.
-      // closeRound creates absent RoundAnswers with the correct penalty; don't
-      // pre-create them here or the penalty branch will skip these players.
+    const effectiveDeadline = deferredSkipDeadline(round.updatedAt, cfg, tz);
+
+    if (now >= effectiveDeadline) {
+      // closeRound creates absent RoundAnswers with the correct penalty
       try {
         await closeRound(round.id);
         await notifyAutoClosedRound(round.id);
@@ -281,18 +395,34 @@ export async function GET(request: NextRequest) {
       } catch (err) {
         console.error("[AutoClose] Failed to auto-close round:", err);
       }
+    } else {
+      // Send warning to each incomplete player (if not already sent for this round)
+      const existingWarning = await prisma.notification.findFirst({
+        where: { roundId: round.id, type: "auto_close_warning" },
+        select: { id: true },
+      });
+      if (!existingWarning) {
+        for (const playerId of incompletePlayerIds) {
+          await notifyAutoCloseWarning(round.id, playerId);
+          notificationsSent++;
+          autoCloseWarningsSent++;
+        }
+      }
     }
   }
 
   return NextResponse.json({
     success: true,
+    queuedFlushed,
     approachingRoundsChecked: approachingRounds.length,
     staleRoundsChecked:
       staleAwaitingQuestion.length + staleAwaitingAnswers.length,
     autoSkipRoundsChecked: autoSkipStaleRounds.length,
     autoSkipsPerformed,
+    autoSkipWarningsSent,
     autoCloseRoundsChecked: autoCloseStaleRounds.length,
     autoClosesPerformed,
+    autoCloseWarningsSent,
     notificationsSent,
     timestamp: now.toISOString(),
   });

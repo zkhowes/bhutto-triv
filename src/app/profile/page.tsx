@@ -41,6 +41,7 @@ function ProfilePageContent() {
   const [timezone, setTimezone] = useState("America/Los_Angeles");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [notificationPreference, setNotificationPreference] = useState<string | null>(null);
+  const [preferredSendHour, setPreferredSendHour] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [loaded, setLoaded] = useState(false);
@@ -65,6 +66,7 @@ function ProfilePageContent() {
             setTimezone(data.timezone || "America/Los_Angeles");
             setAvatarUrl(data.avatarUrl || null);
             setNotificationPreference(data.notificationPreference ?? null);
+            setPreferredSendHour(data.preferredSendHour ?? null);
           }
           setLoaded(true);
         })
@@ -138,6 +140,7 @@ function ProfilePageContent() {
           timezone,
           avatarUrl,
           notificationPreference,
+          preferredSendHour,
         }),
       });
 
@@ -350,6 +353,30 @@ function ProfilePageContent() {
                 </label>
               ))}
             </div>
+          </div>
+
+          {/* Morning Flush Hour */}
+          <div>
+            <label className="block text-sm font-medium text-[#a0a0b8] mb-1.5">
+              Morning SMS Time
+            </label>
+            <p className="text-xs text-[#666680] mb-2">
+              When SMS is held during a league&apos;s quiet hours, this is when the queued messages get delivered. &quot;Right at quiet-end&quot; means the moment quiet hours end (default).
+            </p>
+            <select
+              value={preferredSendHour ?? ""}
+              onChange={(e) => setPreferredSendHour(e.target.value === "" ? null : parseInt(e.target.value, 10))}
+              className="w-full px-3 py-2 bg-[#0d1b2a] border border-[#1e3a5f] rounded-lg text-white text-sm focus:outline-none focus:border-[#4fc3f7]"
+            >
+              <option value="">Right at quiet-end (default)</option>
+              {Array.from({ length: 24 }, (_, h) => {
+                const label = h === 0 ? "12 AM" : h === 12 ? "12 PM" : h < 12 ? `${h} AM` : `${h - 12} PM`;
+                return <option key={h} value={h}>{label}</option>;
+              })}
+            </select>
+            <p className="text-xs text-[#666680] mt-1.5">
+              Note: A preferred hour earlier than the league&apos;s quiet-end is bumped up to quiet-end — never delivered into quiet hours.
+            </p>
           </div>
 
           {error && (

@@ -39,7 +39,13 @@ export async function PUT(
   const body = await req.json();
 
   // Fields that can be changed anytime (even during a season)
-  const alwaysAllowedFields = ["maxPlayers", "autoSkipEnabled"];
+  const alwaysAllowedFields = [
+    "maxPlayers",
+    "autoSkipEnabled",
+    "quietHoursEnabled",
+    "quietHoursStart",
+    "quietHoursEnd",
+  ];
   // Fields that require no active season
   const seasonLockedFields = [
     "gamesPerSeason",
@@ -53,6 +59,9 @@ export async function PUT(
     gamesPerSeason: (v) => typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= 50,
     answerTimerSeconds: (v) => typeof v === "number" && v >= 0 && v <= 600,
     autoSkipEnabled: (v) => typeof v === "boolean",
+    quietHoursEnabled: (v) => typeof v === "boolean",
+    quietHoursStart: (v) => typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= 23,
+    quietHoursEnd: (v) => typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= 23,
   };
 
   const updateData: Record<string, unknown> = {};
@@ -97,7 +106,7 @@ export async function PUT(
             type: enabled ? "auto_skip_enabled" : "auto_skip_disabled",
             title: enabled ? "24-Hour Rule Enabled" : "24-Hour Rule Disabled",
             message: enabled
-              ? `${league.name} now has the 24-hour rule. You'll be warned after 24h of inactivity and auto-skipped after 27h. Stay on top of your rounds!`
+              ? `${league.name} now has the 24-hour rule. You'll be auto-skipped after 24h of inactivity (deferred past quiet hours). Stay on top of your rounds!`
               : `${league.name} no longer has the 24-hour rule. The commissioner will manually progress the game.`,
             destinationUrl: `/leagues/${leagueId}`,
             phoneNumber: p.user.phoneNumber ?? undefined,

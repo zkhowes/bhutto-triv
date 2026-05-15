@@ -37,6 +37,9 @@ interface LeagueInfo {
   absenteePenaltyType: string;
   autoSkipEnabled: boolean;
   notificationMode: string;
+  quietHoursEnabled: boolean;
+  quietHoursStart: number;
+  quietHoursEnd: number;
   inviteCode: string;
   myRole: string | null;
   players: Player[];
@@ -54,9 +57,19 @@ interface LeagueInfo {
         number: number;
         status: string;
         atBatPlayerId: string | null;
+        pausedAt: string | null;
+        pausedTimerSnapshotMs: number | null;
+        updatedAt: string;
       }>;
     }>;
   }>;
+}
+
+function formatHour(h: number): string {
+  if (h === 0) return "12 AM";
+  if (h === 12) return "12 PM";
+  if (h < 12) return `${h} AM`;
+  return `${h - 12} PM`;
 }
 
 export default function CommissionerPage() {
@@ -77,6 +90,17 @@ export default function CommissionerPage() {
   const [shutdownStep, setShutdownStep] = useState(0);
   const [shutdownConfirmName, setShutdownConfirmName] = useState("");
   const [shutdownDeleting, setShutdownDeleting] = useState(false);
+  const [resumeModal, setResumeModal] = useState<{ roundId: string; remainingMs: number } | null>(null);
+  // Tracks which round action is currently in flight (button shows spinner, stays disabled
+  // through fetchLeague so users can't double-click during the refetch). Cleared by the
+  // fetch's status swap unmounting/re-rendering the buttons; explicit clear is a fallback.
+  const [pendingRoundAction, setPendingRoundAction] = useState<string | null>(null);
+  const [actionConfirmation, setActionConfirmation] = useState<{ message: string; tone: "success" | "error" } | null>(null);
+
+  const showConfirmation = (message: string, tone: "success" | "error" = "success") => {
+    setActionConfirmation({ message, tone });
+    setTimeout(() => setActionConfirmation(null), 4000);
+  };
 
   const fetchLeague = useCallback(async () => {
     try {
@@ -161,29 +185,68 @@ export default function CommissionerPage() {
   };
 
   const skipPlayer = async (roundId: string) => {
-    await fetch(`/api/rounds/${roundId}/skip`, { method: "POST" });
-    await fetchLeague();
+    if (pendingRoundAction) return;
+    setPendingRoundAction("skip");
+    try {
+      const res = await fetch(`/api/rounds/${roundId}/skip`, { method: "POST" });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Failed to skip player");
+      await fetchLeague();
+      showConfirmation("At-bat player skipped.");
+    } catch (err) {
+      showConfirmation(err instanceof Error ? err.message : "Failed to skip player", "error");
+      setPendingRoundAction(null);
+      return;
+    }
+    setPendingRoundAction(null);
   };
 
   const revealCategory = async (roundId: string) => {
-    await fetch(`/api/rounds/${roundId}/reveal`, { method: "POST" });
-    await fetchLeague();
+    if (pendingRoundAction) return;
+    setPendingRoundAction("reveal");
+    try {
+      const res = await fetch(`/api/rounds/${roundId}/reveal`, { method: "POST" });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Failed to reveal category");
+      await fetchLeague();
+      showConfirmation("Category revealed — players can answer now.");
+    } catch (err) {
+      showConfirmation(err instanceof Error ? err.message : "Failed to reveal category", "error");
+      setPendingRoundAction(null);
+      return;
+    }
+    setPendingRoundAction(null);
   };
 
   const closeRound = async (roundId: string) => {
+    if (pendingRoundAction) return;
     if (!confirm("Close this round and calculate scores?")) return;
-    await fetch(`/api/rounds/${roundId}/close`, { method: "POST" });
-    await fetchLeague();
+    setPendingRoundAction("close");
+    try {
+      const res = await fetch(`/api/rounds/${roundId}/close`, { method: "POST" });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Failed to close round");
+      await fetchLeague();
+      showConfirmation("Round closed — scores have been calculated.");
+    } catch (err) {
+      showConfirmation(err instanceof Error ? err.message : "Failed to close round", "error");
+      setPendingRoundAction(null);
+      return;
+    }
+    setPendingRoundAction(null);
   };
 
   const forceCloseRound = async (roundId: string) => {
+    if (pendingRoundAction) return;
     if (!confirm("Force close this round? Players who haven't answered will be marked absent. You'll review grades before scoring.")) return;
-    const res = await fetch(`/api/rounds/${roundId}/force-close`, { method: "POST" });
-    if (res.ok) {
+    setPendingRoundAction("force-close");
+    try {
+      const res = await fetch(`/api/rounds/${roundId}/force-close`, { method: "POST" });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Failed to force close round");
       const data = await res.json();
       router.push(`/rounds/${data.roundId}`);
-    } else {
+      // Leave pendingRoundAction set — the navigation will unmount this view.
+    } catch (err) {
+      showConfirmation(err instanceof Error ? err.message : "Failed to force close round", "error");
       await fetchLeague();
+      setPendingRoundAction(null);
     }
   };
 
@@ -271,6 +334,44 @@ export default function CommissionerPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ maxPlayers: value }),
     });
+    await fetchLeague();
+  };
+
+  const saveQuietHours = async (patch: Partial<{ quietHoursEnabled: boolean; quietHoursStart: number; quietHoursEnd: number }>) => {
+    await fetch(`/api/leagues/${leagueId}/settings`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+    await fetchLeague();
+  };
+
+  const pauseRound = async (roundId: string) => {
+    if (!confirm("Pause this round? The auto-skip cron won't act on it until you resume.")) return;
+    const res = await fetch(`/api/rounds/${roundId}/pause`, { method: "POST" });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      alert(d.error || "Failed to pause round");
+    }
+    await fetchLeague();
+  };
+
+  const openResumeModal = (round: { id: string; pausedTimerSnapshotMs: number | null }) => {
+    setResumeModal({ roundId: round.id, remainingMs: round.pausedTimerSnapshotMs ?? 24 * 60 * 60 * 1000 });
+  };
+
+  const resumeRound = async (mode: "reset" | "preserve") => {
+    if (!resumeModal) return;
+    const res = await fetch(`/api/rounds/${resumeModal.roundId}/pause`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode }),
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      alert(d.error || "Failed to resume round");
+    }
+    setResumeModal(null);
     await fetchLeague();
   };
 
@@ -527,36 +628,73 @@ export default function CommissionerPage() {
                 <h2 className="text-sm font-semibold text-[#a0a0b8] uppercase tracking-wider mb-3">
                   Active Round Controls
                 </h2>
+                {actionConfirmation && (
+                  <div
+                    className={`mb-3 px-3 py-2 rounded-lg text-sm ${
+                      actionConfirmation.tone === "success"
+                        ? "bg-green-500/15 text-green-300 border border-green-500/30"
+                        : "bg-red-500/15 text-red-300 border border-red-500/30"
+                    }`}
+                  >
+                    {actionConfirmation.tone === "success" ? "✓ " : "✗ "}
+                    {actionConfirmation.message}
+                  </div>
+                )}
                 <p className="text-white mb-3">
                   Round {activeRound.number} - Status:{" "}
                   {activeRound.status.replace(/_/g, " ")}
+                  {activeRound.pausedAt && (
+                    <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-xs">
+                      ⏸ Paused
+                    </span>
+                  )}
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  {activeRound.status === "awaiting_question" && (
+                  {activeRound.status === "awaiting_question" && !activeRound.pausedAt && (
                     <button
                       onClick={() => skipPlayer(activeRound.id)}
-                      className="btn-secondary text-sm"
+                      disabled={pendingRoundAction !== null}
+                      className="btn-secondary text-sm disabled:opacity-60 disabled:cursor-not-allowed"
                     >
-                      Skip At-Bat Player
+                      {pendingRoundAction === "skip" ? "Skipping..." : "Skip At-Bat Player"}
                     </button>
                   )}
-                  {activeRound.status === "question_submitted" && (
+                  {activeRound.status === "question_submitted" && !activeRound.pausedAt && (
                     <button
                       onClick={() => revealCategory(activeRound.id)}
-                      className="btn-primary text-sm"
+                      disabled={pendingRoundAction !== null}
+                      className="btn-primary text-sm disabled:opacity-60 disabled:cursor-not-allowed"
                     >
-                      Reveal Category
+                      {pendingRoundAction === "reveal" ? "Revealing..." : "Reveal Category"}
                     </button>
                   )}
                   {(activeRound.status === "question_submitted" ||
-                    activeRound.status === "category_revealed") && (
+                    activeRound.status === "category_revealed") && !activeRound.pausedAt && (
                       <button
                         onClick={() => forceCloseRound(activeRound.id)}
-                        className="btn-danger text-sm"
+                        disabled={pendingRoundAction !== null}
+                        className="btn-danger text-sm disabled:opacity-60 disabled:cursor-not-allowed"
                       >
-                        Force Close Round
+                        {pendingRoundAction === "force-close" ? "Closing..." : "Force Close Round"}
                       </button>
                     )}
+                  {!activeRound.pausedAt ? (
+                    <button
+                      onClick={() => pauseRound(activeRound.id)}
+                      disabled={pendingRoundAction !== null}
+                      className="btn-secondary text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      ⏸ Pause Round
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => openResumeModal(activeRound)}
+                      disabled={pendingRoundAction !== null}
+                      className="btn-gold text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      ▶ Resume Round
+                    </button>
+                  )}
                 </div>
               </div>
             ) : (
@@ -806,7 +944,7 @@ export default function CommissionerPage() {
                 <div>
                   <span className="text-[#a0a0b8] block">Auto-Skip</span>
                   <span className="text-xs text-[#666680] block mt-1">
-                    After 24h of inactivity, warn players. After 27h, auto-skip question submitters or auto-close answering rounds.
+                    Auto-skip question submitters or auto-close answering rounds after 24h of inactivity. Deferred past quiet hours so nobody loses their turn overnight.
                   </span>
                 </div>
                 <button
@@ -821,6 +959,58 @@ export default function CommissionerPage() {
                     }`}
                   />
                 </button>
+              </div>
+
+              {/* Quiet Hours */}
+              <div className="py-3 border-b border-[#1e3a5f]">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <span className="text-[#a0a0b8] block">Quiet Hours</span>
+                    <span className="text-xs text-[#666680] block mt-1">
+                      No SMS in this window. Auto-skip deadlines that land inside quiet hours are pushed to quiet-end + 1h.
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => saveQuietHours({ quietHoursEnabled: !league.quietHoursEnabled })}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      league.quietHoursEnabled ? "bg-[#e94560]" : "bg-[#1e3a5f]"
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        league.quietHoursEnabled ? "translate-x-6" : "translate-x-1"
+                      }`}
+                    />
+                  </button>
+                </div>
+                {league.quietHoursEnabled && (
+                  <div className="flex items-center gap-3 mt-3">
+                    <label className="flex items-center gap-2 text-xs text-[#a0a0b8]">
+                      Start
+                      <select
+                        value={league.quietHoursStart}
+                        onChange={(e) => saveQuietHours({ quietHoursStart: parseInt(e.target.value, 10) })}
+                        className="bg-[#0d1b2a] border border-[#2a4a6f] text-white text-sm rounded px-2 py-1"
+                      >
+                        {Array.from({ length: 24 }, (_, h) => (
+                          <option key={h} value={h}>{formatHour(h)}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="flex items-center gap-2 text-xs text-[#a0a0b8]">
+                      End
+                      <select
+                        value={league.quietHoursEnd}
+                        onChange={(e) => saveQuietHours({ quietHoursEnd: parseInt(e.target.value, 10) })}
+                        className="bg-[#0d1b2a] border border-[#2a4a6f] text-white text-sm rounded px-2 py-1"
+                      >
+                        {Array.from({ length: 24 }, (_, h) => (
+                          <option key={h} value={h}>{formatHour(h)}</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                )}
               </div>
 
               {/* Notification Mode */}
@@ -949,6 +1139,43 @@ export default function CommissionerPage() {
           </div>
         )}
       </div>
+
+      {resumeModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => setResumeModal(null)}>
+          <div className="bg-[#0d1b2a] border border-[#2a4a6f] rounded-lg p-6 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-white mb-2">Resume Round</h3>
+            <p className="text-sm text-[#a0a0b8] mb-5">
+              How should the 24-hour auto-skip clock be set?
+            </p>
+            <div className="space-y-2 mb-5">
+              <button
+                onClick={() => resumeRound("preserve")}
+                className="w-full text-left p-3 rounded-lg border border-[#1e3a5f] hover:border-[#4fc3f7] transition"
+              >
+                <div className="text-white text-sm font-medium">Preserve remaining time</div>
+                <div className="text-xs text-[#a0a0b8] mt-0.5">
+                  ~{Math.max(0, Math.round(resumeModal.remainingMs / (60 * 60 * 1000)))} hours left on the clock at pause.
+                </div>
+              </button>
+              <button
+                onClick={() => resumeRound("reset")}
+                className="w-full text-left p-3 rounded-lg border border-[#1e3a5f] hover:border-[#4fc3f7] transition"
+              >
+                <div className="text-white text-sm font-medium">Reset to 24h</div>
+                <div className="text-xs text-[#a0a0b8] mt-0.5">
+                  Fresh start — useful if the pause was for a real-world delay (vacation, outage).
+                </div>
+              </button>
+            </div>
+            <button
+              onClick={() => setResumeModal(null)}
+              className="text-xs text-[#a0a0b8] hover:text-white"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

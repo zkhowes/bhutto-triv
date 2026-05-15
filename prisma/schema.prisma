@@ -63,6 +63,10 @@ model User {
   // Notification preference override (null = use league setting)
   notificationPreference String? // "none" | "low" | "high"
 
+  // Optional morning-flush hour for queued overnight SMS (local hour 0-23 in commissioner's TZ).
+  // Null = send the moment quiet hours end.
+  preferredSendHour Int?
+
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   lastLoginAt     DateTime?
@@ -99,8 +103,14 @@ model League {
   categoryRevealTime    String  @default("07:00")
   answerTimerSeconds    Int     @default(120) // Timer from category reveal to answer deadline
   absenteePenaltyType   String  @default("half") // "half", "quarter", "none"
-  autoSkipEnabled       Boolean @default(true) // Auto-skip at-bat players after 27h of inactivity
+  autoSkipEnabled       Boolean @default(true) // Auto-skip at-bat players after 24h of inactivity (deferred past quiet hours)
   notificationMode      String  @default("low") // "none" | "low" | "high"
+
+  // Quiet hours: no SMS sent in this window (local hour 0-23 in commissioner's TZ).
+  // Window wraps midnight when start > end (e.g. 20-7 = 8 PM to 7 AM next day).
+  quietHoursEnabled Boolean @default(true)
+  quietHoursStart   Int     @default(20)
+  quietHoursEnd     Int     @default(7)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -230,6 +240,13 @@ model Round {
   inTheHolePlayerId String? // Player after next
   skippedPlayerId   String? // LeaguePlayer id of skipped player (for revert)
   skipPenaltyAmount Int?    // Points deducted on 2nd skip (for revert)
+
+  // Commissioner pause: while pausedAt is set, the round is excluded from auto-skip cron.
+  // pausedTimerSnapshotMs captures the ms remaining on the 24h skip clock at pause time,
+  // used to restore "preserve remaining" mode on resume.
+  pausedAt              DateTime?
+  pausedById            String?
+  pausedTimerSnapshotMs Int?
 
   questionSubmissionOpensAt DateTime?
   categoryRevealAt          DateTime?
@@ -436,8 +453,9 @@ model Notification {
   link      String? // click-through URL (/api/notifications/click/[id] → actual page)
   data      String? // JSON with additional context
   isRead    Boolean   @default(false)
-  smsStatus String? // null (in-app only) | "sent" | "failed"
-  smsSentAt DateTime?
+  smsStatus       String?   // null (in-app only) | "sent" | "failed" | "queued"
+  smsSentAt       DateTime?
+  smsScheduledFor DateTime? // When a queued SMS should fire; null = send immediately or in-app only
   clickedAt DateTime? // set when player clicks the notification link
 
   createdAt DateTime @default(now())
