@@ -298,38 +298,6 @@ export async function notifyNewQuestion(roundId: string): Promise<void> {
 }
 
 /**
- * "All questions submitted – time to grade"
- * Level: Low + High | Recipient: at-bat player
- * Trigger: All eligible players have answered
- */
-export async function notifyAllAnswersIn(roundId: string): Promise<void> {
-  try {
-    const round = await getRoundContext(roundId);
-    if (!round?.atBatPlayerId) return;
-
-    const league = round.game.season.league;
-    const leagueId = league.id;
-    const ln = league.name;
-    const player = await getPlayerInfo(round.atBatPlayerId);
-    if (!player || !player.isActive || player.isFake) return;
-
-    await createNotification({
-      userId: player.userId,
-      leagueId,
-      gameId: round.gameId,
-      roundId,
-      type: "all_answers_in",
-      title: `${ln}: All answers in – time to grade`,
-      message: "All players have answered. Review and validate the AI grades for your question.",
-      destinationUrl: `/games/${round.gameId}?round=${roundId}`,
-      phoneNumber: player.phoneNumber,
-    });
-  } catch (err) {
-    console.error("[Notifications] notifyAllAnswersIn failed:", err);
-  }
-}
-
-/**
  * "You're on deck, start preparing a question"
  * Level: Low | Recipient: on-deck player
  * Trigger: New round becomes active
