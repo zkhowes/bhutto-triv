@@ -4,6 +4,7 @@ import {
   quietEndAt,
   flushTimeFor,
   deferredSkipDeadline,
+  quietExtendedDeadline,
   type QuietHoursConfig,
 } from "../quiet-hours";
 
@@ -171,5 +172,40 @@ describe("deferredSkipDeadline", () => {
     const result = deferredSkipDeadline(stale, cfg, PACIFIC);
     const expected = pacificDate(2026, 1, 15, 2);
     expect(result.getTime()).toBe(expected.getTime());
+  });
+});
+
+describe("quietExtendedDeadline", () => {
+  it("returns natural deadline unchanged when outside quiet hours", () => {
+    const natural = pacificDate(2026, 1, 14, 11);
+    const { deadline, extended } = quietExtendedDeadline(natural, DEFAULT_CFG, PACIFIC);
+    expect(deadline.getTime()).toBe(natural.getTime());
+    expect(extended).toBe(false);
+  });
+
+  it("extends to quiet-end + 1h when natural deadline lands inside quiet hours", () => {
+    // 2 AM Pacific natural deadline → quiet-end (7 AM) + 1h = 8 AM same day.
+    const natural = pacificDate(2026, 1, 14, 2);
+    const { deadline, extended } = quietExtendedDeadline(natural, DEFAULT_CFG, PACIFIC);
+    const expected = pacificDate(2026, 1, 14, 8);
+    expect(deadline.getTime()).toBe(expected.getTime());
+    expect(extended).toBe(true);
+  });
+
+  it("extends when natural deadline is at evening quiet start (8 PM)", () => {
+    // 8 PM Pacific → quiet → next-day 7 AM + 1h = next-day 8 AM.
+    const natural = pacificDate(2026, 1, 14, 20);
+    const { deadline, extended } = quietExtendedDeadline(natural, DEFAULT_CFG, PACIFIC);
+    const expected = pacificDate(2026, 1, 15, 8);
+    expect(deadline.getTime()).toBe(expected.getTime());
+    expect(extended).toBe(true);
+  });
+
+  it("does not extend when quiet hours disabled", () => {
+    const cfg: QuietHoursConfig = { ...DEFAULT_CFG, quietHoursEnabled: false };
+    const natural = pacificDate(2026, 1, 14, 2);
+    const { deadline, extended } = quietExtendedDeadline(natural, cfg, PACIFIC);
+    expect(deadline.getTime()).toBe(natural.getTime());
+    expect(extended).toBe(false);
   });
 });

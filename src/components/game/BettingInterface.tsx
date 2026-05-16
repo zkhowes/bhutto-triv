@@ -13,6 +13,7 @@ interface BettingInterfaceProps {
   category: string;
   answerFormat?: string | null;
   answerDeadline?: string | null;
+  answerDeadlineExtended?: boolean;
   atBatAvgRating?: number | null;
   atBatSuccessRate?: number | null;
   onBetPlaced: () => void;
@@ -35,6 +36,7 @@ export default function BettingInterface({
   category,
   answerFormat,
   answerDeadline,
+  answerDeadlineExtended = false,
   atBatAvgRating,
   atBatSuccessRate,
   onBetPlaced,
@@ -148,6 +150,9 @@ export default function BettingInterface({
         {answerDeadline && (
           <div className="mt-2">
             <CountdownTimer deadlineTime={answerDeadline} />
+            {answerDeadlineExtended && (
+              <p className="text-[11px] text-[#666680] mt-0.5">Extended for quiet hours</p>
+            )}
           </div>
         )}
         <p className="text-base text-[#a0a0b8] mt-2">

@@ -10,6 +10,7 @@ import FlagReviewInterface from "@/components/game/FlagReviewInterface";
 import FixAndRegradeModal from "@/components/game/FixAndRegradeModal";
 import AutoSkipCountdown from "@/components/game/AutoSkipCountdown";
 import ReviewProposalBanner from "@/components/game/ReviewProposalBanner";
+import { quietExtendedDeadline, DEFAULT_QUIET_HOURS_TZ, type QuietHoursConfig } from "@/lib/quiet-hours";
 
 interface RoundData {
   id: string;
@@ -210,10 +211,20 @@ export default function GuideControl(props: GuideControlProps) {
   const hasAnswered = !!myAnswer?.answeredAt;
   const isGraded = round.status === "graded";
 
-  const answerDeadline =
-    round.categoryRevealAt && answerTimerSeconds
-      ? new Date(new Date(round.categoryRevealAt).getTime() + answerTimerSeconds * 1000).toISOString()
-      : null;
+  const { answerDeadline, answerDeadlineExtended } = (() => {
+    if (!round.categoryRevealAt || !answerTimerSeconds) {
+      return { answerDeadline: null as string | null, answerDeadlineExtended: false };
+    }
+    const natural = new Date(new Date(round.categoryRevealAt).getTime() + answerTimerSeconds * 1000);
+    const cfg: QuietHoursConfig = {
+      quietHoursEnabled: quietHours?.enabled ?? false,
+      quietHoursStart: quietHours?.start ?? 20,
+      quietHoursEnd: quietHours?.end ?? 7,
+    };
+    const tz = quietHours?.timezone ?? DEFAULT_QUIET_HOURS_TZ;
+    const { deadline, extended } = quietExtendedDeadline(natural, cfg, tz);
+    return { answerDeadline: deadline.toISOString(), answerDeadlineExtended: extended };
+  })();
 
   const showAutoSkipTimer = autoSkipEnabled && roundUpdatedAt && !isGraded && round.status !== "cancelled";
 
@@ -527,6 +538,7 @@ export default function GuideControl(props: GuideControlProps) {
             playerPoints={0}
             allActivePoints={[]}
             answerDeadline={answerDeadline}
+            answerDeadlineExtended={answerDeadlineExtended}
             roundStatus={round.status}
             powerUpType={null}
             actAsPlayerId={actAsPlayerId}
@@ -595,6 +607,7 @@ export default function GuideControl(props: GuideControlProps) {
             .filter((ps) => ps.points > 0)
             .map((ps) => ps.points)}
           answerDeadline={answerDeadline}
+          answerDeadlineExtended={answerDeadlineExtended}
           roundStatus={round.status}
           powerUpType={myAnswer?.powerUpType ?? null}
           actAsPlayerId={actAsPlayerId}

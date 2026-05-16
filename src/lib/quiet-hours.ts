@@ -92,3 +92,19 @@ export function deferredSkipDeadline(
   const end = quietEndAt(naturalDeadline, config, timezone);
   return new Date(end.getTime() + 60 * 60 * 1000);
 }
+
+// Per-question answer-timer deadline. If it lands inside quiet hours, push to
+// quiet-end + 1h so players aren't penalized for a deadline that falls during
+// the league's quiet window. Returns { deadline, extended } so the UI can label
+// the extension.
+export function quietExtendedDeadline(
+  naturalDeadline: Date,
+  config: QuietHoursConfig,
+  timezone: string,
+): { deadline: Date; extended: boolean } {
+  if (!isInQuietHours(naturalDeadline, config, timezone)) {
+    return { deadline: naturalDeadline, extended: false };
+  }
+  const end = quietEndAt(naturalDeadline, config, timezone);
+  return { deadline: new Date(end.getTime() + 60 * 60 * 1000), extended: true };
+}

@@ -27,6 +27,7 @@ interface AnswerInterfaceProps {
   playerPoints: number; // current points before the bet
   allActivePoints: number[]; // points of all active (non-eliminated) players
   answerDeadline?: string | null;
+  answerDeadlineExtended?: boolean;
   roundStatus: string;
   powerUpType?: string | null; // already-purchased power-up this round
   actAsPlayerId?: string | null;
@@ -42,6 +43,7 @@ export default function AnswerInterface({
   playerPoints,
   allActivePoints,
   answerDeadline,
+  answerDeadlineExtended = false,
   roundStatus,
   powerUpType,
   actAsPlayerId,
@@ -296,6 +298,9 @@ export default function AnswerInterface({
           {answerDeadline && (
             <div className="mt-1">
               <CountdownTimer deadlineTime={answerDeadline} />
+              {answerDeadlineExtended && (
+                <p className="text-[11px] text-[#666680] mt-0.5">Extended for quiet hours</p>
+              )}
             </div>
           )}
         </div>
