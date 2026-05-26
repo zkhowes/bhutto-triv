@@ -177,6 +177,12 @@ export async function GET(request: NextRequest) {
   // reminders don't appear with a 3am timestamp while SMS waits at the gate.
 
   const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  // §3/§3b widen eligibility by 1h so a round enters the auto-skip / auto-close
+  // sweep ~1h before its natural deadline — giving the cron (15-min cadence) up
+  // to ~4 ticks to fire the warning before the close. The actual close still
+  // gates on the full deferredSkipDeadline (updatedAt + 24h, quiet-hours-deferred).
+  const twentyThreeHoursAgo = new Date(now.getTime() - 23 * 60 * 60 * 1000);
+  const WARN_LEAD_MS = 60 * 60 * 1000; // warn when within 1h of the deadline
 
   // 2a. Awaiting question — at-bat player hasn't submitted after 24h
   const staleAwaitingQuestion = await prisma.round.findMany({
@@ -272,7 +278,7 @@ export async function GET(request: NextRequest) {
   const autoSkipStaleRounds = await prisma.round.findMany({
     where: {
       status: "awaiting_question",
-      updatedAt: { lte: twentyFourHoursAgo },
+      updatedAt: { lte: twentyThreeHoursAgo },
       pausedAt: null,
       game: {
         status: "active",
@@ -329,8 +335,9 @@ export async function GET(request: NextRequest) {
       } catch (err) {
         console.error("[AutoSkip] Failed to skip player:", err);
       }
-    } else {
-      // Not yet at deadline — send warning if not already sent
+    } else if (effectiveDeadline.getTime() - now.getTime() <= WARN_LEAD_MS) {
+      // Within 1h of the deadline — send the heads-up if not already sent.
+      // notifyAutoSkipWarning dedupes per round/player, so it's safe across ticks.
       const existingWarning = await prisma.notification.findFirst({
         where: {
           roundId: round.id,
@@ -345,6 +352,7 @@ export async function GET(request: NextRequest) {
         autoSkipWarningsSent++;
       }
     }
+    // else: more than 1h out (or quiet-hours-deferred) — too early to warn.
   }
 
   // ─── 3b. Auto-close stale answering rounds (leagues with autoSkipEnabled) ───
@@ -356,7 +364,7 @@ export async function GET(request: NextRequest) {
   const autoCloseStaleRounds = await prisma.round.findMany({
     where: {
       status: { in: ["question_submitted", "category_revealed"] },
-      updatedAt: { lte: twentyFourHoursAgo },
+      updatedAt: { lte: twentyThreeHoursAgo },
       pausedAt: null,
       game: {
         status: "active",
@@ -423,8 +431,8 @@ export async function GET(request: NextRequest) {
       } catch (err) {
         console.error("[AutoClose] Failed to auto-close round:", err);
       }
-    } else {
-      // Send warning to each incomplete player (if not already sent for this round)
+    } else if (effectiveDeadline.getTime() - now.getTime() <= WARN_LEAD_MS) {
+      // Within 1h of the deadline — warn each incomplete player (once per round).
       const existingWarning = await prisma.notification.findFirst({
         where: { roundId: round.id, type: "auto_close_warning" },
         select: { id: true },
@@ -437,6 +445,7 @@ export async function GET(request: NextRequest) {
         }
       }
     }
+    // else: more than 1h out (or quiet-hours-deferred) — too early to warn.
   }
 
   return NextResponse.json({
