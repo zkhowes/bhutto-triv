@@ -44,10 +44,8 @@ async function loadAndAuthorize(roundId: string, userId: string) {
 
 // POST /api/rounds/[id]/pause — commissioner pauses the round so the auto-skip cron skips it.
 // Captures remaining time on the 24h skip clock so resume can choose to preserve it.
-export async function POST(
-  _req: NextRequest,
-  { params }: { params: { id: string } },
-) {
+export async function POST(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -85,10 +83,8 @@ export async function POST(
 // DELETE /api/rounds/[id]/pause — commissioner resumes a paused round.
 // Body: { mode: "reset" | "preserve" } — "reset" gives a fresh 24h, "preserve" restores the
 // remaining time captured at pause.
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: { id: string } },
-) {
+export async function DELETE(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

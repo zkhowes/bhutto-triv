@@ -5,10 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { notifyAtBat, notifyOnDeck } from "@/lib/notifications";
 
 // GET - list players
-export async function GET(
-  _req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const players = await prisma.leaguePlayer.findMany({
     where: { leagueId: params.id, isActive: true },
     include: {
@@ -28,10 +26,8 @@ export async function GET(
 }
 
 // PATCH - pause/unpause player (commissioner or self)
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function PATCH(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -196,10 +192,8 @@ export async function PATCH(
 }
 
 // DELETE - remove player (commissioner only)
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
