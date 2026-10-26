@@ -9,10 +9,8 @@ import { initializeGame } from "@/lib/game-engine";
  * Used when a season was auto-completed before all intended games were played
  * (e.g. gamesPerSeason was set incorrectly and has since been updated).
  */
-export async function POST(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

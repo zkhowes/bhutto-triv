@@ -3,10 +3,8 @@ import { requireSuperAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { deleteLeagueCascade } from "@/lib/league-delete";
 
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function PATCH(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { error } = await requireSuperAdmin();
   if (error) return error;
 
@@ -31,10 +29,8 @@ export async function PATCH(
   return NextResponse.json({ id: updated.id, name: updated.name });
 }
 
-export async function DELETE(
-  _req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(_req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { error } = await requireSuperAdmin();
   if (error) return error;
 
